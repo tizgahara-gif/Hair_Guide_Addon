@@ -8,7 +8,8 @@ REGIONS = "Regions"
 PLACEMENT_POINTS = "PlacementPoints"
 CURVES = "Curves"
 WARNINGS = "Warnings"
-SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS)
+TAPER_OBJECTS = "TaperObjects"
+SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS, TAPER_OBJECTS)
 REGION_NAMES = ("Front", "Side", "Back_Upper", "Back_Middle", "Nape")
 POINT_REGIONS = ("Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape")
 REGION_COLORS = {
@@ -64,6 +65,75 @@ def generated_objects(type_filter=None):
     if type_filter:
         objects = [obj for obj in objects if obj.get("hair_guide_type") == type_filter]
     return objects
+
+
+def get_guide_object(name):
+    for obj in generated_objects("guide"):
+        if obj.name == name or obj.name.split(".")[0] == name:
+            return obj
+    return None
+
+
+def _spline_control_points_world(obj):
+    if not obj or obj.type != "CURVE":
+        return []
+    points = []
+    for spline in obj.data.splines:
+        if spline.type == "BEZIER":
+            points.extend(obj.matrix_world @ point.co for point in spline.bezier_points)
+        else:
+            for point in spline.points:
+                co = point.co
+                points.append(obj.matrix_world @ mathutils.Vector((co.x, co.y, co.z)))
+        if points:
+            break
+    return points
+
+
+def sample_curve_world_points(obj, count):
+    source = _spline_control_points_world(obj)
+    if not source:
+        return []
+    if len(source) == 1:
+        return [source[0].copy() for _ in range(max(count, 1))]
+    lengths = []
+    total = 0.0
+    for start, end in zip(source, source[1:]):
+        total += (end - start).length
+        lengths.append(total)
+    if total == 0.0:
+        return [source[0].copy() for _ in range(max(count, 1))]
+    samples = []
+    for i in range(max(count, 2)):
+        target = total * (i / max(count - 1, 1))
+        segment_index = 0
+        previous = 0.0
+        for idx, end_length in enumerate(lengths):
+            if target <= end_length:
+                segment_index = idx
+                break
+            previous = end_length
+        segment_length = max(lengths[segment_index] - previous, 0.000001)
+        t = (target - previous) / segment_length
+        samples.append(source[segment_index].lerp(source[segment_index + 1], t))
+    return samples
+
+
+def get_curve_world_center(obj):
+    points = _spline_control_points_world(obj)
+    if not points:
+        return None
+    center = mathutils.Vector((0.0, 0.0, 0.0))
+    for point in points:
+        center += point
+    return center / len(points)
+
+
+def get_curve_world_endpoints(obj):
+    points = _spline_control_points_world(obj)
+    if not points:
+        return None
+    return points[0], points[-1]
 
 
 def clear_collection_objects(collection_name, type_filter=None):
