@@ -60,11 +60,12 @@ The add-on includes a **Quick Start** panel and **Help** panel in the Blender si
 
 1. Select head mesh
 2. Set Target Head
-3. Create Hair Guides
-4. Generate Placement Points
-5. Select placement points
-6. Create Curve Strands
-7. Check Root Clustering
+3. Create Basic Hair Guides
+4. Adjust guides if needed
+5. Generate Placement Points
+6. Select points
+7. Create Curve Strands
+8. Check Root Clustering
 
 ## Sidebar panel layout
 
@@ -85,7 +86,7 @@ The **Hair Guide** tab is organized as:
 
 ## Generated collection structure
 
-`Regenerate Guide Lines` and related operators create and reuse this structure without duplicating collections:
+`Create Basic Hair Guides`, `Regenerate Basic Guides`, and related operators create and reuse this structure without duplicating collections:
 
 ```text
 HairGuideSystem
@@ -102,16 +103,20 @@ If same-named `Guides / Regions / PlacementPoints / Curves / Warnings` Collectio
 
 ## Generated guide concepts
 
-The add-on estimates rough areas from the target head object's world-space bounding box. These guides are intended as editable starting points, not anatomical detection:
+The add-on estimates rough areas from the target head object's world-space bounding box. These guides are intended as editable starting points, not anatomical detection.
 
-- Top, hairline, hachi, ear upper/back, occipital, nape, center, and side-boundary guide curves.
-- Front region lines for bang start, forehead clearance, three-way split, and flow direction.
-- Side region lines for ear-area flow, ear-back transition, and ear volume limits.
-- Back upper cap and volume boundary lines.
-- Back middle placement variation guides to avoid uniform center-root clumping.
-- Nape lower-edge and neck-flow guide lines.
+Basic Guides are intentionally minimal. The add-on does not display every anatomical reference line by default. **Create Basic Hair Guides / Regenerate Basic Guides** creates only:
 
-Pressing **Regenerate Guide Lines** again regenerates guide and region lines by first clearing existing generated objects in `HairGuideSystem/Guides` and `HairGuideSystem/Regions`. It does not delete Placement Points, Curves, Warnings, the Target Head, or existing hair meshes.
+- `HAIR_GUIDE_Hairline`
+- `HAIR_GUIDE_SideBoundary_L`
+- `HAIR_GUIDE_SideBoundary_R`
+- `HAIR_GUIDE_BackVolume`
+- `HAIR_GUIDE_Nape`
+- `HAIR_GUIDE_Center`
+
+Use **Add Detailed Guide Lines** only when additional references are needed. Detailed guides may add Top, Hachi, Ear Upper/Back, Occipital, and optional region helper lines.
+
+Pressing **Regenerate Basic Guides** again clears and recreates only those six Basic Guides. It does not delete Detailed Guides, Placement Points, Curves, Warnings, the Target Head, or existing hair meshes.
 
 ## Placement points and curve strands
 
@@ -185,7 +190,7 @@ Additional limitations:
 
 1. Blender 4.2 LTSでAdd-onを有効化できる。
 2. MeshをTarget Headに設定できる。
-3. Create Hair Guidesを2回押してもガイドが重複増殖しない。
+3. Create Basic Hair Guidesを2回押してもガイドが重複増殖しない。
 4. Generate Placement Pointsで各領域の配置点が生成される。
 5. Seedを変えると配置点の揺らぎが変わる。
 6. 同じSeedでは同じ配置点になる。

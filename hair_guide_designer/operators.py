@@ -29,10 +29,74 @@ class HGD_OT_set_target_head(bpy.types.Operator):
         return {'FINISHED'}
 
 
+BASIC_GUIDE_NAMES = {
+    "HAIR_GUIDE_Hairline",
+    "HAIR_GUIDE_SideBoundary_L",
+    "HAIR_GUIDE_SideBoundary_R",
+    "HAIR_GUIDE_BackVolume",
+    "HAIR_GUIDE_Nape",
+    "HAIR_GUIDE_Center",
+}
+
+
+def _remove_named_generated_guides(names):
+    removed = 0
+    for obj in list(utils.generated_objects("guide")):
+        if obj.name.split(".")[0] in names or obj.name in names:
+            bpy.data.objects.remove(obj, do_unlink=True)
+            removed += 1
+    return removed
+
+
 class HGD_OT_create_hair_guides(bpy.types.Operator):
     bl_idname = "hgd.create_hair_guides"
-    bl_label = "Regenerate Guide Lines"
-    bl_description = "Create visual hair guide lines and region references from the target head bounding box"
+    bl_label = "Create Basic Hair Guides"
+    bl_description = "Creates only essential guide lines: Hairline, Side Boundary, Back Volume, Nape, and Center."
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        try:
+            head = require_head(context, self)
+            if not head:
+                return {'CANCELLED'}
+            _, collections = utils.ensure_system()
+            guides = collections[utils.GUIDES]
+            removed = _remove_named_generated_guides(BASIC_GUIDE_NAMES)
+            scene = context.scene
+            min_v, max_v, center, size = utils.head_bounds(head)
+            scale = scene.hair_guide_scale
+            offset = scene.hair_guide_offset
+            rx = size.x * 0.5 * scale + offset
+            ry = size.y * 0.5 * scale + offset
+            top = max_v.z + offset
+            hairline_z = min_v.z + size.z * 0.66
+            back_volume_z = min_v.z + size.z * 0.58
+            nape_z = min_v.z + size.z * 0.18
+            front_y = min_v.y - offset
+            back_y = max_v.y + offset
+
+            guide_specs = [
+                ("HAIR_GUIDE_Hairline", utils.make_arc_points(center, rx * 0.72, ry * 0.55, hairline_z, 3.6, 5.8, 5), "Front"),
+                ("HAIR_GUIDE_SideBoundary_L", [mathutils.Vector((center.x - rx, front_y, hairline_z)), mathutils.Vector((center.x - rx, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x - rx * 0.7, back_y, back_volume_z))], "Side"),
+                ("HAIR_GUIDE_SideBoundary_R", [mathutils.Vector((center.x + rx, front_y, hairline_z)), mathutils.Vector((center.x + rx, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x + rx * 0.7, back_y, back_volume_z))], "Side"),
+                ("HAIR_GUIDE_BackVolume", utils.make_arc_points(center, rx * 0.78, ry * 0.72, back_volume_z, 0.15, 3.0, 5), "Back_Middle"),
+                ("HAIR_GUIDE_Nape", [mathutils.Vector((center.x - rx * 0.45, back_y, nape_z)), mathutils.Vector((center.x, back_y + offset, nape_z - size.z * 0.03)), mathutils.Vector((center.x + rx * 0.45, back_y, nape_z))], "Nape"),
+                ("HAIR_GUIDE_Center", [mathutils.Vector((center.x, center.y, top)), mathutils.Vector((center.x, center.y, nape_z))], "Back_Middle"),
+            ]
+            for name, points, region in guide_specs:
+                obj = utils.make_curve(name, points, guides, region, "guide", scene, bevel=0.004)
+                obj["hair_guide_level"] = "basic"
+            self.report({'INFO'}, f"Regenerated {len(guide_specs)} basic guide object(s); removed {removed} old basic guide(s).")
+            return {'FINISHED'}
+        except Exception as exc:
+            self.report({'ERROR'}, f"Failed to create basic hair guides: {exc}")
+            return {'CANCELLED'}
+
+
+class HGD_OT_create_detailed_guides(bpy.types.Operator):
+    bl_idname = "hgd.create_detailed_guides"
+    bl_label = "Add Detailed Guide Lines"
+    bl_description = "Add optional detailed references such as Top, Hachi, Ear, Occipital, and region helper lines."
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -43,10 +107,6 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
             _, collections = utils.ensure_system()
             guides = collections[utils.GUIDES]
             regions = collections[utils.REGIONS]
-            cleared = utils.clear_collection_objects(utils.GUIDES, "guide")
-            cleared += utils.clear_collection_objects(utils.REGIONS, "region")
-            if cleared:
-                self.report({'INFO'}, "Regenerated hair guides: cleared old guide/region objects.")
             scene = context.scene
             min_v, max_v, center, size = utils.head_bounds(head)
             scale = scene.hair_guide_scale
@@ -61,58 +121,56 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
             nape_z = min_v.z + size.z * 0.18
             front_y = min_v.y - offset
             back_y = max_v.y + offset
-
-            guide_specs = [
+            detailed_specs = [
                 ("HAIR_GUIDE_Top", [center + mathutils.Vector((-rx * 0.45, 0, top-center.z)), center + mathutils.Vector((0, 0, top + size.z*0.04-center.z)), center + mathutils.Vector((rx * 0.45, 0, top-center.z))], "Back_Upper"),
-                ("HAIR_GUIDE_Hairline", utils.make_arc_points(center, rx * 0.72, ry * 0.55, hairline_z, 3.6, 5.8, 5), "Front"),
                 ("HAIR_GUIDE_Hachi", utils.make_arc_points(center, rx, ry, hachi_z, 0.0, 6.28, 9), "Back_Upper"),
                 ("HAIR_GUIDE_Ear_Upper", [mathutils.Vector((center.x - rx, center.y, ear_z)), mathutils.Vector((center.x + rx, center.y, ear_z))], "Side"),
                 ("HAIR_GUIDE_Ear_Back", [mathutils.Vector((center.x - rx, back_y, ear_z)), mathutils.Vector((center.x + rx, back_y, ear_z))], "Side"),
                 ("HAIR_GUIDE_Occipital", utils.make_arc_points(center, rx * 0.75, ry * 0.65, occ_z, 0.15, 3.0, 5), "Back_Middle"),
-                ("HAIR_GUIDE_Nape", [mathutils.Vector((center.x - rx * 0.45, back_y, nape_z)), mathutils.Vector((center.x, back_y + offset, nape_z - size.z*0.03)), mathutils.Vector((center.x + rx * 0.45, back_y, nape_z))], "Nape"),
-                ("HAIR_GUIDE_Center", [mathutils.Vector((center.x, center.y, top)), mathutils.Vector((center.x, center.y, nape_z))], "Back_Middle"),
-                ("HAIR_GUIDE_Side_Boundary_L", [mathutils.Vector((center.x - rx, front_y, hairline_z)), mathutils.Vector((center.x - rx, center.y, ear_z)), mathutils.Vector((center.x - rx * 0.7, back_y, occ_z))], "Side"),
-                ("HAIR_GUIDE_Side_Boundary_R", [mathutils.Vector((center.x + rx, front_y, hairline_z)), mathutils.Vector((center.x + rx, center.y, ear_z)), mathutils.Vector((center.x + rx * 0.7, back_y, occ_z))], "Side"),
             ]
-            for name, points, region in guide_specs:
-                utils.make_curve(name, points, guides, region, "guide", scene, bevel=0.004)
+            for name, points, region in detailed_specs:
+                obj = utils.make_curve(name, points, guides, region, "guide", scene, bevel=0.003)
+                obj["hair_guide_level"] = "detailed"
             self._create_region_guides(context, regions, center, size, rx, ry, offset, hairline_z, ear_z, occ_z, nape_z, front_y, back_y)
-            created_count = len([obj for obj in utils.generated_objects() if obj.get("hair_guide_type") in {"guide", "region"}])
-            self.report({'INFO'}, f"Created {created_count} guide objects.")
+            detailed_count = len(detailed_specs) + len([obj for obj in regions.objects if obj.get("hair_guide_type") == "region"])
+            self.report({'INFO'}, f"Added {detailed_count} detailed guide object(s).")
             return {'FINISHED'}
         except Exception as exc:
-            self.report({'ERROR'}, f"Failed to create hair guides: {exc}")
+            self.report({'ERROR'}, f"Failed to create detailed guide lines: {exc}")
             return {'CANCELLED'}
 
     def _create_region_guides(self, context, regions, center, size, rx, ry, offset, hairline_z, ear_z, occ_z, nape_z, front_y, back_y):
         scene = context.scene
         top_z = center.z + size.z * 0.55
         # Front: start line, clearance, split guides, flow guides.
-        utils.make_curve("REGION_Front_Hair_Start", [mathutils.Vector((center.x - rx*0.55, front_y, hairline_z)), mathutils.Vector((center.x, front_y-offset, hairline_z+size.z*0.04)), mathutils.Vector((center.x + rx*0.55, front_y, hairline_z))], regions, "Front", "region", scene, bevel=0.003)
-        utils.make_curve("REGION_Front_Forehead_Clearance", [mathutils.Vector((center.x - rx*0.5, front_y-offset*2.5, hairline_z-size.z*0.12)), mathutils.Vector((center.x, front_y-offset*3.0, hairline_z-size.z*0.17)), mathutils.Vector((center.x + rx*0.5, front_y-offset*2.5, hairline_z-size.z*0.12))], regions, "Front", "region", scene, bevel=0.002)
+        created = []
+        created.append(utils.make_curve("REGION_Front_Hair_Start", [mathutils.Vector((center.x - rx*0.55, front_y, hairline_z)), mathutils.Vector((center.x, front_y-offset, hairline_z+size.z*0.04)), mathutils.Vector((center.x + rx*0.55, front_y, hairline_z))], regions, "Front", "region", scene, bevel=0.003))
+        created.append(utils.make_curve("REGION_Front_Forehead_Clearance", [mathutils.Vector((center.x - rx*0.5, front_y-offset*2.5, hairline_z-size.z*0.12)), mathutils.Vector((center.x, front_y-offset*3.0, hairline_z-size.z*0.17)), mathutils.Vector((center.x + rx*0.5, front_y-offset*2.5, hairline_z-size.z*0.12))], regions, "Front", "region", scene, bevel=0.002))
         for xmul, label in [(-0.35, "L"), (0.0, "Center"), (0.35, "R")]:
             root = mathutils.Vector((center.x + rx*xmul, front_y, hairline_z))
-            utils.make_curve(f"REGION_Front_Flow_{label}", [root, root + mathutils.Vector((0, -offset*3, -size.z*0.18)), root + mathutils.Vector((0, -offset*4, -size.z*0.35))], regions, "Front", "region", scene, bevel=0.002)
+            created.append(utils.make_curve(f"REGION_Front_Flow_{label}", [root, root + mathutils.Vector((0, -offset*3, -size.z*0.18)), root + mathutils.Vector((0, -offset*4, -size.z*0.35))], regions, "Front", "region", scene, bevel=0.002))
         # Side.
         for side, sign in [("L", -1), ("R", 1)]:
             x = center.x + sign * rx
-            utils.make_curve(f"REGION_Side_{side}_Ear_Upper", [mathutils.Vector((x, center.y-ry*0.35, ear_z)), mathutils.Vector((x, center.y+ry*0.15, ear_z+size.z*0.02)), mathutils.Vector((x, back_y, ear_z))], regions, "Side", "region", scene, bevel=0.003)
-            utils.make_curve(f"REGION_Side_{side}_Flow_To_Back", [mathutils.Vector((x, center.y-ry*0.45, ear_z+size.z*0.12)), mathutils.Vector((center.x + (x-center.x)*0.9, center.y+ry*0.25, ear_z+size.z*0.02)), mathutils.Vector((center.x + (x-center.x)*0.65, back_y, occ_z))], regions, "Side", "region", scene, bevel=0.002)
-            utils.make_curve(f"REGION_Side_{side}_Volume_Limit", [mathutils.Vector((center.x + (x-center.x)*1.08, center.y-ry*0.2, ear_z+size.z*0.08)), mathutils.Vector((center.x + (x-center.x)*1.08, center.y+ry*0.35, ear_z+size.z*0.05))], regions, "Side", "region", scene, bevel=0.002)
+            created.append(utils.make_curve(f"REGION_Side_{side}_Ear_Upper", [mathutils.Vector((x, center.y-ry*0.35, ear_z)), mathutils.Vector((x, center.y+ry*0.15, ear_z+size.z*0.02)), mathutils.Vector((x, back_y, ear_z))], regions, "Side", "region", scene, bevel=0.003))
+            created.append(utils.make_curve(f"REGION_Side_{side}_Flow_To_Back", [mathutils.Vector((x, center.y-ry*0.45, ear_z+size.z*0.12)), mathutils.Vector((center.x + (x-center.x)*0.9, center.y+ry*0.25, ear_z+size.z*0.02)), mathutils.Vector((center.x + (x-center.x)*0.65, back_y, occ_z))], regions, "Side", "region", scene, bevel=0.002))
+            created.append(utils.make_curve(f"REGION_Side_{side}_Volume_Limit", [mathutils.Vector((center.x + (x-center.x)*1.08, center.y-ry*0.2, ear_z+size.z*0.08)), mathutils.Vector((center.x + (x-center.x)*1.08, center.y+ry*0.35, ear_z+size.z*0.05))], regions, "Side", "region", scene, bevel=0.002))
         # Back upper cap lines.
         for zmul in [0.35, 0.45, 0.55]:
             z = center.z + size.z * zmul
-            utils.make_curve(f"REGION_Back_Upper_Cap_{int(zmul*100)}", utils.make_arc_points(center, rx*0.85, ry*0.85, z, 0.15, 3.0, 7), regions, "Back_Upper", "region", scene, bevel=0.002)
-        utils.make_curve("REGION_Back_Upper_Volume_Boundary", utils.make_arc_points(center, rx*0.95, ry*0.95, top_z-size.z*0.12, 0.0, 3.14, 7), regions, "Back_Upper", "region", scene, bevel=0.003)
+            created.append(utils.make_curve(f"REGION_Back_Upper_Cap_{int(zmul*100)}", utils.make_arc_points(center, rx*0.85, ry*0.85, z, 0.15, 3.0, 7), regions, "Back_Upper", "region", scene, bevel=0.002))
+        created.append(utils.make_curve("REGION_Back_Upper_Volume_Boundary", utils.make_arc_points(center, rx*0.95, ry*0.95, top_z-size.z*0.12, 0.0, 3.14, 7), regions, "Back_Upper", "region", scene, bevel=0.003))
         # Back middle variation guides.
         for xmul, label in [(-0.45, "Left"), (0.0, "Center_Sparse"), (0.45, "Right")]:
             x = center.x + rx*xmul
-            utils.make_curve(f"REGION_Back_Middle_{label}", [mathutils.Vector((x, back_y, occ_z+size.z*0.08)), mathutils.Vector((center.x + (x-center.x)*0.9, back_y+offset, occ_z-size.z*0.1)), mathutils.Vector((center.x + (x-center.x)*0.7, back_y, nape_z+size.z*0.14))], regions, "Back_Middle", "region", scene, bevel=0.002)
+            created.append(utils.make_curve(f"REGION_Back_Middle_{label}", [mathutils.Vector((x, back_y, occ_z+size.z*0.08)), mathutils.Vector((center.x + (x-center.x)*0.9, back_y+offset, occ_z-size.z*0.1)), mathutils.Vector((center.x + (x-center.x)*0.7, back_y, nape_z+size.z*0.14))], regions, "Back_Middle", "region", scene, bevel=0.002))
         # Nape.
-        utils.make_curve("REGION_Nape_Lower_Edge", [mathutils.Vector((center.x - rx*0.45, back_y, nape_z)), mathutils.Vector((center.x, back_y+offset, nape_z-size.z*0.03)), mathutils.Vector((center.x + rx*0.45, back_y, nape_z))], regions, "Nape", "region", scene, bevel=0.003)
+        created.append(utils.make_curve("REGION_Nape_Lower_Edge", [mathutils.Vector((center.x - rx*0.45, back_y, nape_z)), mathutils.Vector((center.x, back_y+offset, nape_z-size.z*0.03)), mathutils.Vector((center.x + rx*0.45, back_y, nape_z))], regions, "Nape", "region", scene, bevel=0.003))
         for xmul, label in [(-0.25, "L"), (0.0, "Center"), (0.25, "R")]:
             root = mathutils.Vector((center.x + rx*xmul, back_y, nape_z))
-            utils.make_curve(f"REGION_Nape_Flow_{label}", [root, root + mathutils.Vector((0, offset*1.5, -size.z*0.12)), root + mathutils.Vector((0, offset*2.5, -size.z*0.28))], regions, "Nape", "region", scene, bevel=0.002)
+            created.append(utils.make_curve(f"REGION_Nape_Flow_{label}", [root, root + mathutils.Vector((0, offset*1.5, -size.z*0.12)), root + mathutils.Vector((0, offset*2.5, -size.z*0.28))], regions, "Nape", "region", scene, bevel=0.002))
+        for obj in created:
+            obj["hair_guide_level"] = "detailed"
 
 
 class HGD_OT_delete_hair_guides(bpy.types.Operator):
@@ -154,7 +212,7 @@ class HGD_OT_show_hide_guides(bpy.types.Operator):
                 obj.hide_render = self.hide
                 count += 1
         if count == 0:
-            self.report({'WARNING'}, "No guide lines found. Click Regenerate Guide Lines first.")
+            self.report({'WARNING'}, "No guide lines found. Click Regenerate Basic Guides first.")
             return {'CANCELLED'}
         self.report({'INFO'}, "Guide lines hidden." if self.hide else "Guide lines shown.")
         return {'FINISHED'}
@@ -636,7 +694,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
             else:
                 for key in list(new_obj.keys()):
                     del new_obj[key]
-            new_obj.location.x *= -1
+            # Mirror generated curve data in local coordinates only; keep object transform unchanged.
             for spline in new_obj.data.splines:
                 if spline.type != "BEZIER":
                     continue
@@ -685,6 +743,7 @@ class HGD_OT_mirror_side_r_to_l(bpy.types.Operator):
 classes = (
     HGD_OT_set_target_head,
     HGD_OT_create_hair_guides,
+    HGD_OT_create_detailed_guides,
     HGD_OT_delete_hair_guides,
     HGD_OT_show_hide_guides,
     HGD_OT_region_visibility,

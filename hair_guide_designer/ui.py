@@ -15,11 +15,14 @@ def _draw_status(layout, scene):
     else:
         box.label(text="Target Head: Not Set", icon='ERROR')
         box.label(text="Select a head mesh first.")
-    guide_count = len([obj for obj in utils.generated_objects() if obj.get("hair_guide_type") in {"guide", "region"}])
+    guide_objects = [obj for obj in utils.generated_objects() if obj.get("hair_guide_type") in {"guide", "region"}]
+    basic_count = len([obj for obj in guide_objects if obj.get("hair_guide_level") == "basic"])
+    detailed_count = len([obj for obj in guide_objects if obj.get("hair_guide_level") == "detailed"])
     point_count = _count_generated("placement_point")
     curve_count = _count_generated("curve")
     warning_count = _count_generated("warning")
-    box.label(text=f"Guides: {guide_count if guide_count else 'None'}", icon='OUTLINER_OB_CURVE')
+    box.label(text=f"Basic Guides: {basic_count}", icon='OUTLINER_OB_CURVE')
+    box.label(text=f"Detailed Guides: {detailed_count}", icon='OUTLINER_OB_CURVE')
     box.label(text=f"Placement Points: {point_count}", icon='MESH_UVSPHERE')
     box.label(text=f"Curves: {curve_count}", icon='OUTLINER_OB_CURVE')
     box.label(text=f"Warnings: {scene.hair_warning_count or warning_count}", icon='ERROR' if (scene.hair_warning_count or warning_count) else 'CHECKMARK')
@@ -52,11 +55,12 @@ class HGD_PT_quick_start(HGD_PT_base):
         box.label(text="Workflow:", icon='INFO')
         box.label(text="1. Select head mesh")
         box.label(text="2. Set Target Head")
-        box.label(text="3. Create Hair Guides")
-        box.label(text="4. Generate Placement Points")
-        box.label(text="5. Select placement points")
-        box.label(text="6. Create Curve Strands")
-        box.label(text="7. Check Root Clustering")
+        box.label(text="3. Create Basic Hair Guides")
+        box.label(text="4. Adjust guides if needed")
+        box.label(text="5. Generate Placement Points")
+        box.label(text="6. Select points")
+        box.label(text="7. Create Curve Strands")
+        box.label(text="8. Check Root Clustering")
         _draw_status(layout, context.scene)
 
 
@@ -86,15 +90,16 @@ class HGD_PT_guide_lines(HGD_PT_base):
 
     def draw(self, context):
         layout = self.layout
-        layout.label(text="Shows top, hairline, hachi, ear,", icon='INFO')
-        layout.label(text="occipital, nape, and center references.")
+        layout.label(text="Basic guides are intentionally minimal.", icon='INFO')
+        layout.label(text="Hairline, side boundaries, back volume, nape, center.")
         row = layout.row(align=True)
         op = row.operator('hgd.show_hide_guides', text='Show Guide Lines', icon='HIDE_OFF')
         op.hide = False
         op = row.operator('hgd.show_hide_guides', text='Hide Guide Lines', icon='HIDE_ON')
         op.hide = True
-        layout.operator('hgd.create_hair_guides', text='Regenerate Guide Lines', icon='OUTLINER_OB_CURVE')
-        layout.label(text="Creates guide lines from head bounds.")
+        layout.operator('hgd.create_hair_guides', text='Regenerate Basic Guides', icon='OUTLINER_OB_CURVE')
+        layout.operator('hgd.create_detailed_guides', text='Add Detailed Guide Lines', icon='OUTLINER_OB_CURVE')
+        layout.label(text="Basic guides only; details are optional.")
         layout.operator('hgd.delete_hair_guides', text='Delete Guide Lines', icon='TRASH')
         layout.label(text="Deletes only generated guide objects.")
         layout.label(text="Head mesh is not deleted.")
