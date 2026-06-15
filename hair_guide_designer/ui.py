@@ -97,9 +97,10 @@ class HGD_PT_guide_lines(HGD_PT_base):
         op.hide = False
         op = row.operator('hgd.show_hide_guides', text='Hide Guide Lines', icon='HIDE_ON')
         op.hide = True
+        layout.operator('hgd.create_hair_guides', text='Create Basic Hair Guides', icon='OUTLINER_OB_CURVE')
         layout.operator('hgd.create_hair_guides', text='Regenerate Basic Guides', icon='OUTLINER_OB_CURVE')
         layout.operator('hgd.create_detailed_guides', text='Add Detailed Guide Lines', icon='OUTLINER_OB_CURVE')
-        layout.label(text="Basic guides only; details are optional.")
+        layout.label(text="Basic guides only; rerun regenerates only basics.")
         layout.operator('hgd.delete_hair_guides', text='Delete Guide Lines', icon='TRASH')
         layout.label(text="Deletes only generated guide objects.")
         layout.label(text="Head mesh is not deleted.")

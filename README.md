@@ -63,7 +63,7 @@ The add-on includes a **Quick Start** panel and **Help** panel in the Blender si
 3. Create Basic Hair Guides
 4. Adjust guides if needed
 5. Generate Placement Points
-6. Select points
+6. Select placement points
 7. Create Curve Strands
 8. Check Root Clustering
 
