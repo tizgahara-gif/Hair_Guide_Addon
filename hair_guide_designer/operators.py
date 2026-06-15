@@ -8,24 +8,24 @@ from . import utils
 def require_head(context, operator):
     head = context.scene.hair_target_head_object
     if not head or head.type != "MESH":
-        operator.report({'WARNING'}, "No target head object set. Select a mesh and click Set Selected Mesh as Head.")
+        operator.report({'WARNING'}, "頭部が未設定です。メッシュを選択して「選択メッシュを頭部として登録」を押してください。")
         return None
     return head
 
 
 class HGD_OT_set_target_head(bpy.types.Operator):
     bl_idname = "hgd.set_target_head"
-    bl_label = "Set Selected Mesh as Head"
-    bl_description = "Register the selected mesh as the target head without editing it"
+    bl_label = "選択メッシュを頭部として登録"
+    bl_description = "選択中のメッシュを頭部として登録します。メッシュ自体は変更しません"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         obj = context.object
         if not obj or obj.type != "MESH":
-            self.report({'WARNING'}, "No mesh selected. Select a head mesh and click Set Selected Mesh as Head.")
+            self.report({'WARNING'}, "メッシュが選択されていません。頭部メッシュを選択して登録してください。")
             return {'CANCELLED'}
         context.scene.hair_target_head_object = obj
-        self.report({'INFO'}, f"Target head set: {obj.name}")
+        self.report({'INFO'}, f"頭部を登録しました: {obj.name}")
         return {'FINISHED'}
 
 
@@ -50,8 +50,8 @@ def _remove_named_generated_guides(names):
 
 class HGD_OT_create_hair_guides(bpy.types.Operator):
     bl_idname = "hgd.create_hair_guides"
-    bl_label = "Create Basic Hair Guides"
-    bl_description = "Creates only essential guide lines: Hairline, Side Boundary, Back Volume, Nape, and Center."
+    bl_label = "基本ガイドを生成"
+    bl_description = "生え際、サイド境界、後頭部ボリューム、襟足、正中線だけの基本ガイドを生成します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -86,17 +86,17 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
             for name, points, region in guide_specs:
                 obj = utils.make_curve(name, points, guides, region, "guide", scene, bevel=0.004)
                 obj["hair_guide_level"] = "basic"
-            self.report({'INFO'}, f"Regenerated {len(guide_specs)} basic guide object(s); removed {removed} old basic guide(s).")
+            self.report({'INFO'}, f"基本ガイドを{len(guide_specs)}個生成しました（古い基本ガイド{removed}個を削除）。")
             return {'FINISHED'}
         except Exception as exc:
-            self.report({'ERROR'}, f"Failed to create basic hair guides: {exc}")
+            self.report({'ERROR'}, f"基本ガイドの生成に失敗しました: {exc}")
             return {'CANCELLED'}
 
 
 class HGD_OT_create_detailed_guides(bpy.types.Operator):
     bl_idname = "hgd.create_detailed_guides"
-    bl_label = "Add Detailed Guide Lines"
-    bl_description = "Add optional detailed references such as Top, Hachi, Ear, Occipital, and region helper lines."
+    bl_label = "詳細ガイドを追加"
+    bl_description = "頭頂、ハチ、耳周り、後頭部などの詳細参照線を追加します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -133,10 +133,10 @@ class HGD_OT_create_detailed_guides(bpy.types.Operator):
                 obj["hair_guide_level"] = "detailed"
             self._create_region_guides(context, regions, center, size, rx, ry, offset, hairline_z, ear_z, occ_z, nape_z, front_y, back_y)
             detailed_count = len(detailed_specs) + len([obj for obj in regions.objects if obj.get("hair_guide_type") == "region"])
-            self.report({'INFO'}, f"Added {detailed_count} detailed guide object(s).")
+            self.report({'INFO'}, f"詳細ガイドを{detailed_count}個追加しました。")
             return {'FINISHED'}
         except Exception as exc:
-            self.report({'ERROR'}, f"Failed to create detailed guide lines: {exc}")
+            self.report({'ERROR'}, f"詳細ガイドの追加に失敗しました: {exc}")
             return {'CANCELLED'}
 
     def _create_region_guides(self, context, regions, center, size, rx, ry, offset, hairline_z, ear_z, occ_z, nape_z, front_y, back_y):
@@ -175,35 +175,35 @@ class HGD_OT_create_detailed_guides(bpy.types.Operator):
 
 class HGD_OT_delete_hair_guides(bpy.types.Operator):
     bl_idname = "hgd.delete_hair_guides"
-    bl_label = "Delete Guide Lines"
-    bl_description = "Delete only generated guide and region line objects; the target head is not deleted"
+    bl_label = "ガイド削除"
+    bl_description = "生成されたガイドと領域線だけを削除します。頭部メッシュは削除しません"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         root = bpy.data.collections.get(utils.ROOT)
         if not root:
-            self.report({'WARNING'}, "HairGuideSystem does not exist")
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
         count = 0
         for collection_name in (utils.GUIDES, utils.REGIONS):
             count += utils.clear_collection_objects(collection_name)
         if count == 0:
-            self.report({'WARNING'}, "No generated hair guides to delete")
+            self.report({'WARNING'}, "削除する生成ガイドがありません。")
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Deleted {count} guide objects")
+        self.report({'INFO'}, f"ガイドを{count}個削除しました。")
         return {'FINISHED'}
 
 
 class HGD_OT_show_hide_guides(bpy.types.Operator):
     bl_idname = "hgd.show_hide_guides"
-    bl_label = "Show/Hide Guide Lines"
-    bl_description = "Show or hide generated guide and region line objects"
+    bl_label = "ガイド表示切替"
+    bl_description = "生成されたガイドと領域線を表示または非表示にします"
     bl_options = {'REGISTER', 'UNDO'}
-    hide: bpy.props.BoolProperty(default=False, description="Hide when enabled; show when disabled")
+    hide: bpy.props.BoolProperty(default=False, description="オンで非表示、オフで表示します")
 
     def execute(self, context):
         if not bpy.data.collections.get(utils.ROOT):
-            self.report({'WARNING'}, "HairGuideSystem does not exist")
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
         count = 0
         for obj in utils.generated_objects():
@@ -212,38 +212,38 @@ class HGD_OT_show_hide_guides(bpy.types.Operator):
                 obj.hide_render = self.hide
                 count += 1
         if count == 0:
-            self.report({'WARNING'}, "No guide lines found. Click Regenerate Basic Guides first.")
+            self.report({'WARNING'}, "ガイドが見つかりません。先に基本ガイドを生成してください。")
             return {'CANCELLED'}
-        self.report({'INFO'}, "Guide lines hidden." if self.hide else "Guide lines shown.")
+        self.report({'INFO'}, "ガイドを非表示にしました。" if self.hide else "ガイドを表示しました。")
         return {'FINISHED'}
 
 
 class HGD_OT_region_visibility(bpy.types.Operator):
     bl_idname = "hgd.region_visibility"
-    bl_label = "Region Visibility"
-    bl_description = "Show or hide generated objects for a hair construction region"
+    bl_label = "領域表示"
+    bl_description = "髪の領域ごとに生成物を表示または非表示にします"
     bl_options = {'REGISTER', 'UNDO'}
-    region: EnumProperty(items=[("Front", "Front", ""), ("Side", "Side", ""), ("Side_L", "Side L", ""), ("Side_R", "Side R", ""), ("Back_Upper", "Back Upper", ""), ("Back_Middle", "Back Middle", ""), ("Nape", "Nape", ""), ("ALL", "All", "")], default="ALL", description="Hair construction region to show or hide")
-    action: EnumProperty(items=[("SHOW", "Show", ""), ("HIDE", "Hide", "")], default="SHOW", description="Visibility action to apply")
+    region: EnumProperty(items=[("Front", "前髪", "前髪領域"), ("Side", "側頭部", "左右の側頭部をまとめた領域"), ("Side_L", "左側", "左側頭部"), ("Side_R", "右側", "右側頭部"), ("Back_Upper", "後頭部上層", "髪全体のボリューム領域"), ("Back_Middle", "後頭部中層", "大きな毛束を配置する領域"), ("Nape", "襟足", "首へ向かって落ちる短い毛束領域"), ("ALL", "すべて", "すべての領域")], default="ALL", description="表示または非表示にする髪領域")
+    action: EnumProperty(items=[("SHOW", "表示", ""), ("HIDE", "非表示", "")], default="SHOW", description="適用する表示操作")
 
     def execute(self, context):
         if not bpy.data.collections.get(utils.ROOT):
-            self.report({'WARNING'}, "HairGuideSystem does not exist")
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
         hide = self.action == "HIDE"
         regions = utils.REGION_NAMES if self.region == "ALL" else (self.region,)
         count = sum(utils.set_region_visibility(region, hide) for region in regions)
         if count == 0:
-            self.report({'WARNING'}, "No region objects found")
+            self.report({'WARNING'}, "領域オブジェクトが見つかりません。")
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Region visibility updated: {self.region} {self.action.lower()}.")
+        self.report({'INFO'}, f"領域表示を更新しました: {self.region} {self.action.lower()}。")
         return {'FINISHED'}
 
 
 class HGD_OT_generate_placement_points(bpy.types.Operator):
     bl_idname = "hgd.generate_placement_points"
-    bl_label = "Generate Placement Points"
-    bl_description = "Generate seed-based suggested hair strand root positions inside HairGuideSystem/PlacementPoints"
+    bl_label = "配置点を生成"
+    bl_description = "HairGuideSystem/PlacementPoints内に毛束根元候補を生成します"
     bl_options = {'REGISTER', 'UNDO'}
 
     BASE_COUNTS = {"Front": 7, "Side_L": 4, "Side_R": 4, "Back_Upper": 6, "Back_Middle": 9, "Nape": 5}
@@ -276,10 +276,10 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                     obj["flow_side"] = "L" if loc.x < center.x - size.x*0.05 else ("R" if loc.x > center.x + size.x*0.05 else "Center")
                     obj["position_type"] = "center" if abs(loc.x - center.x) < size.x * 0.18 else "outer"
                     count_total += 1
-            self.report({'INFO'}, f"Generated {count_total} placement points")
+            self.report({'INFO'}, f"配置点を{count_total}個生成しました。")
             return {'FINISHED'}
         except Exception as exc:
-            self.report({'ERROR'}, f"Failed to generate placement points: {exc}")
+            self.report({'ERROR'}, f"配置点の生成に失敗しました: {exc}")
             return {'CANCELLED'}
 
     def _base_positions(self, region, count, min_v, max_v, center, size, offset):
@@ -327,33 +327,33 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
 
 class HGD_OT_clear_placement_points(bpy.types.Operator):
     bl_idname = "hgd.clear_placement_points"
-    bl_label = "Clear Placement Points"
-    bl_description = "Delete generated placement point objects only"
+    bl_label = "配置点を削除"
+    bl_description = "生成された配置点だけを削除します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         if not bpy.data.collections.get(utils.ROOT):
-            self.report({'WARNING'}, "HairGuideSystem does not exist")
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
         count = utils.clear_collection_objects(utils.PLACEMENT_POINTS, "placement_point")
         if count == 0:
-            self.report({'WARNING'}, "No placement points found. Click Generate Placement Points first.")
+            self.report({'WARNING'}, "配置点が見つかりません。先に配置点を生成してください。")
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Cleared {count} placement points")
+        self.report({'INFO'}, f"配置点を{count}個削除しました。")
         return {'FINISHED'}
 
 
 class HGD_OT_create_curve_from_points(bpy.types.Operator):
     bl_idname = "hgd.create_curve_from_points"
-    bl_label = "Create Editable Curve Strands"
-    bl_description = "Create editable Bezier curve strands from selected placement points without converting them to mesh"
+    bl_label = "カーブ毛束を生成"
+    bl_description = "選択した配置点から編集可能なBezierカーブ毛束を生成します。メッシュ化はしません"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         try:
             points = [obj for obj in context.selected_objects if obj.get("hair_guide_type") == "placement_point"]
             if not points:
-                self.report({'WARNING'}, "No placement points selected. Select generated placement point objects first.")
+                self.report({'WARNING'}, "配置点が選択されていません。生成された配置点を選択してください。")
                 return {'CANCELLED'}
             _, collections = utils.ensure_system()
             curves = collections[utils.CURVES]
@@ -385,10 +385,10 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 obj["taper_strength"] = scene.hair_curve_taper_strength
                 obj["segment_count"] = scene.hair_curve_segment_count
                 made += 1
-            self.report({'INFO'}, f"Created {made} curve strands")
+            self.report({'INFO'}, f"カーブ毛束を{made}本生成しました。")
             return {'FINISHED'}
         except Exception as exc:
-            self.report({'ERROR'}, f"Failed to create curve strands: {exc}")
+            self.report({'ERROR'}, f"カーブ毛束の生成に失敗しました: {exc}")
             return {'CANCELLED'}
 
     def _prefix(self, region):
@@ -404,19 +404,19 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
 
 class HGD_OT_check_root_clustering(bpy.types.Operator):
     bl_idname = "hgd.check_root_clustering"
-    bl_label = "Check Root Clustering"
-    bl_description = "Detect placement point pairs in the same region that are closer than the root clustering threshold"
+    bl_label = "根元集中チェック"
+    bl_description = "同じ領域内で近すぎる配置点ペアを検出します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         try:
             if not bpy.data.collections.get(utils.ROOT):
-                self.report({'WARNING'}, "HairGuideSystem does not exist")
+                self.report({'WARNING'}, "HairGuideSystemが存在しません。")
                 return {'CANCELLED'}
             self._clear_warning_markers(context, reset_colors=False)
             points = utils.generated_objects("placement_point")
             if not points:
-                self.report({'WARNING'}, "No placement points found. Click Generate Placement Points first.")
+                self.report({'WARNING'}, "配置点が見つかりません。先に配置点を生成してください。")
                 return {'CANCELLED'}
             _, collections = utils.ensure_system()
             warnings = collections[utils.WARNINGS]
@@ -445,10 +445,10 @@ class HGD_OT_check_root_clustering(bpy.types.Operator):
                     marker["length_delta"] = length_delta
                     warning_count += 1
             context.scene.hair_warning_count = warning_count
-            self.report({'INFO'}, f"Found {warning_count} root clustering warnings.")
+            self.report({'INFO'}, f"警告を{warning_count}件検出しました。")
             return {'FINISHED'}
         except Exception as exc:
-            self.report({'ERROR'}, f"Failed to check root clustering: {exc}")
+            self.report({'ERROR'}, f"根元集中チェックに失敗しました: {exc}")
             return {'CANCELLED'}
 
     def _clear_warning_markers(self, context, reset_colors=True):
@@ -461,43 +461,43 @@ class HGD_OT_check_root_clustering(bpy.types.Operator):
 
 class HGD_OT_clear_warnings(bpy.types.Operator):
     bl_idname = "hgd.clear_warnings"
-    bl_label = "Clear Warnings"
-    bl_description = "Remove warning markers and restore placement point colors"
+    bl_label = "警告を削除"
+    bl_description = "警告マーカーを削除し、配置点の色を戻します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         if not bpy.data.collections.get(utils.ROOT):
-            self.report({'WARNING'}, "HairGuideSystem does not exist")
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
         for obj in utils.generated_objects("placement_point"):
             obj.color = utils.REGION_COLORS.get(obj.get("hair_region"), (0.9, 0.9, 0.9, 1.0))
         count = utils.clear_collection_objects(utils.WARNINGS, "warning")
         context.scene.hair_warning_count = 0
         if count == 0:
-            self.report({'WARNING'}, "No warnings to clear")
+            self.report({'WARNING'}, "削除する警告がありません。")
             return {'CANCELLED'}
-        self.report({'INFO'}, "Cleared warnings.")
+        self.report({'INFO'}, "警告を削除しました。")
         return {'FINISHED'}
 
 
 class HGD_OT_clear_all_generated(bpy.types.Operator):
     bl_idname = "hgd.clear_all_generated"
-    bl_label = "Clear All Generated Objects"
-    bl_description = "Delete generated guides, regions, placement points, curves, and warnings inside HairGuideSystem only"
+    bl_label = "生成物をすべて削除"
+    bl_description = "HairGuideSystem内のガイド、領域線、配置点、カーブ、警告だけを削除します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         if not bpy.data.collections.get(utils.ROOT):
-            self.report({'WARNING'}, "HairGuideSystem does not exist")
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
         total = 0
         for collection_name in (utils.GUIDES, utils.REGIONS, utils.PLACEMENT_POINTS, utils.CURVES, utils.WARNINGS):
             total += utils.clear_collection_objects(collection_name)
         context.scene.hair_warning_count = 0
         if total == 0:
-            self.report({'WARNING'}, "No generated objects to clear")
+            self.report({'WARNING'}, "削除する生成物がありません。")
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Cleared {total} generated Hair Guide objects")
+        self.report({'INFO'}, f"生成物を{total}個削除しました。")
         return {'FINISHED'}
 
 
@@ -545,20 +545,20 @@ def _delete_generated_if_exists(name):
 
 class HGD_OT_apply_curve_batch_settings(bpy.types.Operator):
     bl_idname = "hgd.apply_curve_batch_settings"
-    bl_label = "Apply Curve Batch Settings"
-    bl_description = "Apply length scale, bevel depth, and resolution to selected or all generated hair curves"
+    bl_label = "カーブ一括設定を適用"
+    bl_description = "選択または全生成カーブに長さ倍率、太さ、解像度を一括適用します"
     bl_options = {'REGISTER', 'UNDO'}
 
     target: EnumProperty(
-        items=(("SELECTED", "Selected", "Apply to selected generated curves"), ("ALL", "All Generated", "Apply to all generated curves")),
+        items=(("SELECTED", "選択", "選択中の生成カーブへ適用"), ("ALL", "全生成", "全生成カーブへ適用")),
         default="SELECTED",
-        description="Generated curves to update",
+        description="更新する生成カーブの範囲",
     )
 
     def execute(self, context):
         curves = _generated_curves_from_context(context, self.target == "SELECTED")
         if not curves:
-            message = "No generated hair curves selected." if self.target == "SELECTED" else "No generated hair curves found."
+            message = "生成カーブが選択されていません。" if self.target == "SELECTED" else "生成カーブが見つかりません。"
             self.report({'WARNING'}, message)
             return {'CANCELLED'}
         scale = context.scene.hair_batch_curve_length
@@ -575,20 +575,20 @@ class HGD_OT_apply_curve_batch_settings(bpy.types.Operator):
             obj.data.resolution_u = context.scene.hair_batch_curve_resolution
             obj["hair_curve_bevel_depth"] = context.scene.hair_batch_curve_bevel_depth
             obj["hair_curve_resolution"] = context.scene.hair_batch_curve_resolution
-        self.report({'INFO'}, f"Applied curve settings to {len(curves)} curve(s).")
+        self.report({'INFO'}, f"カーブ設定を{len(curves)}本に適用しました。")
         return {'FINISHED'}
 
 
 class HGD_OT_update_curve_roots_from_points(bpy.types.Operator):
     bl_idname = "hgd.update_curve_roots_from_points"
-    bl_label = "Update Curve Roots From Points"
-    bl_description = "Move generated curve roots back to their source placement points"
+    bl_label = "配置点から更新"
+    bl_description = "生成カーブの根元を元の配置点へ追従させます"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         curves = _generated_curves_from_context(context, context.scene.hair_follow_update_selected_only)
         if not curves:
-            self.report({'WARNING'}, "No generated hair curves selected." if context.scene.hair_follow_update_selected_only else "No generated hair curves found.")
+            self.report({'WARNING'}, "生成カーブが選択されていません。" if context.scene.hair_follow_update_selected_only else "生成カーブが見つかりません。")
             return {'CANCELLED'}
         updated = 0
         skipped = 0
@@ -617,29 +617,29 @@ class HGD_OT_update_curve_roots_from_points(bpy.types.Operator):
                 root_point.handle_right += delta
             updated += 1
         if skipped:
-            self.report({'WARNING'}, f"Updated {updated} curve root(s), skipped {skipped} missing source point(s).")
+            self.report({'WARNING'}, f"カーブ根元を{updated}本更新しました。参照点なしを{skipped}本スキップしました。")
         else:
-            self.report({'INFO'}, f"Updated {updated} curve root(s), skipped 0 missing source point(s).")
+            self.report({'INFO'}, f"カーブ根元を{updated}本更新しました。参照点なしは0本です。")
         return {'FINISHED'}
 
 
 class HGD_OT_mirror_side(bpy.types.Operator):
     bl_idname = "hgd.mirror_side"
-    bl_label = "Mirror Side Objects"
-    bl_description = "Mirror selected Side_L or Side_R placement points and generated curves across the X axis"
+    bl_label = "左右ミラー"
+    bl_description = "選択したSide_LまたはSide_Rの配置点と生成カーブをX軸で反対側へ複製します"
     bl_options = {'REGISTER', 'UNDO'}
 
     direction: EnumProperty(
-        items=(("L2R", "Side_L to Side_R", "Mirror selected Side_L objects to Side_R"), ("R2L", "Side_R to Side_L", "Mirror selected Side_R objects to Side_L")),
+        items=(("L2R", "左から右", "選択したSide_LオブジェクトをSide_Rへミラー"), ("R2L", "右から左", "選択したSide_RオブジェクトをSide_Lへミラー")),
         default="L2R",
-        description="Side mirror direction",
+        description="左右ミラー方向",
     )
 
     def execute(self, context):
         src_side, dst_side = ("Side_L", "Side_R") if self.direction == "L2R" else ("Side_R", "Side_L")
         selected = [obj for obj in context.selected_objects if obj.get("hair_region") == src_side and obj.get("hair_guide_type") in {"placement_point", "curve"}]
         if not selected:
-            self.report({'WARNING'}, f"No {src_side} objects selected.")
+            self.report({'WARNING'}, f"{src_side}のオブジェクトが選択されていません。")
             return {'CANCELLED'}
         _, collections = utils.ensure_system()
         point_map = {}
@@ -652,7 +652,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
             if context.scene.hair_mirror_overwrite_existing:
                 _delete_generated_if_exists(new_name)
             elif bpy.data.objects.get(new_name):
-                self.report({'WARNING'}, "Mirror target already exists and overwrite is disabled; using a unique numbered name.")
+                self.report({'WARNING'}, "ミラー先が既に存在し、上書きがオフです。連番名で作成します。")
                 new_name = utils.unique_name(new_name)
             new_obj = obj.copy()
             new_obj.data = obj.data.copy() if obj.data else None
@@ -682,7 +682,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
             if context.scene.hair_mirror_overwrite_existing:
                 _delete_generated_if_exists(new_name)
             elif bpy.data.objects.get(new_name):
-                self.report({'WARNING'}, "Mirror target already exists and overwrite is disabled; using a unique numbered name.")
+                self.report({'WARNING'}, "ミラー先が既に存在し、上書きがオフです。連番名で作成します。")
                 new_name = utils.unique_name(new_name)
             new_obj = obj.copy()
             new_obj.data = obj.data.copy()
@@ -694,7 +694,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
             else:
                 for key in list(new_obj.keys()):
                     del new_obj[key]
-            # Mirror generated curve data in local coordinates only; keep object transform unchanged.
+            # 生成カーブはObject transformを保持し、ローカル座標だけをミラーします。
             for spline in new_obj.data.splines:
                 if spline.type != "BEZIER":
                     continue
@@ -716,14 +716,14 @@ class HGD_OT_mirror_side(bpy.types.Operator):
                 new_obj["hair_root_id"] = ""
                 lost_links += 1
             mirrored += 1
-        self.report({'INFO'}, f"Mirrored {mirrored} object(s). {lost_links} curve(s) lost source point link.")
+        self.report({'INFO'}, f"{mirrored}個をミラーしました。参照配置点を失ったカーブは{lost_links}本です。")
         return {'FINISHED'}
 
 
 class HGD_OT_mirror_side_l_to_r(bpy.types.Operator):
     bl_idname = "hgd.mirror_side_l_to_r"
-    bl_label = "Mirror Side_L to Side_R"
-    bl_description = "Mirror selected Side_L placement points and curves to Side_R across the X axis"
+    bl_label = "左側→右側へミラー"
+    bl_description = "選択したSide_Lの配置点とカーブをX軸でSide_Rへ複製します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -732,8 +732,8 @@ class HGD_OT_mirror_side_l_to_r(bpy.types.Operator):
 
 class HGD_OT_mirror_side_r_to_l(bpy.types.Operator):
     bl_idname = "hgd.mirror_side_r_to_l"
-    bl_label = "Mirror Side_R to Side_L"
-    bl_description = "Mirror selected Side_R placement points and curves to Side_L across the X axis"
+    bl_label = "右側→左側へミラー"
+    bl_description = "選択したSide_Rの配置点とカーブをX軸でSide_Lへ複製します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):

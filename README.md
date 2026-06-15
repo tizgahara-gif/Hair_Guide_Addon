@@ -1,17 +1,21 @@
 # Hair Guide Designer
 
-Hair Guide Designer is a Blender 4.x add-on for Object Mode hair-planning support. It creates non-destructive visual guide lines, placement points, editable curve strands, and root-clustering warnings for anime/VRC-style character hair. It does **not** automatically generate final hair meshes, edit the target head mesh, remove existing modifiers, or delete objects outside `HairGuideSystem`.
+## 概要
 
-- Add-on name: **Hair Guide Designer**
-- Internal module: `hair_guide_designer`
-- Author: 地図ヶ原
-- Target: Blender 4.x, with Blender 4.2 LTS prioritized
+Hair Guide Designer は、Blender 4.x向けの髪制作補助アドオンです。アニメ調・VRC向けキャラクターの髪を作る前段階で、ガイドライン、毛束の根元候補、編集可能なBezierカーブ毛束、根元集中チェックを使って髪型設計を支援します。
 
-## Installation and ZIP packaging
+このアドオンは非破壊を前提にしています。頭部メッシュを編集せず、既存モディファイアを削除せず、カーブを自動でメッシュ化しません。生成物は `HairGuideSystem` Collection配下にまとめられます。
 
-BlenderにインストールするZIPは、`hair_guide_designer` フォルダを直接ZIP化したものを使用してください。GitHubの **Download ZIP** をそのままインストールしないでください。GitHub ZIPは `Hair_Guide_Addon-main/` のようなリポジトリフォルダがZIP直下に入り、BlenderのAdd-on Installで失敗する可能性があります。
+- アドオン名: **Hair Guide Designer**
+- 内部モジュール名: `hair_guide_designer`
+- 作者: 地図ヶ原
+- 対象: Blender 4.x（Blender 4.2 LTS優先）
 
-Correct install ZIP structure:
+## インストール方法
+
+BlenderにインストールするZIPは、`hair_guide_designer` フォルダを直接ZIP化したものを使用してください。GitHubの **Download ZIP** をそのままインストールしないでください。
+
+正しいZIP構造:
 
 ```text
 hair_guide_designer.zip
@@ -23,70 +27,154 @@ hair_guide_designer.zip
    └─ utils.py
 ```
 
-Recommended command from the repository root:
+リリース用ZIPを作る場合の例:
 
 ```bash
 zip -r hair_guide_designer.zip hair_guide_designer -x '*/__pycache__/*' '*.pyc'
 ```
 
-Distribution ZIP files are not stored in this repository. Create the installable ZIP only when packaging a release.
+配布用ZIPはリポジトリに含めません。リリース時のみ、ローカルで `hair_guide_designer` フォルダをZIP化してください。
 
-配布用ZIPはリポジトリに含めません。リリース時のみ、`hair_guide_designer` フォルダをZIP化してください。
+Blenderでは **Edit > Preferences > Add-ons > Install...** からローカルで作成したZIPを選択し、**Hair Guide Designer** を有効化してください。UIは3D Viewportサイドバーの **ヘアガイド** タブに表示されます。
 
-Then in Blender, open **Edit > Preferences > Add-ons > Install...**, select the locally created `hair_guide_designer.zip`, enable **Hair Guide Designer**, and open the 3D Viewport sidebar **Hair Guide** tab.
-
-
-## Repository Contents / Development Notes
-
-This repository should contain only source files and documentation. Do not commit generated caches, Blender files, media files, archives, or binary assets.
+## リポジトリ内容 / 開発メモ
 
 このリポジトリにはソースコードとドキュメントのみを含めます。キャッシュ、Blenderファイル、メディアファイル、圧縮ファイル、バイナリアセットはコミットしないでください。
 
-Codex and other development workflows should follow these rules:
+開発時の注意:
 
-- Do not create or commit binary files.
-- Do not create `.blend` files in the repository.
-- Do not create image, video, or audio files in the repository.
-- Do not create ZIP/archive files in the repository.
-- Do not commit `__pycache__`, `.pyc`, or other generated cache files.
-- Keep required files limited to Python, Markdown, and text configuration files.
-- If temporary verification artifacts are needed, create them outside the repository and do not include them in the final patch.
+- バイナリファイルを作成・コミットしない。
+- `.blend` ファイルをリポジトリ内に作成しない。
+- 画像・動画・音声ファイルを作成しない。
+- ZIPなどの圧縮ファイルをリポジトリに含めない。
+- `__pycache__`、`.pyc` などの生成キャッシュをコミットしない。
+- 必要なファイルはPython、Markdown、テキスト設定に限定する。
 
-## UI Help
+## 基本操作
 
-The add-on includes a **Quick Start** panel and **Help** panel in the Blender sidebar. Follow the panels from top to bottom: **Setup → Guide Lines → Placement Points → Curve Strand → Validation**. The UI also shows current Target Head, Guide, Placement Point, Curve, and Warning counts so you can see what to do next without reading this README.
+Blender上の **クイックスタート** パネルと同じ手順です。
 
-## Quick Start workflow
+1. 頭部メッシュを選択
+2. 頭部として登録
+3. 基本ガイドを生成
+4. 必要なら位置調整
+5. 配置点を生成
+6. 配置点を選択
+7. カーブ毛束を生成
+8. 根元集中を確認
 
-1. Select head mesh
-2. Set Target Head
-3. Create Basic Hair Guides
-4. Adjust guides if needed
-5. Generate Placement Points
-6. Select placement points
-7. Create Curve Strands
-8. Check Root Clustering
+## 各パネル説明
 
-## Sidebar panel layout
+### クイックスタート
 
-The **Hair Guide** tab is organized as:
+作業手順と現在の状態を表示します。基本ガイド数、詳細ガイド数、配置点数、カーブ数、警告数を確認できます。
 
-1. **Hair Guide: Quick Start** — workflow and current status.
-2. **Setup** — register the selected head mesh; the mesh is not edited.
-3. **Guide Lines** — show, hide, regenerate, or delete visual guide lines.
-4. **Regions** — toggle Front, Side, Side_L, Side_R, Back Upper, Back Middle, and Nape references.
-5. **Placement Points** — generate seed-based strand root suggestions and adjust variation.
-6. **Curve Strand** — create editable Bezier curve strands from selected points.
-7. **Curve Batch Adjust** — batch-edit generated curve length scale, bevel depth, and resolution.
-8. **Curve Follow** — reconnect generated curve roots to moved placement points.
-9. **Side Mirror** — mirror selected Side_L / Side_R placement points and curves across X.
-10. **Validation** — check root clustering and explain Warning Count.
-11. **Display / Cleanup** — grouped display and delete commands; cleanup affects only HairGuideSystem.
-12. **Help** — explains what the add-on does and does not do.
+### セットアップ
 
-## Generated collection structure
+選択中の頭部メッシュを登録します。既存メッシュは変更されません。
 
-`Create Basic Hair Guides`, `Regenerate Basic Guides`, and related operators create and reuse this structure without duplicating collections:
+### ガイドライン
+
+髪型設計の基準となるガイドラインを生成・表示・削除します。
+
+基本ガイドは意図的に最小限です。初期生成では以下のみ作成します。
+
+```text
+HAIR_GUIDE_Hairline
+HAIR_GUIDE_SideBoundary_L
+HAIR_GUIDE_SideBoundary_R
+HAIR_GUIDE_BackVolume
+HAIR_GUIDE_Nape
+HAIR_GUIDE_Center
+```
+
+すべての解剖学的参照線を最初から表示するわけではありません。追加の参照が必要な場合のみ **詳細ガイドを追加** を使用してください。詳細ガイドでは、頭頂、ハチ、耳周り、後頭部、必要な領域補助線を追加します。
+
+**基本ガイドを再生成** は、上記6本の基本ガイドだけを削除して作り直します。詳細ガイド、配置点、カーブ、警告、頭部メッシュは削除しません。
+
+### 領域表示
+
+髪の領域を表示・非表示します。
+
+- 前髪: 前髪の開始位置
+- 側頭部: 耳周辺から後頭部へ流れる領域
+- 後頭部上層: 髪全体のボリューム
+- 後頭部中層: 大きな毛束を配置する領域
+- 襟足: 首へ向かって落ちる短い毛束領域
+
+### 配置点について
+
+毛束の根元候補を生成します。同じ位置から髪が生えて見える問題を避けるための目安です。
+
+主な設定:
+
+- 乱数シード: 同じ値なら同じ配置になります。
+- 密度: 配置点の数や間隔を調整します。
+- 左右対称性: 高いほど左右対称になります。
+- 高さの揺らぎ: 上下方向のランダム変化。
+- 幅の揺らぎ: 左右方向のランダム変化。
+- 奥行きの揺らぎ: 前後方向のランダム変化。
+- サイズの揺らぎ: 配置点表示と推奨サイズの変化。
+- 長さの揺らぎ: 推奨毛束長さの変化。
+
+### カーブ毛束について
+
+配置点から編集可能なBezierカーブ毛束を生成します。生成されたカーブは後から通常のBlender操作で編集できます。自動でメッシュ化はされません。
+
+主な設定:
+
+- 毛束長さ
+- 太さ
+- 解像度
+- 根元半径
+- 毛先半径
+- 先細り強度
+
+根元半径、毛先半径、先細り強度はMVPでは主に将来用の保存値です。
+
+### カーブ一括調整
+
+生成済みカーブをまとめて調整します。
+
+- 長さ倍率: 根元を基準にカーブ長を倍率変更します。
+- 太さ: Curveの表示太さを変更します。
+- 解像度: Curveの滑らかさを変更します。
+
+選択カーブだけ、または全生成カーブへ適用できます。
+
+### カーブ追従
+
+配置点を移動した後に、生成済みカーブの根元を配置点へ追従させます。
+
+- 選択カーブのみ: 選択中の生成カーブだけ更新します。
+- 毛先位置を維持: カーブ全体を同じ移動量で動かし、形を維持します。
+
+### 左右ミラー
+
+側頭部の配置点とカーブを反対側へ複製します。
+
+- 左側→右側へミラー
+- 右側→左側へミラー
+
+MVPではX軸固定です。配置点はObject位置を反転し、カーブはObject transformを反転せず、Bezierのローカル座標のみ反転します。
+
+### 検証機能について
+
+同じ場所から毛束が生えて見える問題を検出します。
+
+**根元集中チェック** は、同じ領域内で近すぎる配置点ペアを検出します。警告数は警告対象オブジェクト数ではなく、近すぎる配置点ペア数です。
+
+警告色や領域色を確認するには、Viewport ShadingのColorをObjectに設定してください。
+
+### 表示と削除
+
+表示切替と削除をまとめています。削除は `HairGuideSystem` 内の生成物のみ対象です。頭部メッシュは削除されません。
+
+### ヘルプ
+
+Blender上だけで、このアドオンでできること・できないこと・推奨手順を確認できます。
+
+## 生成Collection構造
 
 ```text
 HairGuideSystem
@@ -97,110 +185,41 @@ HairGuideSystem
 └─ Warnings
 ```
 
-Only generated objects with `obj.get("hair_guide_type")` inside this collection tree are deleted by delete/clear operators. The target head mesh, existing hair meshes, and existing modifiers are left untouched.
+生成物には `hair_guide_type` などのCustom Propertyが付与され、削除や表示切替はこの情報を使って安全に行います。
 
-If same-named `Guides / Regions / PlacementPoints / Curves / Warnings` Collections already exist, the add-on reuses them. To avoid collisions, do not rename or repurpose the HairGuideSystem-dedicated collection names.
+## 既知の制限
 
-## Generated guide concepts
+MVPでは以下は未対応です。
 
-The add-on estimates rough areas from the target head object's world-space bounding box. These guides are intended as editable starting points, not anatomical detection.
-
-Basic Guides are intentionally minimal. The add-on does not display every anatomical reference line by default. **Create Basic Hair Guides / Regenerate Basic Guides** creates only:
-
-- `HAIR_GUIDE_Hairline`
-- `HAIR_GUIDE_SideBoundary_L`
-- `HAIR_GUIDE_SideBoundary_R`
-- `HAIR_GUIDE_BackVolume`
-- `HAIR_GUIDE_Nape`
-- `HAIR_GUIDE_Center`
-
-Use **Add Detailed Guide Lines** only when additional references are needed. Detailed guides may add Top, Hachi, Ear Upper/Back, Occipital, and optional region helper lines.
-
-Pressing **Regenerate Basic Guides** again clears and recreates only those six Basic Guides. It does not delete Detailed Guides, Placement Points, Curves, Warnings, the Target Head, or existing hair meshes.
-
-## Placement points and curve strands
-
-**Generate Placement Points** creates UV sphere markers with reproducible seed-based variation. Default MVP point counts are:
-
-```text
-Front: 7
-Side_L: 4
-Side_R: 4
-Back_Upper: 6
-Back_Middle: 9
-Nape: 5
-```
-
-Each placement point stores region, recommended size, recommended direction, recommended length, flow side, and center/outer position metadata. **Create Curve From Selected Points** uses that direction and length to create normal editable Blender Bezier curves in `HairGuideSystem/Curves`; it does not convert them to mesh.
-
-## Curve adjustment, follow, and side mirror
-
-### Curve Batch Adjust
-
-Generated hair curves can be adjusted together. **Length Scale** changes strand length relative to its root: `1.0` keeps the current length, `0.8` shortens by 20%, and `1.2` lengthens by 20%. Batch settings can be applied to selected generated curves or to all generated curves. Bevel Depth and Resolution update both the Blender Curve data and the curve custom properties.
-
-### Curve Follow
-
-If placement points are moved after curve creation, use **Update Curve Roots From Points** to reconnect curve roots to their source points. With **Keep Tip Offset** enabled, the whole curve moves by the root delta and the strand shape is preserved. With it disabled, only the first Bezier point is moved, which may deform the strand.
-
-### Side Mirror
-
-Select `Side_L` placement points or generated curves and run **Mirror Side_L to Side_R**, or select `Side_R` objects and run **Mirror Side_R to Side_L**. The mirrored objects are copied across the X axis. Placement point custom properties are side-flipped, and mirrored curves try to reference the mirrored placement point when the source point was mirrored in the same operation.
-
-Mirror operates on selected Side_L / Side_R objects only in this MVP. It does not generate final hair meshes, does not use Geometry Nodes, and does not perform live mirror synchronization.
-
-## Validation and colors
-
-**Check Root Clustering** compares placement points in the same region. If points are closer than `Root Cluster Threshold`, the add-on colors the involved points red, creates warning markers in `HairGuideSystem/Warnings`, and updates `Warning Count`.
-
-Warning Countは警告対象オブジェクト数ではなく、近すぎる配置点ペアの数です。
-
-警告色や領域色を確認するには、Viewport ShadingのColorをObjectに設定してください。The add-on stores region and warning colors in `obj.color`.
-
-**Clear Warnings** removes warning markers and restores placement point colors.
-
-## Delete and clear behavior
-
-- **Delete Guide Lines** removes generated guide and region line objects only.
-- **Clear Placement Points** removes generated placement point objects only.
-- **Clear Warnings** removes warning markers and resets warning colors/count.
-- **Clear All Generated Objects** removes generated guide, region, placement point, curve, and warning objects inside `HairGuideSystem` only.
-
-These commands never delete the Target Head Object, never delete objects outside `HairGuideSystem`, and never edit existing modifiers.
-
-## MVP limitations
-
-MVPでは以下は未対応です:
-
+- 髪メッシュ自動生成
+- カーブからメッシュ生成
+- Geometry Nodes連携
 - 頭部メッシュ表面への厳密なスナップ
 - 前髪クリアランスの自動判定
 - 襟足位置チェック
-- カーブからメッシュ生成
-- 自動・リアルタイム左右ミラー
+- Unity設定
+- PhysBone設定
+- 自動リギング
 - プリセット保存
+- 自動・リアルタイム左右ミラー同期
 
-Additional limitations:
-
-- Bounding box estimates are intentionally approximate and should be manually adjusted by the artist.
-- Root clustering validation is an MVP heuristic focused on placement points; curve-root validation can be added later.
-- No advanced heatmap, exact head-surface distance check, automatic bang clearance, live auto mirror, mesh batch conversion, hair cap generation, presets, multi-character management, mini diagrams, or Geometry Nodes integration is included in this MVP.
-- `mesh_strip.py` was removed because strip mesh generation is outside the current MVP scope.
-
-## Verification Checklist
+## 動作確認チェックリスト
 
 1. Blender 4.2 LTSでAdd-onを有効化できる。
-2. MeshをTarget Headに設定できる。
-3. Create Basic Hair Guidesを2回押してもガイドが重複増殖しない。
-4. Generate Placement Pointsで各領域の配置点が生成される。
-5. Seedを変えると配置点の揺らぎが変わる。
-6. 同じSeedでは同じ配置点になる。
-7. 選択したPlacement PointからCurveが生成される。
-8. Check Root Clusteringで近い点が警告される。
-9. Clear Warningsで警告色とWarning markerが消える。
-10. Delete Guide LinesでGuides / Regionsのみ消える。
-11. Clear All Generated ObjectsでHairGuideSystem配下の生成物だけ消える。
-12. Target Head Objectは削除されない。
+2. Meshを頭部として登録できる。
+3. 基本ガイド生成で6本の最小ガイドだけが生成される。
+4. 詳細ガイドを後から追加できる。
+5. 配置点を生成できる。
+6. Seedを変えると配置点の揺らぎが変わる。
+7. 同じSeedでは同じ配置点になる。
+8. 選択した配置点からカーブ毛束が生成される。
+9. カーブ一括調整ができる。
+10. 配置点移動後にカーブ追従ができる。
+11. 左右ミラーでSide_L / Side_Rの配置点とカーブを複製できる。
+12. 根元集中チェックで近い点が警告される。
+13. 警告削除で警告色とWarning markerが消える。
+14. 生成物をすべて削除しても頭部メッシュは削除されない。
 
-## Quick verification in this repository
+## リポジトリ内での簡易確認
 
-In this repository, source parsing can be checked without generating cache files by running a Python AST parse over `hair_guide_designer/*.py`. Distribution ZIP files are intentionally not stored in the repository; create the install ZIP locally only when packaging a release. Full runtime behavior should be verified by installing the locally packaged add-on in Blender 4.2 LTS and exercising the **Hair Guide** tab.
+`__pycache__` を生成しないよう、Python AST parseで `hair_guide_designer/*.py` を確認できます。配布ZIPはリポジトリに保存しません。リリース時のみローカルで作成してください。Blender上の実動作は、Blender 4.2 LTSへインストールして確認してください。

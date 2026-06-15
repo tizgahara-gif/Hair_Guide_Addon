@@ -3,8 +3,8 @@ bl_info = {
     "author": "地図ヶ原",
     "version": (1, 0, 0),
     "blender": (4, 2, 0),
-    "location": "View3D > Sidebar > Hair Guide Designer",
-    "description": "Guide-curve based helper tools for anime/VRC hair blockout and strip generation.",
+    "location": "3Dビュー > サイドバー > ヘアガイド",
+    "description": "アニメ調・VRC向け髪型設計を補助するガイド、配置点、カーブ毛束ツールです。",
     "category": "Object",
 }
 

@@ -2,10 +2,10 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty
 
 STRAND_TYPES = (
-    ("FRONT", "Front", "Front bang strand"),
-    ("SIDE", "Side", "Side strand"),
-    ("BACK", "Back", "Back strand"),
-    ("NAPE", "Nape", "Nape strand"),
+    ("FRONT", "前髪", "前髪用の毛束"),
+    ("SIDE", "側頭部", "側頭部用の毛束"),
+    ("BACK", "後頭部", "後頭部用の毛束"),
+    ("NAPE", "襟足", "襟足用の毛束"),
 )
 
 PROPERTY_NAMES = (
@@ -25,200 +25,200 @@ PROPERTY_NAMES = (
 def register():
     scene = bpy.types.Scene
     scene.hair_target_head_object = PointerProperty(
-        name="Target Head Object",
+        name="頭部オブジェクト",
         type=bpy.types.Object,
-        description="Mesh object used as the bounding-box reference for generating hair guides",
+        description="髪ガイド生成の基準にする頭部メッシュオブジェクト",
     )
     scene.hair_guide_scale = FloatProperty(
-        name="Guide Scale",
+        name="ガイド倍率",
         default=1.0,
         min=0.05,
         max=10.0,
-        description="Scale multiplier for visual guide lines generated from the target head bounding box",
+        description="頭部バウンディングボックスから生成するガイドラインの倍率",
     )
     scene.hair_guide_offset = FloatProperty(
-        name="Guide Offset",
+        name="ガイド距離",
         default=0.04,
         min=-1.0,
         max=1.0,
-        description="Offset distance used to place guide lines slightly away from the head bounding box",
+        description="ガイドラインを頭部から少し離して配置する距離",
     )
 
     scene.hair_seed = IntProperty(
-        name="Seed",
+        name="乱数シード",
         default=7,
         min=0,
-        description="Random seed. Same seed generates the same point variation.",
+        description="乱数シード。同じ値なら同じ配置になります。",
     )
     scene.hair_density = FloatProperty(
-        name="Density",
+        name="密度",
         default=1.0,
         min=0.1,
         max=3.0,
-        description="Controls the number or spacing of placement points.",
+        description="配置点の数や間隔を調整します。",
     )
     scene.hair_symmetry_bias = FloatProperty(
-        name="Symmetry Bias",
+        name="左右対称性",
         default=0.75,
         min=0.0,
         max=1.0,
-        description="Controls how strongly left and right points remain symmetrical. 1.0 = more symmetrical, 0.0 = more random.",
+        description="高いほど左右対称になります。1.0でより対称、0.0でよりランダムです。",
     )
 
     scene.hair_height_variation = FloatProperty(
-        name="Height Variation",
+        name="高さの揺らぎ",
         default=0.04,
         min=0.0,
         max=1.0,
-        description="Random vertical offset for placement points.",
+        description="上下方向のランダム変化。",
     )
     scene.hair_width_variation = FloatProperty(
-        name="Width Variation",
+        name="幅の揺らぎ",
         default=0.035,
         min=0.0,
         max=1.0,
-        description="Random left-right offset for placement points.",
+        description="左右方向のランダム変化。",
     )
     scene.hair_depth_variation = FloatProperty(
-        name="Depth Variation",
+        name="奥行きの揺らぎ",
         default=0.04,
         min=0.0,
         max=1.0,
-        description="Random front-back offset for placement points.",
+        description="前後方向のランダム変化。",
     )
     scene.hair_size_variation = FloatProperty(
-        name="Size Variation",
+        name="サイズの揺らぎ",
         default=0.25,
         min=0.0,
         max=2.0,
-        description="Random size variation for point display and recommended strand size.",
+        description="配置点の表示サイズと推奨毛束サイズのランダム変化。",
     )
     scene.hair_length_variation = FloatProperty(
-        name="Length Variation",
+        name="長さの揺らぎ",
         default=0.25,
         min=0.0,
         max=2.0,
-        description="Random recommended strand length variation.",
+        description="推奨毛束長さのランダム変化。",
     )
 
     scene.hair_strand_type = EnumProperty(
-        name="Strand Type",
+        name="毛束タイプ",
         items=STRAND_TYPES,
         default="FRONT",
-        description="Metadata category stored on generated curve strands",
+        description="生成カーブ毛束に保存する分類情報",
     )
     scene.hair_curve_length = FloatProperty(
-        name="Length",
+        name="毛束長さ",
         default=0.55,
         min=0.01,
         max=5.0,
-        description="Base length of generated curve strands.",
+        description="生成するカーブ毛束の基準長さ。",
     )
     scene.hair_curve_bevel_depth = FloatProperty(
-        name="Bevel Depth",
+        name="太さ",
         default=0.012,
         min=0.0,
         precision=4,
-        description="Viewport thickness of generated curve strands.",
+        description="生成するカーブ毛束の表示上の太さ。",
     )
     scene.hair_curve_resolution = IntProperty(
-        name="Resolution",
+        name="解像度",
         default=12,
         min=1,
         max=64,
-        description="Curve smoothing resolution.",
+        description="カーブの滑らかさ。",
     )
     scene.hair_curve_root_radius = FloatProperty(
-        name="Root Radius",
+        name="根元半径",
         default=0.035,
         min=0.0,
         precision=4,
-        description="Stored root radius value for future taper support.",
+        description="将来の先細り対応用に保存する根元半径。",
     )
     scene.hair_curve_tip_radius = FloatProperty(
-        name="Tip Radius",
+        name="毛先半径",
         default=0.004,
         min=0.0,
         precision=4,
-        description="Stored tip radius value for future taper support.",
+        description="将来の先細り対応用に保存する毛先半径。",
     )
     scene.hair_curve_taper_strength = FloatProperty(
-        name="Taper Strength",
+        name="先細り強度",
         default=0.75,
         min=0.0,
         max=1.0,
-        description="Stored taper strength value for future taper support.",
+        description="将来の先細り対応用に保存する先細り強度。",
     )
     scene.hair_curve_segment_count = IntProperty(
-        name="Segment Count",
+        name="制御点数",
         default=3,
         min=2,
         max=12,
-        description="Number of points used when creating strand guide curves.",
+        description="カーブ毛束を作成するときに使う制御点数。",
     )
 
     scene.hair_warning_count = IntProperty(
-        name="Warning Count",
+        name="警告数",
         default=0,
         min=0,
-        description="Number of too-close placement point pairs found by root clustering validation",
+        description="根元集中チェックで見つかった近すぎる配置点ペア数",
     )
     scene.hair_root_cluster_threshold = FloatProperty(
-        name="Root Cluster Threshold",
+        name="判定距離",
         default=0.08,
         min=0.001,
         max=1.0,
-        description="Distance threshold for detecting placement points that are too close.",
+        description="近すぎる配置点を検出する距離しきい値。",
     )
 
     scene.hair_batch_curve_length = FloatProperty(
-        name="Length Scale",
+        name="長さ倍率",
         default=1.0,
         min=0.01,
         max=5.0,
-        description="Scale selected or generated curve strand length from the root. 1.0 keeps current length.",
+        description="選択または生成済みカーブ毛束の長さを根元基準で倍率変更します。1.0で現状維持。",
     )
     scene.hair_batch_curve_bevel_depth = FloatProperty(
-        name="Bevel Depth",
+        name="太さ",
         default=0.02,
         min=0.0,
         precision=4,
-        description="Batch viewport thickness applied to generated hair curves.",
+        description="生成済みカーブへ一括適用する表示上の太さ。",
     )
     scene.hair_batch_curve_resolution = IntProperty(
-        name="Resolution",
+        name="解像度",
         default=3,
         min=1,
         max=64,
-        description="Batch smoothing resolution applied to generated hair curves.",
+        description="生成済みカーブへ一括適用する滑らかさ。",
     )
 
     scene.hair_follow_keep_tip_offset = BoolProperty(
-        name="Keep Tip Offset",
+        name="毛先位置を維持",
         default=True,
-        description="Move the whole curve by the root delta so strand shape and tip offset are preserved.",
+        description="根元の移動量でカーブ全体を動かし、形と毛先位置を維持します。",
     )
     scene.hair_follow_update_selected_only = BoolProperty(
-        name="Selected Curves Only",
+        name="選択カーブのみ",
         default=True,
-        description="Update only selected generated curves instead of all generated curves.",
+        description="全生成カーブではなく、選択中の生成カーブのみ更新します。",
     )
 
     scene.hair_mirror_axis = EnumProperty(
-        name="Axis",
-        items=(("X", "X", "Mirror across the X axis"),),
+        name="軸",
+        items=(("X", "X", "X軸でミラー"),),
         default="X",
-        description="Mirror axis. MVP supports X axis only.",
+        description="ミラー軸。MVPではX軸のみ対応します。",
     )
     scene.hair_mirror_overwrite_existing = BoolProperty(
-        name="Overwrite Existing",
+        name="既存を上書き",
         default=True,
-        description="Delete generated mirror target objects with the same name before creating mirrored objects.",
+        description="同名の生成済みミラー先オブジェクトを削除してから作成します。",
     )
     scene.hair_mirror_copy_custom_properties = BoolProperty(
-        name="Copy Custom Properties",
+        name="カスタムプロパティをコピー",
         default=True,
-        description="Copy custom properties from source objects when mirroring, then update side and mirror metadata.",
+        description="ミラー時に元オブジェクトのカスタムプロパティをコピーし、左右情報とミラー情報を更新します。",
     )
 
 

@@ -8,32 +8,32 @@ def _count_generated(guide_type=None):
 
 def _draw_status(layout, scene):
     box = layout.box()
-    box.label(text="Current Status:", icon='INFO')
+    box.label(text="現在の状態:", icon='INFO')
     head = scene.hair_target_head_object
     if head and head.type == 'MESH':
-        box.label(text=f"Target Head: {head.name}", icon='CHECKMARK')
+        box.label(text=f"頭部: {head.name}", icon='CHECKMARK')
     else:
-        box.label(text="Target Head: Not Set", icon='ERROR')
-        box.label(text="Select a head mesh first.")
+        box.label(text="頭部: 未設定", icon='ERROR')
+        box.label(text="先に頭部メッシュを選択してください。")
     guide_objects = [obj for obj in utils.generated_objects() if obj.get("hair_guide_type") in {"guide", "region"}]
     basic_count = len([obj for obj in guide_objects if obj.get("hair_guide_level") == "basic"])
     detailed_count = len([obj for obj in guide_objects if obj.get("hair_guide_level") == "detailed"])
     point_count = _count_generated("placement_point")
     curve_count = _count_generated("curve")
     warning_count = _count_generated("warning")
-    box.label(text=f"Basic Guides: {basic_count}", icon='OUTLINER_OB_CURVE')
-    box.label(text=f"Detailed Guides: {detailed_count}", icon='OUTLINER_OB_CURVE')
-    box.label(text=f"Placement Points: {point_count}", icon='MESH_UVSPHERE')
-    box.label(text=f"Curves: {curve_count}", icon='OUTLINER_OB_CURVE')
-    box.label(text=f"Warnings: {scene.hair_warning_count or warning_count}", icon='ERROR' if (scene.hair_warning_count or warning_count) else 'CHECKMARK')
+    box.label(text=f"基本ガイド: {basic_count}", icon='OUTLINER_OB_CURVE')
+    box.label(text=f"詳細ガイド: {detailed_count}", icon='OUTLINER_OB_CURVE')
+    box.label(text=f"配置点: {point_count}", icon='MESH_UVSPHERE')
+    box.label(text=f"カーブ: {curve_count}", icon='OUTLINER_OB_CURVE')
+    box.label(text=f"警告: {scene.hair_warning_count or warning_count}", icon='ERROR' if (scene.hair_warning_count or warning_count) else 'CHECKMARK')
 
 
 def _region_buttons(layout, label, region, note):
     row = layout.row(align=True)
-    op = row.operator('hgd.region_visibility', text=f"Show {label}", icon='HIDE_OFF')
+    op = row.operator('hgd.region_visibility', text=f"{label} 表示", icon='HIDE_OFF')
     op.region = region
     op.action = 'SHOW'
-    op = row.operator('hgd.region_visibility', text=f"Hide {label}", icon='HIDE_ON')
+    op = row.operator('hgd.region_visibility', text=f"{label} 非表示", icon='HIDE_ON')
     op.region = region
     op.action = 'HIDE'
     layout.label(text=note, icon='INFO')
@@ -42,112 +42,112 @@ def _region_buttons(layout, label, region, note):
 class HGD_PT_base(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Hair Guide'
+    bl_category = 'ヘアガイド'
 
 
 class HGD_PT_quick_start(HGD_PT_base):
-    bl_label = 'Hair Guide: Quick Start'
+    bl_label = 'クイックスタート'
     bl_order = 0
 
     def draw(self, context):
         layout = self.layout
         box = layout.box()
-        box.label(text="Workflow:", icon='INFO')
-        box.label(text="1. Select head mesh")
-        box.label(text="2. Set Target Head")
-        box.label(text="3. Create Basic Hair Guides")
-        box.label(text="4. Adjust guides if needed")
-        box.label(text="5. Generate Placement Points")
-        box.label(text="6. Select points")
-        box.label(text="7. Create Curve Strands")
-        box.label(text="8. Check Root Clustering")
+        box.label(text="作業手順", icon='INFO')
+        box.label(text="1. 頭部メッシュを選択")
+        box.label(text="2. 頭部として登録")
+        box.label(text="3. 基本ガイドを生成")
+        box.label(text="4. 必要なら位置調整")
+        box.label(text="5. 配置点を生成")
+        box.label(text="6. 配置点を選択")
+        box.label(text="7. カーブ毛束を生成")
+        box.label(text="8. 根元集中を確認")
         _draw_status(layout, context.scene)
 
 
 class HGD_PT_setup(HGD_PT_base):
-    bl_label = 'Setup'
+    bl_label = 'セットアップ'
     bl_order = 1
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        layout.label(text="Register the selected head mesh.", icon='INFO')
-        layout.label(text="This add-on does not edit the mesh.")
+        layout.label(text="選択中の頭部メッシュを登録します。", icon='INFO')
+        layout.label(text="既存メッシュは変更されません。")
         if not scene.hair_target_head_object:
-            layout.label(text="No target head set.", icon='ERROR')
-            layout.label(text="Select a head mesh first.")
+            layout.label(text="頭部が未設定です。", icon='ERROR')
+            layout.label(text="先に頭部メッシュを選択してください。")
         col = layout.column(align=True)
         col.prop(scene, 'hair_target_head_object')
-        col.operator('hgd.set_target_head', text='Set Selected Mesh as Head', icon='CHECKMARK')
+        col.operator('hgd.set_target_head', text='選択メッシュを頭部として登録', icon='CHECKMARK')
         layout.separator()
         layout.prop(scene, 'hair_guide_scale')
         layout.prop(scene, 'hair_guide_offset')
 
 
 class HGD_PT_guide_lines(HGD_PT_base):
-    bl_label = 'Guide Lines'
+    bl_label = 'ガイドライン'
     bl_order = 2
 
     def draw(self, context):
         layout = self.layout
-        layout.label(text="Basic guides are intentionally minimal.", icon='INFO')
-        layout.label(text="Hairline, side boundaries, back volume, nape, center.")
+        layout.label(text="髪型設計の基準となるガイドラインです。", icon='INFO')
+        layout.label(text="基本は生え際・側面境界・後頭部・襟足・正中線です。")
         row = layout.row(align=True)
-        op = row.operator('hgd.show_hide_guides', text='Show Guide Lines', icon='HIDE_OFF')
+        op = row.operator('hgd.show_hide_guides', text='ガイド表示', icon='HIDE_OFF')
         op.hide = False
-        op = row.operator('hgd.show_hide_guides', text='Hide Guide Lines', icon='HIDE_ON')
+        op = row.operator('hgd.show_hide_guides', text='ガイド非表示', icon='HIDE_ON')
         op.hide = True
-        layout.operator('hgd.create_hair_guides', text='Create Basic Hair Guides', icon='OUTLINER_OB_CURVE')
-        layout.operator('hgd.create_hair_guides', text='Regenerate Basic Guides', icon='OUTLINER_OB_CURVE')
-        layout.operator('hgd.create_detailed_guides', text='Add Detailed Guide Lines', icon='OUTLINER_OB_CURVE')
-        layout.label(text="Basic guides only; rerun regenerates only basics.")
-        layout.operator('hgd.delete_hair_guides', text='Delete Guide Lines', icon='TRASH')
-        layout.label(text="Deletes only generated guide objects.")
-        layout.label(text="Head mesh is not deleted.")
+        layout.operator('hgd.create_hair_guides', text='基本ガイドを生成', icon='OUTLINER_OB_CURVE')
+        layout.operator('hgd.create_hair_guides', text='基本ガイドを再生成', icon='OUTLINER_OB_CURVE')
+        layout.operator('hgd.create_detailed_guides', text='詳細ガイドを追加', icon='OUTLINER_OB_CURVE')
+        layout.label(text="基本ガイドのみ生成します。再実行しても基本のみ更新します。")
+        layout.operator('hgd.delete_hair_guides', text='ガイド削除', icon='TRASH')
+        layout.label(text="生成されたガイドのみ削除します。")
+        layout.label(text="頭部メッシュは削除されません。")
 
 
 class HGD_PT_regions(HGD_PT_base):
-    bl_label = 'Regions'
+    bl_label = '領域表示'
     bl_order = 3
 
     def draw(self, context):
         layout = self.layout
-        layout.label(text="Toggle hair construction regions.", icon='INFO')
-        _region_buttons(layout, "Front", "Front", "Bangs start from hairline, not forehead.")
-        _region_buttons(layout, "Side", "Side", "Avoid excessive volume above ears.")
-        _region_buttons(layout, "Side L", "Side_L", "Left side-only visibility.")
-        _region_buttons(layout, "Side R", "Side_R", "Right side-only visibility.")
-        _region_buttons(layout, "Back Upper", "Back_Upper", "Defines hair cap volume.")
-        _region_buttons(layout, "Back Middle", "Back_Middle", "Main large strand roots.")
-        _region_buttons(layout, "Nape", "Nape", "Avoid strands growing from neck.")
+        layout.label(text="髪の領域を表示・非表示します。", icon='INFO')
+        _region_buttons(layout, "前髪", "Front", "前髪：前髪の開始位置。")
+        _region_buttons(layout, "側頭部", "Side", "側頭部：耳周辺から後頭部へ流れる領域。")
+        _region_buttons(layout, "左側", "Side_L", "左側のみ表示・非表示します。")
+        _region_buttons(layout, "右側", "Side_R", "右側のみ表示・非表示します。")
+        _region_buttons(layout, "後頭部上層", "Back_Upper", "後頭部上層：髪全体のボリューム。")
+        _region_buttons(layout, "後頭部中層", "Back_Middle", "後頭部中層：大きな毛束を配置する領域。")
+        _region_buttons(layout, "襟足", "Nape", "襟足：首へ向かって落ちる短い毛束領域。")
         row = layout.row(align=True)
-        op = row.operator('hgd.region_visibility', text='Show All Regions', icon='HIDE_OFF')
+        op = row.operator('hgd.region_visibility', text='全領域表示', icon='HIDE_OFF')
         op.region = 'ALL'
         op.action = 'SHOW'
-        op = row.operator('hgd.region_visibility', text='Hide All Regions', icon='HIDE_ON')
+        op = row.operator('hgd.region_visibility', text='全領域非表示', icon='HIDE_ON')
         op.region = 'ALL'
         op.action = 'HIDE'
 
 
 class HGD_PT_placement(HGD_PT_base):
-    bl_label = 'Placement Points'
+    bl_label = '配置点'
     bl_order = 4
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        layout.label(text="Suggested hair strand root positions.", icon='MESH_UVSPHERE')
-        layout.label(text="Use them to avoid uniform roots.")
+        layout.label(text="毛束の根元候補を生成します。", icon='MESH_UVSPHERE')
+        layout.label(text="同じ位置から生えて見える問題を避ける目安です。")
         if not scene.hair_target_head_object:
-            layout.label(text="No target head set. Do Setup first.", icon='ERROR')
+            layout.label(text="頭部が未設定です。先にセットアップしてください。", icon='ERROR')
         if _count_generated("placement_point") == 0:
-            layout.label(text="No placement points found.", icon='ERROR')
-            layout.label(text="Click Generate Placement Points.")
+            layout.label(text="配置点がありません。", icon='ERROR')
+            layout.label(text="配置点を生成してください。")
         layout.operator('hgd.generate_placement_points', icon='MESH_UVSPHERE')
         layout.operator('hgd.clear_placement_points', icon='TRASH')
         layout.separator()
-        layout.label(text="Seed: same value reproduces layout.", icon='INFO')
-        layout.label(text="Symmetry Bias: high = balanced L/R.")
+        layout.label(text="乱数シード：同じ値なら同じ配置になります。", icon='INFO')
+        layout.label(text="左右対称性：高いほど左右対称になります。")
         layout.prop(scene, 'hair_seed')
         layout.prop(scene, 'hair_density')
         layout.prop(scene, 'hair_symmetry_bias')
@@ -159,164 +159,164 @@ class HGD_PT_placement(HGD_PT_base):
 
 
 class HGD_PT_curve_strand(HGD_PT_base):
-    bl_label = 'Curve Strand'
+    bl_label = 'カーブ毛束'
     bl_order = 5
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        layout.label(text="Creates editable Bezier curve strands", icon='OUTLINER_OB_CURVE')
-        layout.label(text="from selected placement points.")
-        layout.label(text="Curves are not converted to mesh.")
+        layout.label(text="配置点から編集可能なBezierカーブ毛束を生成します。", icon='OUTLINER_OB_CURVE')
+        layout.label(text="選択した配置点を使います。")
+        layout.label(text="自動でメッシュ化はされません。")
         if _count_generated("placement_point") == 0:
-            layout.label(text="No placement points found.", icon='ERROR')
+            layout.label(text="配置点がありません。", icon='ERROR')
         if _count_generated("curve") == 0:
-            layout.label(text="No curve strands created yet.", icon='INFO')
-        layout.operator('hgd.create_curve_from_points', text='Create Editable Curve Strands', icon='OUTLINER_OB_CURVE')
+            layout.label(text="カーブ毛束はまだありません。", icon='INFO')
+        layout.operator('hgd.create_curve_from_points', text='カーブ毛束を生成', icon='OUTLINER_OB_CURVE')
         layout.prop(scene, 'hair_strand_type')
         layout.prop(scene, 'hair_curve_length')
         layout.prop(scene, 'hair_curve_bevel_depth')
         layout.prop(scene, 'hair_curve_resolution')
         layout.prop(scene, 'hair_curve_segment_count')
-        layout.label(text="Root/Tip Radius and Taper are stored", icon='INFO')
-        layout.label(text="for future versions.")
+        layout.label(text="根元半径・毛先半径・先細りは", icon='INFO')
+        layout.label(text="将来用の保存値です。")
         layout.prop(scene, 'hair_curve_root_radius')
         layout.prop(scene, 'hair_curve_tip_radius')
         layout.prop(scene, 'hair_curve_taper_strength')
 
 
 class HGD_PT_curve_batch_adjust(HGD_PT_base):
-    bl_label = 'Curve Batch Adjust'
+    bl_label = 'カーブ一括調整'
     bl_order = 6
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        layout.label(text="Adjust selected generated curves", icon='OUTLINER_OB_CURVE')
-        layout.label(text="after creating curve strands.")
-        layout.label(text="Length Scale changes from root.", icon='INFO')
-        layout.prop(scene, 'hair_batch_curve_length', text='Length Scale')
+        layout.label(text="生成済みカーブをまとめて調整します。", icon='OUTLINER_OB_CURVE')
+        layout.label(text="カーブ毛束生成後に使用します。")
+        layout.label(text="長さ倍率は根元基準で変更します。", icon='INFO')
+        layout.prop(scene, 'hair_batch_curve_length', text='長さ倍率')
         layout.prop(scene, 'hair_batch_curve_bevel_depth')
         layout.prop(scene, 'hair_batch_curve_resolution')
         row = layout.row(align=True)
-        op = row.operator('hgd.apply_curve_batch_settings', text='Apply To Selected Curves')
+        op = row.operator('hgd.apply_curve_batch_settings', text='選択カーブへ適用')
         op.target = 'SELECTED'
-        op = row.operator('hgd.apply_curve_batch_settings', text='Apply To All Generated Curves')
+        op = row.operator('hgd.apply_curve_batch_settings', text='全カーブへ適用')
         op.target = 'ALL'
 
 
 class HGD_PT_curve_follow(HGD_PT_base):
-    bl_label = 'Curve Follow'
+    bl_label = 'カーブ追従'
     bl_order = 7
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        layout.label(text="Move curve roots back to source points.", icon='INFO')
-        layout.label(text="Use after moving placement points.")
+        layout.label(text="配置点移動後にカーブ根元を追従させます。", icon='INFO')
+        layout.label(text="配置点を動かした後に使用します。")
         layout.prop(scene, 'hair_follow_update_selected_only')
         layout.prop(scene, 'hair_follow_keep_tip_offset')
         if not scene.hair_follow_keep_tip_offset:
-            layout.label(text="Keep Tip Offset OFF may deform the strand.", icon='ERROR')
+            layout.label(text="毛先位置を維持しない場合、形が崩れることがあります。", icon='ERROR')
         layout.operator('hgd.update_curve_roots_from_points', icon='OUTLINER_OB_CURVE')
 
 
 class HGD_PT_side_mirror(HGD_PT_base):
-    bl_label = 'Side Mirror'
+    bl_label = '左右ミラー'
     bl_order = 8
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        layout.label(text="Mirror selected Side_L or Side_R", icon='INFO')
-        layout.label(text="points and curves across X axis.")
-        layout.label(text="Selected side objects only.", icon='ERROR')
+        layout.label(text="側頭部の配置点とカーブを", icon='INFO')
+        layout.label(text="反対側へ複製します。")
+        layout.label(text="選択中の左右対象のみ処理します。", icon='ERROR')
         layout.prop(scene, 'hair_mirror_axis')
-        layout.label(text="MVP mirror axis is X only.")
+        layout.label(text="MVPではX軸のみ対応します。")
         layout.prop(scene, 'hair_mirror_overwrite_existing')
         layout.prop(scene, 'hair_mirror_copy_custom_properties')
         row = layout.row(align=True)
-        row.operator('hgd.mirror_side_l_to_r', text='Mirror Side_L to Side_R')
-        row.operator('hgd.mirror_side_r_to_l', text='Mirror Side_R to Side_L')
+        row.operator('hgd.mirror_side_l_to_r', text='左側→右側へミラー')
+        row.operator('hgd.mirror_side_r_to_l', text='右側→左側へミラー')
 
 
 class HGD_PT_validation(HGD_PT_base):
-    bl_label = 'Validation'
+    bl_label = '検証'
     bl_order = 9
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        layout.label(text="Checks roots that are too close.", icon='INFO')
-        layout.label(text="They may look like same-origin hair.")
+        layout.label(text="同じ場所から毛束が生えて見える問題を検出します。", icon='INFO')
+        layout.label(text="根元が近すぎる箇所を確認します。")
         if _count_generated("placement_point") == 0:
-            layout.label(text="No placement points found.", icon='ERROR')
-            layout.label(text="Generate points before validation.")
+            layout.label(text="配置点がありません。", icon='ERROR')
+            layout.label(text="検証前に配置点を生成してください。")
         layout.operator('hgd.check_root_clustering', icon='ERROR')
         layout.operator('hgd.clear_warnings', icon='TRASH')
         layout.prop(scene, 'hair_root_cluster_threshold')
         layout.prop(scene, 'hair_warning_count')
-        layout.label(text="Warning Count = too-close point pairs.", icon='INFO')
-        layout.label(text="Red = roots too close.")
-        layout.label(text="Set Viewport Color to Object.")
+        layout.label(text="警告数は近すぎる配置点ペア数です。", icon='INFO')
+        layout.label(text="赤色は根元が近すぎる警告です。")
+        layout.label(text="Viewport ShadingのColorをObjectにしてください。")
 
 
 class HGD_PT_display_cleanup(HGD_PT_base):
-    bl_label = 'Display / Cleanup'
+    bl_label = '表示と削除'
     bl_order = 10
 
     def draw(self, context):
         layout = self.layout
-        layout.label(text="Display and cleanup generated objects.", icon='INFO')
+        layout.label(text="表示切替と削除を行います。", icon='INFO')
         row = layout.row(align=True)
-        op = row.operator('hgd.show_hide_guides', text='Show Guide Lines', icon='HIDE_OFF')
+        op = row.operator('hgd.show_hide_guides', text='ガイド表示', icon='HIDE_OFF')
         op.hide = False
-        op = row.operator('hgd.show_hide_guides', text='Hide Guide Lines', icon='HIDE_ON')
+        op = row.operator('hgd.show_hide_guides', text='ガイド非表示', icon='HIDE_ON')
         op.hide = True
         row = layout.row(align=True)
-        op = row.operator('hgd.region_visibility', text='Show All Regions', icon='HIDE_OFF')
+        op = row.operator('hgd.region_visibility', text='全領域表示', icon='HIDE_OFF')
         op.region = 'ALL'
         op.action = 'SHOW'
-        op = row.operator('hgd.region_visibility', text='Hide All Regions', icon='HIDE_ON')
+        op = row.operator('hgd.region_visibility', text='全領域非表示', icon='HIDE_ON')
         op.region = 'ALL'
         op.action = 'HIDE'
         layout.separator()
-        layout.label(text="Cleanup affects only HairGuideSystem.", icon='INFO')
+        layout.label(text="HairGuideSystem内の生成物のみ削除します。", icon='INFO')
         layout.operator('hgd.clear_warnings', icon='TRASH')
         layout.operator('hgd.clear_placement_points', icon='TRASH')
-        layout.operator('hgd.delete_hair_guides', text='Delete Guide Lines', icon='TRASH')
-        layout.label(text="Clear All deletes generated guides,")
-        layout.label(text="points, curves, and warnings only.")
-        layout.label(text="Target head is not deleted.")
+        layout.operator('hgd.delete_hair_guides', text='ガイド削除', icon='TRASH')
+        layout.label(text="すべて削除はガイド、配置点、")
+        layout.label(text="カーブ、警告のみを削除します。")
+        layout.label(text="頭部メッシュは削除されません。")
         layout.operator('hgd.clear_all_generated', icon='TRASH')
 
 
 class HGD_PT_help(HGD_PT_base):
-    bl_label = 'Help'
+    bl_label = 'ヘルプ'
     bl_order = 11
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
         box = layout.box()
-        box.label(text="What this add-on does:", icon='INFO')
-        box.label(text="- Shows stylized hair guide lines.")
-        box.label(text="- Suggests strand root points.")
-        box.label(text="- Creates editable curve strands.")
-        box.label(text="- Checks root clustering.")
+        box.label(text="このアドオンでできること", icon='INFO')
+        box.label(text="・髪のガイド生成")
+        box.label(text="・毛束配置点生成")
+        box.label(text="・Bezierカーブ毛束生成")
+        box.label(text="・根元集中チェック")
         box = layout.box()
-        box.label(text="What this add-on does NOT do:", icon='ERROR')
-        box.label(text="- No automatic final hair generation.")
-        box.label(text="- Does not edit the head mesh.")
-        box.label(text="- Does not convert curves to mesh.")
-        box.label(text="- No Unity or PhysBone setup.")
+        box.label(text="できないこと", icon='ERROR')
+        box.label(text="・髪メッシュ自動生成")
+        box.label(text="・頭部メッシュ編集")
+        box.label(text="・カーブの自動メッシュ化")
+        box.label(text="・Unity設定 / PhysBone設定")
         box = layout.box()
-        box.label(text="Recommended workflow:", icon='CHECKMARK')
-        box.label(text="1. Use guides as visual references.")
-        box.label(text="2. Adjust points manually if needed.")
-        box.label(text="3. Generate curve strands.")
-        box.label(text="4. Edit curves by hand.")
-        box.label(text="5. Treat warnings as hints.")
+        box.label(text="推奨手順", icon='CHECKMARK')
+        box.label(text="1. 基本ガイド生成")
+        box.label(text="2. 配置点生成")
+        box.label(text="3. 必要なら配置点調整")
+        box.label(text="4. カーブ毛束生成")
+        box.label(text="5. カーブ編集 / 根元集中チェック")
 
 
 classes = (
