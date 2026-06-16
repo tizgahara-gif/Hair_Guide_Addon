@@ -246,7 +246,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
     bl_description = "既存の配置点と警告を削除し、現在の基本ガイド位置から配置点を再生成します。既存のカーブは削除されません"
     bl_options = {'REGISTER', 'UNDO'}
 
-    BASE_COUNTS = {"Front": 7, "Side_L": 4, "Side_R": 4, "Back_Upper": 6, "Back_Middle": 9, "Nape": 5}
+    BASE_COUNTS = {"Top": 5, "Front": 7, "Side_L": 4, "Side_R": 4, "Back_Upper": 6, "Back_Middle": 9, "Nape": 5}
 
     def execute(self, context):
         try:
@@ -266,7 +266,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             rng = random.Random(scene.hair_seed)
             count_total = 0
             for region, base_count in self.BASE_COUNTS.items():
-                count = max(1, round(base_count * scene.hair_density))
+                count = base_count if region == "Top" else max(1, round(base_count * scene.hair_density))
                 positions = self._guide_positions(region, count, guides, min_v, max_v, center, size, scene.hair_guide_offset)
                 if positions is None:
                     positions = self._base_positions(region, count, min_v, max_v, center, size, scene.hair_guide_offset)
@@ -274,8 +274,10 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                 for i, base in enumerate(positions):
                     loc = self._jittered(region, base, rng, scene)
                     radius = max(size.length * 0.008, 0.01) * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation))
-                    obj = utils.make_marker(f"POINT_{region}_{i+1:03d}", loc, max(radius, 0.004), collection, region, "placement_point", scene)
-                    direction = utils.direction_for_region(region, loc.x - center.x)
+                    point_name = self._point_name(region, i)
+                    obj = utils.make_marker(point_name, loc, max(radius, 0.004), collection, region, "placement_point", scene)
+                    position_type = self._position_type(region, i, loc, center, size)
+                    direction = self._recommended_direction(region, position_type, loc.x - center.x)
                     length = scene.hair_curve_length * (1.0 + rng.uniform(-scene.hair_length_variation, scene.hair_length_variation))
                     size_rec = max(scene.hair_curve_root_radius * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation)), 0.001)
                     obj["hair_root_id"] = obj.name
@@ -283,7 +285,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                     obj["recommended_direction"] = utils.vector_to_string(direction)
                     obj["recommended_length"] = max(length, 0.01)
                     obj["flow_side"] = "L" if loc.x < center.x - size.x*0.05 else ("R" if loc.x > center.x + size.x*0.05 else "Center")
-                    obj["position_type"] = "center" if abs(loc.x - center.x) < size.x * 0.18 else "outer"
+                    obj["position_type"] = position_type
                     count_total += 1
             if guide_count == 0:
                 self.report({'WARNING'}, "基本ガイドが見つからないため、頭部Bounding Boxから配置点を生成しました。")
@@ -309,6 +311,8 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
         }
 
     def _guide_positions(self, region, count, guides, min_v, max_v, center, size, offset):
+        if region == "Top":
+            return self._top_positions(count, min_v, max_v, center, size, guides)
         if region == "Front" and guides["hairline"]:
             return utils.sample_curve_world_points(guides["hairline"], count)
         if region == "Side_L" and guides["side_l"]:
@@ -340,6 +344,8 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
         positions = []
         for i in range(count):
             t = i / max(count - 1, 1)
+            if region == "Top":
+                return self._top_positions(count, min_v, max_v, center, size, {})
             if region == "Front":
                 x = center.x + (t - 0.5) * size.x * 0.7
                 y = min_v.y - offset * 1.5
@@ -368,13 +374,57 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             positions.append(mathutils.Vector((x, y, z)))
         return positions
 
+    def _top_positions(self, count, min_v, max_v, center, size, guides):
+        base = mathutils.Vector((center.x, center.y, max_v.z - size.z * 0.08))
+        center_guide = guides.get("center") if guides else None
+        if center_guide:
+            guide_center = utils.get_curve_world_center(center_guide)
+            if guide_center:
+                base.x = guide_center.x
+                base.y = guide_center.y
+        x_offset = size.x * 0.12
+        y_offset = size.y * 0.12
+        positions = [
+            base,
+            base + mathutils.Vector((0.0, -y_offset, 0.0)),
+            base + mathutils.Vector((0.0, y_offset, 0.0)),
+            base + mathutils.Vector((-x_offset, 0.0, 0.0)),
+            base + mathutils.Vector((x_offset, 0.0, 0.0)),
+        ]
+        return positions[:count]
+
+    def _point_name(self, region, index):
+        if region == "Top":
+            return ("POINT_Top_Center", "POINT_Top_Front", "POINT_Top_Back", "POINT_Top_Left", "POINT_Top_Right")[index]
+        return f"POINT_{region}_{index+1:03d}"
+
+    def _position_type(self, region, index, loc, center, size):
+        if region == "Top":
+            return ("top_center", "top_front", "top_back", "top_left", "top_right")[index]
+        return "center" if abs(loc.x - center.x) < size.x * 0.18 else "outer"
+
+    def _recommended_direction(self, region, position_type, x_offset):
+        if region != "Top":
+            return utils.direction_for_region(region, x_offset)
+        directions = {
+            "top_center": mathutils.Vector((0.0, 0.35, -0.9)),
+            "top_front": mathutils.Vector((0.0, -0.35, -0.9)),
+            "top_back": mathutils.Vector((0.0, 0.45, -0.85)),
+            "top_left": mathutils.Vector((-0.35, 0.0, -0.9)),
+            "top_right": mathutils.Vector((0.35, 0.0, -0.9)),
+        }
+        vec = directions.get(position_type, mathutils.Vector((0.0, 0.35, -0.9)))
+        vec.normalize()
+        return vec
+
     def _jittered(self, region, base, rng, scene):
-        x_jit = rng.uniform(-scene.hair_width_variation, scene.hair_width_variation)
+        variation = 0.5 if region == "Top" else 1.0
+        x_jit = rng.uniform(-scene.hair_width_variation, scene.hair_width_variation) * variation
         if region == "Side_R":
             x_jit *= 1.0 - scene.hair_symmetry_bias * 0.65
         elif region == "Side_L":
             x_jit *= 1.0 - scene.hair_symmetry_bias * 0.35
-        return base + mathutils.Vector((x_jit, rng.uniform(-scene.hair_depth_variation, scene.hair_depth_variation), rng.uniform(-scene.hair_height_variation, scene.hair_height_variation)))
+        return base + mathutils.Vector((x_jit, rng.uniform(-scene.hair_depth_variation, scene.hair_depth_variation) * variation, rng.uniform(-scene.hair_height_variation, scene.hair_height_variation) * variation))
 
 
 class HGD_OT_clear_placement_points(bpy.types.Operator):
@@ -457,6 +507,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
 
     def _prefix(self, region):
         return {
+            "Top": "HAIR_TOP",
             "Front": "HAIR_FRONT",
             "Side_L": "HAIR_SIDE_L",
             "Side_R": "HAIR_SIDE_R",
@@ -485,14 +536,14 @@ class HGD_OT_check_root_clustering(bpy.types.Operator):
             _, collections = utils.ensure_system()
             warnings = collections[utils.WARNINGS]
             threshold = context.scene.hair_root_cluster_threshold
-            threshold_sq = threshold * threshold
             warned = set()
             warning_count = 0
             for i, obj in enumerate(points):
                 for other in points[i + 1:]:
                     if obj.get("hair_region") != other.get("hair_region"):
                         continue
-                    if (obj.location - other.location).length_squared >= threshold_sq:
+                    pair_threshold = threshold * 0.75 if obj.get("hair_region") == "Top" else threshold
+                    if (obj.location - other.location).length_squared >= pair_threshold * pair_threshold:
                         continue
                     height_delta = abs(obj.location.z - other.location.z)
                     size_delta = abs(float(obj.get("recommended_size", 0)) - float(other.get("recommended_size", 0)))
@@ -501,7 +552,7 @@ class HGD_OT_check_root_clustering(bpy.types.Operator):
                         target.color = utils.WARNING_COLOR
                         warned.add(target.name)
                     loc = (obj.location + other.location) * 0.5
-                    marker = utils.make_marker("WARNING_RootCluster", loc, max(threshold * 0.25, 0.01), warnings, obj.get("hair_region", ""), "warning", context.scene)
+                    marker = utils.make_marker("WARNING_RootCluster", loc, max(pair_threshold * 0.25, 0.01), warnings, obj.get("hair_region", ""), "warning", context.scene)
                     marker["hair_warning_type"] = "root_cluster"
                     marker["warning_objects"] = f"{obj.name},{other.name}"
                     marker["height_delta"] = height_delta
@@ -562,6 +613,28 @@ class HGD_OT_clear_all_generated(bpy.types.Operator):
             self.report({'WARNING'}, "削除する生成物がありません。")
             return {'CANCELLED'}
         self.report({'INFO'}, f"生成物を{total}個削除しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_toggle_in_front_generated_helpers(bpy.types.Operator):
+    bl_idname = "hgd.toggle_in_front_generated_helpers"
+    bl_label = "最前面表示を反映"
+    bl_description = "生成済みのガイド、領域線、配置点、警告へ最前面表示設定を反映します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    TARGET_TYPES = {"guide", "region", "placement_point", "warning"}
+
+    def execute(self, context):
+        if not bpy.data.collections.get(utils.ROOT):
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
+            return {'CANCELLED'}
+        count = 0
+        show = context.scene.hair_show_guides_in_front
+        for obj in utils.generated_objects():
+            if obj.get("hair_guide_type") in self.TARGET_TYPES:
+                obj.show_in_front = show
+                count += 1
+        self.report({'INFO'}, f"ガイドと配置点の最前面表示を更新しました。対象: {count} 個。")
         return {'FINISHED'}
 
 
@@ -1265,6 +1338,7 @@ classes = (
     HGD_OT_check_root_clustering,
     HGD_OT_clear_warnings,
     HGD_OT_clear_all_generated,
+    HGD_OT_toggle_in_front_generated_helpers,
     HGD_OT_apply_taper_preset,
     HGD_OT_create_or_update_default_taper,
     HGD_OT_apply_taper_to_selected_curves,

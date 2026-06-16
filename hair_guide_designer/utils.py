@@ -10,9 +10,10 @@ CURVES = "Curves"
 WARNINGS = "Warnings"
 TAPER_OBJECTS = "TaperObjects"
 SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS, TAPER_OBJECTS)
-REGION_NAMES = ("Front", "Side", "Back_Upper", "Back_Middle", "Nape")
-POINT_REGIONS = ("Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape")
+REGION_NAMES = ("Top", "Front", "Side", "Back_Upper", "Back_Middle", "Nape")
+POINT_REGIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape")
 REGION_COLORS = {
+    "Top": (1.0, 0.95, 0.35, 1.0),
     "Front": (1.0, 0.45, 0.25, 1.0),
     "Side": (0.25, 0.7, 1.0, 1.0),
     "Side_L": (0.25, 0.55, 1.0, 1.0),
@@ -159,6 +160,8 @@ def set_common_props(obj, guide_type, region="", scene=None):
     obj["hair_warning_type"] = obj.get("hair_warning_type", "")
     obj["hair_seed"] = getattr(scene, "hair_seed", 0) if scene else 0
     obj.color = REGION_COLORS.get(region, (0.9, 0.9, 0.9, 1.0))
+    if guide_type in {"guide", "region", "placement_point", "warning"} and scene:
+        obj.show_in_front = getattr(scene, "hair_show_guides_in_front", True)
 
 
 def head_bounds(obj):
@@ -222,7 +225,9 @@ def make_marker(name, location, radius, collection, region, guide_type, scene):
 
 
 def direction_for_region(region, x=0.0):
-    if region == "Front":
+    if region == "Top":
+        vec = mathutils.Vector((0.0, 0.35, -0.9))
+    elif region == "Front":
         vec = mathutils.Vector((0.0, -0.45, -0.9))
     elif region == "Side_L":
         vec = mathutils.Vector((-0.45, 0.35, -0.75))

@@ -30,10 +30,10 @@ def _draw_status(layout, scene):
 
 def _region_buttons(layout, label, region, note):
     row = layout.row(align=True)
-    op = row.operator('hgd.region_visibility', text=f"{label} 表示", icon='HIDE_OFF')
+    op = row.operator('hgd.region_visibility', text=f"{label}を表示", icon='HIDE_OFF')
     op.region = region
     op.action = 'SHOW'
-    op = row.operator('hgd.region_visibility', text=f"{label} 非表示", icon='HIDE_ON')
+    op = row.operator('hgd.region_visibility', text=f"{label}を非表示", icon='HIDE_ON')
     op.region = region
     op.action = 'HIDE'
     layout.label(text=note, icon='INFO')
@@ -115,6 +115,7 @@ class HGD_PT_regions(HGD_PT_base):
     def draw(self, context):
         layout = self.layout
         layout.label(text="髪の領域を表示・非表示します。", icon='INFO')
+        _region_buttons(layout, "頭頂部", "Top", "頭頂部：前髪・横髪・後ろ髪へ分かれる毛流れの起点です。")
         _region_buttons(layout, "前髪", "Front", "前髪：前髪の開始位置。")
         _region_buttons(layout, "側頭部", "Side", "側頭部：耳周辺から後頭部へ流れる領域。")
         _region_buttons(layout, "左側", "Side_L", "左側のみ表示・非表示します。")
@@ -334,7 +335,12 @@ class HGD_PT_display_cleanup(HGD_PT_base):
 
     def draw(self, context):
         layout = self.layout
+        scene = context.scene
         layout.label(text="表示切替と削除を行います。", icon='INFO')
+        layout.label(text="頭部メッシュに隠れて見えにくい場合に使用します。")
+        layout.prop(scene, 'hair_show_guides_in_front')
+        layout.operator('hgd.toggle_in_front_generated_helpers', icon='HIDE_OFF')
+        layout.separator()
         row = layout.row(align=True)
         op = row.operator('hgd.show_hide_guides', text='ガイド表示', icon='HIDE_OFF')
         op.hide = False
