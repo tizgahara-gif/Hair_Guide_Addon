@@ -1,3 +1,4 @@
+import math
 import random
 import mathutils
 import bpy
@@ -43,6 +44,15 @@ def _remove_named_generated_guides(names):
     removed = 0
     for obj in list(utils.generated_objects("guide")):
         if obj.name.split(".")[0] in names or obj.name in names:
+            bpy.data.objects.remove(obj, do_unlink=True)
+            removed += 1
+    return removed
+
+
+def _remove_detailed_guides():
+    removed = 0
+    for obj in list(utils.generated_objects()):
+        if obj.get("hair_guide_level") == "detailed" and obj.get("hair_guide_type") in {"guide", "region"}:
             bpy.data.objects.remove(obj, do_unlink=True)
             removed += 1
     return removed
@@ -108,6 +118,7 @@ class HGD_OT_create_detailed_guides(bpy.types.Operator):
             guides = collections[utils.GUIDES]
             regions = collections[utils.REGIONS]
             scene = context.scene
+            removed = _remove_detailed_guides()
             min_v, max_v, center, size = utils.head_bounds(head)
             scale = scene.hair_guide_scale
             offset = scene.hair_guide_offset
@@ -131,9 +142,9 @@ class HGD_OT_create_detailed_guides(bpy.types.Operator):
             for name, points, region in detailed_specs:
                 obj = utils.make_curve(name, points, guides, region, "guide", scene, bevel=0.003)
                 obj["hair_guide_level"] = "detailed"
-            self._create_region_guides(context, regions, center, size, rx, ry, offset, hairline_z, ear_z, occ_z, nape_z, front_y, back_y)
-            detailed_count = len(detailed_specs) + len([obj for obj in regions.objects if obj.get("hair_guide_type") == "region"])
-            self.report({'INFO'}, f"詳細ガイドを{detailed_count}個追加しました。")
+            region_guides = self._create_region_guides(context, regions, center, size, rx, ry, offset, hairline_z, ear_z, occ_z, nape_z, front_y, back_y)
+            detailed_count = len(detailed_specs) + len(region_guides)
+            self.report({'INFO'}, f"古い詳細ガイド{removed}個を削除し、詳細ガイド{detailed_count}個を生成しました。")
             return {'FINISHED'}
         except Exception as exc:
             self.report({'ERROR'}, f"詳細ガイドの追加に失敗しました: {exc}")
@@ -171,6 +182,7 @@ class HGD_OT_create_detailed_guides(bpy.types.Operator):
             created.append(utils.make_curve(f"REGION_Nape_Flow_{label}", [root, root + mathutils.Vector((0, offset*1.5, -size.z*0.12)), root + mathutils.Vector((0, offset*2.5, -size.z*0.28))], regions, "Nape", "region", scene, bevel=0.002))
         for obj in created:
             obj["hair_guide_level"] = "detailed"
+        return created
 
 
 class HGD_OT_delete_hair_guides(bpy.types.Operator):
@@ -462,10 +474,9 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 for point in points:
                     _make_braid_from_point(context, point)
                     made += 1
-                self.report({'INFO'}, f"三つ編みカーブを{made}本生成しました。制御カーブを編集してから更新してください。")
+                self.report({'INFO'}, f"三つ編み制御カーブ{made}本と各3本の表示用カーブを生成しました。制御カーブを編集してから更新してください。")
                 return {'FINISHED'}
-            _, collections = utils.ensure_system()
-            curves = collections[utils.CURVES]
+            utils.ensure_system()
             scene = context.scene
             taper_obj = None
             if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
@@ -483,6 +494,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                     sag = mathutils.Vector((0, 0, -0.12 * length * t * t))
                     curve_points.append(root + direction * length * t + sag)
                 prefix = self._prefix(region)
+                curves = utils.get_curve_collection(region, "curve")
                 obj = utils.make_curve(utils.unique_numbered(prefix), curve_points, curves, region, "curve", scene, bevel=scene.hair_curve_bevel_depth)
                 obj["hair_root_id"] = point.name
                 obj["hair_source_point"] = point.name
@@ -496,8 +508,10 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 obj["tip_radius"] = scene.hair_curve_tip_radius
                 obj["taper_strength"] = scene.hair_curve_taper_strength
                 obj["segment_count"] = scene.hair_curve_segment_count
+                _apply_curve_variation(obj, scene, point.name)
                 if scene.hair_auto_apply_taper_to_new_curves:
                     _apply_taper_to_curve_obj(context, obj, taper_obj)
+                _apply_profile_to_curve_obj(context, obj)
                 made += 1
             self.report({'INFO'}, f"カーブ毛束を{made}本生成しました。")
             return {'FINISHED'}
@@ -515,6 +529,58 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
             "Back_Middle": "HAIR_BACK_MIDDLE",
             "Nape": "HAIR_NAPE",
         }.get(region, "HAIR_CURVE")
+
+
+def _stable_curve_variation_rng(scene, source_name):
+    stable_id = sum(ord(char) for char in str(source_name))
+    return random.Random(scene.hair_curve_variation_seed + stable_id)
+
+
+def _variation_jitter_amount(scene, t):
+    if t < 0.34:
+        return scene.hair_curve_root_jitter
+    if t < 0.67:
+        return scene.hair_curve_mid_jitter
+    return scene.hair_curve_tip_jitter
+
+
+def _apply_curve_variation(obj, scene, source_name):
+    obj["hair_curve_variation_enabled"] = scene.hair_curve_variation_enabled
+    obj["hair_curve_variation_seed"] = scene.hair_curve_variation_seed
+    obj["hair_curve_root_jitter"] = scene.hair_curve_root_jitter
+    obj["hair_curve_mid_jitter"] = scene.hair_curve_mid_jitter
+    obj["hair_curve_tip_jitter"] = scene.hair_curve_tip_jitter
+    obj["hair_curve_length_variation"] = scene.hair_curve_length_variation
+    length_scale = 1.0
+    if not scene.hair_curve_variation_enabled or obj.get("hair_guide_type") not in {"curve", "braid_control"}:
+        obj["hair_curve_length_scale"] = length_scale
+        return length_scale
+    spline = _first_bezier_spline(obj)
+    if not spline:
+        obj["hair_curve_length_scale"] = length_scale
+        return length_scale
+    rng = _stable_curve_variation_rng(scene, source_name)
+    length_var = max(scene.hair_curve_length_variation, 0.0)
+    length_scale = rng.uniform(max(1.0 - length_var, 0.01), 1.0 + length_var)
+    root = spline.bezier_points[0].co.copy()
+    for point in spline.bezier_points:
+        point.co = root + (point.co - root) * length_scale
+        point.handle_left = root + (point.handle_left - root) * length_scale
+        point.handle_right = root + (point.handle_right - root) * length_scale
+    point_count = len(spline.bezier_points)
+    for index, point in enumerate(spline.bezier_points):
+        t = index / max(point_count - 1, 1)
+        amount = _variation_jitter_amount(scene, t)
+        offset = mathutils.Vector((
+            rng.uniform(-amount, amount),
+            rng.uniform(-amount, amount),
+            rng.uniform(-amount, amount),
+        ))
+        point.co += offset
+        point.handle_left += offset
+        point.handle_right += offset
+    obj["hair_curve_length_scale"] = length_scale
+    return length_scale
 
 
 class HGD_OT_check_root_clustering(bpy.types.Operator):
@@ -606,7 +672,7 @@ class HGD_OT_clear_all_generated(bpy.types.Operator):
             self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
         total = 0
-        for collection_name in (utils.GUIDES, utils.REGIONS, utils.PLACEMENT_POINTS, utils.CURVES, utils.WARNINGS, utils.TAPER_OBJECTS):
+        for collection_name in (utils.GUIDES, utils.REGIONS, utils.PLACEMENT_POINTS, utils.CURVES, utils.WARNINGS, utils.TAPER_OBJECTS, utils.PROFILE_OBJECTS):
             total += utils.clear_collection_objects(collection_name)
         context.scene.hair_warning_count = 0
         if total == 0:
@@ -638,9 +704,59 @@ class HGD_OT_toggle_in_front_generated_helpers(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_organize_curves_by_region(bpy.types.Operator):
+    bl_idname = "hgd.organize_curves_by_region"
+    bl_label = "カーブを部位別に整理"
+    bl_description = "生成済みカーブをTop、Front、Side、Back、Nape、Braidの部位別Collectionへ移動します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    TARGET_TYPES = {"curve", "braid_control", "braid_strand"}
+
+    def execute(self, context):
+        if not bpy.data.collections.get(utils.ROOT):
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
+            return {'CANCELLED'}
+        utils.ensure_system()
+        count = 0
+        for obj in utils.generated_objects():
+            if obj.get("hair_guide_type") in self.TARGET_TYPES and utils.organize_curve_object(obj):
+                count += 1
+        if count == 0:
+            self.report({'WARNING'}, "整理対象の生成カーブが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"カーブを部位別Collectionへ整理しました: {count} 件")
+        return {'FINISHED'}
+
+
+class HGD_OT_apply_curve_region_colors(bpy.types.Operator):
+    bl_idname = "hgd.apply_curve_region_colors"
+    bl_label = "部位別カラーを反映"
+    bl_description = "生成済みカーブ、三つ編み制御カーブ、三つ編み表示へ部位別のObject Colorを反映します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    TARGET_TYPES = {"curve", "braid_control", "braid_strand"}
+
+    def execute(self, context):
+        if not bpy.data.collections.get(utils.ROOT):
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
+            return {'CANCELLED'}
+        count = 0
+        for obj in utils.generated_objects():
+            if obj.get("hair_guide_type") in self.TARGET_TYPES and utils.apply_curve_region_color(obj):
+                count += 1
+        if count == 0:
+            self.report({'WARNING'}, "カラー反映対象の生成カーブが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"部位別カラーを {count} 件に反映しました。")
+        return {'FINISHED'}
+
+
 def _generated_curves_from_context(context, selected_only):
-    objects = context.selected_objects if selected_only else utils.generated_objects("curve")
-    return [obj for obj in objects if obj.type == "CURVE" and obj.get("hair_guide_type") == "curve"]
+    objects = context.selected_objects if selected_only else utils.generated_objects()
+    return [
+        obj for obj in objects
+        if obj.type == "CURVE" and obj.get("hair_guide_type") in {"curve", "braid_strand"}
+    ]
 
 
 def _follow_targets_from_context(context, selected_only):
@@ -694,7 +810,7 @@ def _next_braid_id():
     index = 1
     while True:
         braid_id = f"{index:03d}"
-        if not bpy.data.objects.get(f"HGD_BRAID_CTRL_{braid_id}") and not bpy.data.objects.get(f"HGD_BRAID_VIS_{braid_id}"):
+        if not bpy.data.objects.get(f"HGD_BRAID_CTRL_{braid_id}") and not bpy.data.objects.get(f"HGD_BRAID_STRAND_A_{braid_id}"):
             return braid_id
         index += 1
 
@@ -708,26 +824,35 @@ def _braid_side_vector(tangent):
     return side
 
 
-def _create_or_replace_braid_visual(context, control_obj):
+def _set_braid_control_display(control_obj):
+    control_obj.data.bevel_depth = 0.0
+    control_obj.data.taper_object = None
+    control_obj.display_type = "WIRE"
+    control_obj.show_in_front = True
+    control_obj["hair_guide_type"] = "braid_control"
+    control_obj["hair_use_taper"] = False
+    control_obj["hair_taper_object"] = ""
+
+
+def _create_or_replace_braid_strands(context, control_obj):
     scene = context.scene
-    _, collections = utils.ensure_system()
-    curves_collection = collections[utils.CURVES]
+    utils.ensure_system()
+    curves_collection = utils.get_curve_collection(control_obj.get("hair_region", ""), "braid_strand")
     braid_id = control_obj.get("hair_braid_id", _next_braid_id())
-    visual_name = f"HGD_BRAID_VIS_{braid_id}"
-    for obj in list(utils.generated_objects("braid_visual")):
-        if obj.get("hair_braid_id") == braid_id or obj.name == visual_name:
+    for obj in list(utils.generated_objects()):
+        if obj.get("hair_braid_id") == braid_id and obj.get("hair_guide_type") in {"braid_strand", "braid_visual"}:
             bpy.data.objects.remove(obj, do_unlink=True)
-    segment_count = max(scene.hair_braid_segments, 2)
-    samples = _sample_curve_world_points(control_obj, segment_count + 1)
+    sample_count = max(scene.hair_braid_segments, 2) + 1
+    samples = _sample_curve_world_points(control_obj, sample_count)
     if len(samples) < 2:
-        return None
-    verts = []
-    faces = []
+        return []
+    phases = (("A", 0.0), ("B", 2.09439510239), ("C", 4.18879020478))
+    strand_points = {label: [] for label, _phase in phases}
     normal_hint = mathutils.Vector((0.0, 0.0, 1.0))
-    for index in range(segment_count):
-        start = samples[index]
-        end = samples[index + 1]
-        tangent = end - start
+    for index, sample in enumerate(samples):
+        prev_point = samples[max(index - 1, 0)]
+        next_point = samples[min(index + 1, len(samples) - 1)]
+        tangent = next_point - prev_point
         if tangent.length < 0.0001:
             tangent = mathutils.Vector((0.0, 0.0, -1.0))
         tangent.normalize()
@@ -737,39 +862,49 @@ def _create_or_replace_braid_visual(context, control_obj):
             normal = normal_hint
         normal.normalize()
         normal_hint = normal
-        t = index / max(segment_count - 1, 1)
+        t = index / max(len(samples) - 1, 1)
         taper_scale = max(1.0 - scene.hair_braid_taper * t, 0.05)
-        width = scene.hair_braid_width * taper_scale
-        radius = scene.hair_braid_radius * taper_scale
-        twist = scene.hair_braid_twist
-        sign = -1.0 if index % 2 else 1.0
-        mid = (start + end) * 0.5
-        left = mid + side * sign * width * twist + normal * radius
-        right = mid - side * sign * width * 0.75 * twist - normal * radius * 0.35
-        base_index = len(verts)
-        verts.extend([start, left, end, right])
-        faces.append((base_index, base_index + 1, base_index + 2, base_index + 3))
-    mesh = bpy.data.meshes.new(visual_name + "Mesh")
-    mesh.from_pydata([tuple(v) for v in verts], [], faces)
-    mesh.update()
-    visual = bpy.data.objects.new(visual_name, mesh)
-    curves_collection.objects.link(visual)
-    utils.set_common_props(visual, "braid_visual", control_obj.get("hair_region", ""), scene)
-    visual["hair_source_point"] = control_obj.get("hair_source_point", "")
-    visual["hair_braid_id"] = braid_id
-    visual["hair_braid_control"] = control_obj.name
-    visual["hair_braid_segments"] = scene.hair_braid_segments
-    visual["hair_braid_radius"] = scene.hair_braid_radius
-    visual["hair_braid_width"] = scene.hair_braid_width
-    visual["hair_braid_taper"] = scene.hair_braid_taper
-    visual["hair_braid_twist"] = scene.hair_braid_twist
-    return visual
+        angle_base = t * scene.hair_braid_twist * math.tau
+        for label, phase in phases:
+            angle = angle_base + phase
+            offset = math.sin(angle) * scene.hair_braid_width * taper_scale
+            depth = math.cos(angle) * scene.hair_braid_radius * taper_scale * 0.35
+            strand_points[label].append(sample + side * offset + normal * depth)
+    taper_obj = None
+    if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
+        taper_obj, _ = _create_or_update_default_taper(context)
+    created = []
+    for label, points in strand_points.items():
+        obj = utils.make_curve(
+            f"HGD_BRAID_STRAND_{label}_{braid_id}",
+            points,
+            curves_collection,
+            control_obj.get("hair_region", ""),
+            "braid_strand",
+            scene,
+            bevel=scene.hair_braid_bevel_depth,
+        )
+        obj.data.resolution_u = scene.hair_braid_resolution
+        obj["hair_source_point"] = control_obj.get("hair_source_point", "")
+        obj["hair_braid_id"] = braid_id
+        obj["hair_braid_control"] = control_obj.name
+        obj["hair_braid_strand"] = label
+        obj["hair_braid_segments"] = scene.hair_braid_segments
+        obj["hair_braid_radius"] = scene.hair_braid_radius
+        obj["hair_braid_width"] = scene.hair_braid_width
+        obj["hair_braid_taper"] = scene.hair_braid_taper
+        obj["hair_braid_twist"] = scene.hair_braid_twist
+        if scene.hair_auto_apply_taper_to_new_curves:
+            _apply_taper_to_curve_obj(context, obj, taper_obj)
+        _apply_profile_to_curve_obj(context, obj)
+        created.append(obj)
+    return created
 
 
 def _make_braid_from_point(context, point):
     scene = context.scene
-    _, collections = utils.ensure_system()
-    curves = collections[utils.CURVES]
+    utils.ensure_system()
+    curves = utils.get_curve_collection(point.get("hair_region", "Front"), "braid_control")
     braid_id = _next_braid_id()
     region = point.get("hair_region", "Front")
     direction = utils.string_to_vector(point.get("recommended_direction"), utils.direction_for_region(region))
@@ -780,14 +915,15 @@ def _make_braid_from_point(context, point):
         t = i / max(scene.hair_curve_segment_count - 1, 1)
         sag = mathutils.Vector((0.0, 0.0, -0.12 * length * t * t))
         control_points.append(root + direction * length * t + sag)
-    control = utils.make_curve(f"HGD_BRAID_CTRL_{braid_id}", control_points, curves, region, "braid_control", scene, bevel=scene.hair_braid_bevel_depth)
+    control = utils.make_curve(f"HGD_BRAID_CTRL_{braid_id}", control_points, curves, region, "braid_control", scene, bevel=0.0)
     control["hair_source_point"] = point.name
     control["hair_root_id"] = point.name
     control["hair_braid_id"] = braid_id
-    control["hair_use_taper"] = False
     control.data.resolution_u = scene.hair_braid_resolution
-    visual = _create_or_replace_braid_visual(context, control)
-    return control, visual
+    _set_braid_control_display(control)
+    _apply_curve_variation(control, scene, point.name)
+    strands = _create_or_replace_braid_strands(context, control)
+    return control, strands
 
 
 def _braid_controls_from_context(context, selected_only):
@@ -797,7 +933,7 @@ def _braid_controls_from_context(context, selected_only):
         for obj in context.selected_objects:
             if obj.get("hair_guide_type") == "braid_control":
                 control = obj
-            elif obj.get("hair_guide_type") == "braid_visual":
+            elif obj.get("hair_guide_type") == "braid_strand":
                 control = bpy.data.objects.get(obj.get("hair_braid_control", ""))
             else:
                 control = None
@@ -828,7 +964,7 @@ def _copy_custom_properties(source, target):
 
 def _delete_generated_if_exists(name):
     existing = bpy.data.objects.get(name)
-    if not existing or existing.get("hair_guide_type") not in {"placement_point", "curve", "braid_control", "braid_visual"}:
+    if not existing or existing.get("hair_guide_type") not in {"placement_point", "curve", "braid_control", "braid_strand", "braid_visual"}:
         return False
     if existing not in utils.generated_objects():
         return False
@@ -918,6 +1054,8 @@ def _apply_taper_to_curve_obj(context, obj, taper_obj=None):
     obj["hair_taper_root_radius"] = scene.hair_taper_root_radius
     obj["hair_taper_mid_radius"] = scene.hair_taper_mid_radius
     obj["hair_taper_tip_radius"] = scene.hair_taper_tip_radius
+    if obj.get("hair_curve_profile_type") == "FLAT":
+        obj.data.bevel_depth = 0.0
 
 
 def _apply_taper_to_curves(context, selected_only):
@@ -936,6 +1074,95 @@ def _clear_taper_from_curves(context, selected_only):
         obj.data.taper_object = None
         obj["hair_use_taper"] = False
         obj["hair_taper_object"] = ""
+    return curves
+
+
+def _create_or_update_flat_profile(context):
+    scene = context.scene
+    _, collections = utils.ensure_system()
+    collection = collections[utils.PROFILE_OBJECTS]
+    name = "HGD_Flat_Profile"
+    existing = bpy.data.objects.get(name)
+    created = False
+    if existing and existing.type != "CURVE":
+        bpy.data.objects.remove(existing, do_unlink=True)
+        existing = None
+    if existing is None:
+        curve = bpy.data.curves.new(name, "CURVE")
+        existing = bpy.data.objects.new(name, curve)
+        collection.objects.link(existing)
+        created = True
+    else:
+        for col in list(existing.users_collection):
+            if col != collection:
+                col.objects.unlink(existing)
+        if not any(obj == existing for obj in collection.objects):
+            collection.objects.link(existing)
+    curve = existing.data
+    curve.dimensions = "2D"
+    curve.resolution_u = 12
+    while curve.splines:
+        curve.splines.remove(curve.splines[0])
+    spline = curve.splines.new("POLY")
+    point_count = 16
+    spline.points.add(point_count - 1)
+    half_width = scene.hair_curve_flat_width * 0.5
+    half_thickness = scene.hair_curve_flat_thickness * 0.5
+    for index, point in enumerate(spline.points):
+        angle = math.tau * index / point_count
+        point.co = (
+            math.cos(angle) * half_width,
+            math.sin(angle) * half_thickness,
+            0.0,
+            1.0,
+        )
+    spline.use_cyclic_u = True
+    existing.hide_viewport = True
+    existing.hide_render = True
+    utils.set_common_props(existing, "profile", "", scene)
+    existing["hair_curve_profile_type"] = "FLAT"
+    existing["hair_curve_flat_width"] = scene.hair_curve_flat_width
+    existing["hair_curve_flat_thickness"] = scene.hair_curve_flat_thickness
+    return existing, created
+
+
+def _apply_profile_to_curve_obj(context, obj, profile_obj=None):
+    scene = context.scene
+    if obj.get("hair_guide_type") not in {"curve", "braid_strand"}:
+        return False
+    profile_type = scene.hair_curve_profile_type
+    if profile_type == "FLAT":
+        profile_obj = profile_obj or _create_or_update_flat_profile(context)[0]
+        obj.data.bevel_depth = 0.0
+        obj.data.bevel_object = profile_obj
+    else:
+        obj.data.bevel_object = None
+        obj.data.bevel_depth = scene.hair_curve_bevel_depth
+        profile_type = "ROUND"
+    obj["hair_curve_profile_type"] = profile_type
+    obj["hair_curve_flat_width"] = scene.hair_curve_flat_width
+    obj["hair_curve_flat_thickness"] = scene.hair_curve_flat_thickness
+    return True
+
+
+def _apply_profile_to_curves(context, selected_only):
+    curves = _generated_curves_from_context(context, selected_only)
+    if not curves:
+        return []
+    profile_obj = None
+    if context.scene.hair_curve_profile_type == "FLAT":
+        profile_obj = _create_or_update_flat_profile(context)[0]
+    for obj in curves:
+        _apply_profile_to_curve_obj(context, obj, profile_obj)
+    return curves
+
+
+def _clear_profile_from_curves(context, selected_only):
+    curves = _generated_curves_from_context(context, selected_only)
+    for obj in curves:
+        obj.data.bevel_object = None
+        obj.data.bevel_depth = 0.0
+        obj["hair_curve_profile_type"] = "NONE"
     return curves
 
 
@@ -1036,10 +1263,82 @@ class HGD_OT_clear_taper_from_all_curves(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_create_or_update_flat_profile(bpy.types.Operator):
+    bl_idname = "hgd.create_or_update_flat_profile"
+    bl_label = "扁平断面を作成/更新"
+    bl_description = "HairGuideSystem/ProfileObjectsに扁平なCurve断面Profile Objectを作成または更新します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        _profile, created = _create_or_update_flat_profile(context)
+        self.report({'INFO'}, "扁平断面を作成しました。" if created else "扁平断面を更新しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_apply_profile_to_selected_curves(bpy.types.Operator):
+    bl_idname = "hgd.apply_profile_to_selected_curves"
+    bl_label = "選択カーブへ断面を適用"
+    bl_description = "選択中の通常カーブと三つ編み表示カーブへ丸または扁平断面を適用します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _apply_profile_to_curves(context, True)
+        if not curves:
+            self.report({'WARNING'}, "断面適用対象の生成カーブが選択されていません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"選択カーブ {len(curves)} 本へ断面を適用しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_apply_profile_to_all_curves(bpy.types.Operator):
+    bl_idname = "hgd.apply_profile_to_all_curves"
+    bl_label = "全カーブへ断面を適用"
+    bl_description = "すべての通常カーブと三つ編み表示カーブへ丸または扁平断面を適用します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _apply_profile_to_curves(context, False)
+        if not curves:
+            self.report({'WARNING'}, "断面適用対象の生成カーブが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"全カーブ {len(curves)} 本へ断面を適用しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_clear_profile_from_selected_curves(bpy.types.Operator):
+    bl_idname = "hgd.clear_profile_from_selected_curves"
+    bl_label = "選択カーブの断面解除"
+    bl_description = "選択中の通常カーブと三つ編み表示カーブから断面Profile Objectを解除します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _clear_profile_from_curves(context, True)
+        if not curves:
+            self.report({'WARNING'}, "断面解除対象の生成カーブが選択されていません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"選択カーブ {len(curves)} 本の断面を解除しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_clear_profile_from_all_curves(bpy.types.Operator):
+    bl_idname = "hgd.clear_profile_from_all_curves"
+    bl_label = "全カーブの断面解除"
+    bl_description = "すべての通常カーブと三つ編み表示カーブから断面Profile Objectを解除します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _clear_profile_from_curves(context, False)
+        if not curves:
+            self.report({'WARNING'}, "断面解除対象の生成カーブが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"全カーブ {len(curves)} 本の断面を解除しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_update_selected_braids(bpy.types.Operator):
     bl_idname = "hgd.update_selected_braids"
     bl_label = "選択三つ編みを更新"
-    bl_description = "選択中の三つ編み制御カーブから表示用三つ編みを再生成します"
+    bl_description = "選択中の三つ編み制御カーブから3本の表示用カーブを再生成します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -1049,7 +1348,7 @@ class HGD_OT_update_selected_braids(bpy.types.Operator):
             return {'CANCELLED'}
         updated = 0
         for control in controls:
-            if _create_or_replace_braid_visual(context, control):
+            if _create_or_replace_braid_strands(context, control):
                 updated += 1
         self.report({'INFO'}, f"選択三つ編みを{updated}本更新しました。")
         return {'FINISHED'}
@@ -1058,7 +1357,7 @@ class HGD_OT_update_selected_braids(bpy.types.Operator):
 class HGD_OT_update_all_braids(bpy.types.Operator):
     bl_idname = "hgd.update_all_braids"
     bl_label = "全三つ編みを更新"
-    bl_description = "すべての三つ編み制御カーブから表示用三つ編みを再生成します"
+    bl_description = "すべての三つ編み制御カーブから3本の表示用カーブを再生成します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -1068,7 +1367,7 @@ class HGD_OT_update_all_braids(bpy.types.Operator):
             return {'CANCELLED'}
         updated = 0
         for control in controls:
-            if _create_or_replace_braid_visual(context, control):
+            if _create_or_replace_braid_strands(context, control):
                 updated += 1
         self.report({'INFO'}, f"全三つ編みを{updated}本更新しました。")
         return {'FINISHED'}
@@ -1168,7 +1467,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
 
     def execute(self, context):
         src_side, dst_side = ("Side_L", "Side_R") if self.direction == "L2R" else ("Side_R", "Side_L")
-        selected = [obj for obj in context.selected_objects if obj.get("hair_region") == src_side and obj.get("hair_guide_type") in {"placement_point", "curve", "braid_control", "braid_visual"}]
+        selected = [obj for obj in context.selected_objects if obj.get("hair_region") == src_side and obj.get("hair_guide_type") in {"placement_point", "curve", "braid_control"}]
         if not selected:
             self.report({'WARNING'}, f"{src_side}のオブジェクトが選択されていません。")
             return {'CANCELLED'}
@@ -1219,7 +1518,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
             new_obj.data = obj.data.copy()
             new_obj.name = new_name
             new_obj.data.name = new_name + "Curve"
-            collections[utils.CURVES].objects.link(new_obj)
+            utils.get_curve_collection(dst_side, "curve").objects.link(new_obj)
             if context.scene.hair_mirror_copy_custom_properties:
                 _copy_custom_properties(obj, new_obj)
             else:
@@ -1235,6 +1534,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
                     point.handle_right.x *= -1
             new_obj["hair_guide_type"] = "curve"
             new_obj["hair_region"] = dst_side
+            utils.apply_curve_region_color(new_obj)
             new_obj["hair_mirror_source"] = obj.name
             new_obj["hair_mirror_pair"] = obj.name
             obj["hair_mirror_pair"] = new_obj.name
@@ -1252,8 +1552,6 @@ class HGD_OT_mirror_side(bpy.types.Operator):
         for obj in selected:
             if obj.get("hair_guide_type") == "braid_control":
                 control = obj
-            elif obj.get("hair_guide_type") == "braid_visual":
-                control = bpy.data.objects.get(obj.get("hair_braid_control", ""))
             else:
                 control = None
             if control and control.get("hair_guide_type") == "braid_control" and control.name not in seen_controls:
@@ -1271,7 +1569,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
             new_obj.data = obj.data.copy()
             new_obj.name = new_name
             new_obj.data.name = new_name + "Curve"
-            collections[utils.CURVES].objects.link(new_obj)
+            utils.get_curve_collection(dst_side, "braid_control").objects.link(new_obj)
             if context.scene.hair_mirror_copy_custom_properties:
                 _copy_custom_properties(obj, new_obj)
             else:
@@ -1286,8 +1584,9 @@ class HGD_OT_mirror_side(bpy.types.Operator):
                     point.handle_right.x *= -1
             new_obj["hair_guide_type"] = "braid_control"
             new_obj["hair_region"] = dst_side
+            utils.apply_curve_region_color(new_obj)
             new_obj["hair_braid_id"] = braid_id
-            new_obj["hair_use_taper"] = False
+            _set_braid_control_display(new_obj)
             new_obj["hair_mirror_source"] = obj.name
             new_obj["hair_mirror_pair"] = obj.name
             obj["hair_mirror_pair"] = new_obj.name
@@ -1299,8 +1598,8 @@ class HGD_OT_mirror_side(bpy.types.Operator):
                 new_obj["hair_source_point"] = ""
                 new_obj["hair_root_id"] = ""
                 lost_links += 1
-            _create_or_replace_braid_visual(context, new_obj)
-            mirrored += 2
+            strands = _create_or_replace_braid_strands(context, new_obj)
+            mirrored += 1 + len(strands)
         self.report({'INFO'}, f"{mirrored}個をミラーしました。参照配置点を失ったカーブは{lost_links}本です。")
         return {'FINISHED'}
 
@@ -1339,12 +1638,19 @@ classes = (
     HGD_OT_clear_warnings,
     HGD_OT_clear_all_generated,
     HGD_OT_toggle_in_front_generated_helpers,
+    HGD_OT_organize_curves_by_region,
+    HGD_OT_apply_curve_region_colors,
     HGD_OT_apply_taper_preset,
     HGD_OT_create_or_update_default_taper,
     HGD_OT_apply_taper_to_selected_curves,
     HGD_OT_apply_taper_to_all_curves,
     HGD_OT_clear_taper_from_selected_curves,
     HGD_OT_clear_taper_from_all_curves,
+    HGD_OT_create_or_update_flat_profile,
+    HGD_OT_apply_profile_to_selected_curves,
+    HGD_OT_apply_profile_to_all_curves,
+    HGD_OT_clear_profile_from_selected_curves,
+    HGD_OT_clear_profile_from_all_curves,
     HGD_OT_update_selected_braids,
     HGD_OT_update_all_braids,
     HGD_OT_apply_curve_batch_settings,

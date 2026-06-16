@@ -194,17 +194,39 @@ class HGD_PT_curve_strand(HGD_PT_base):
         layout.prop(scene, 'hair_curve_taper_strength')
 
 
-class HGD_PT_braid(HGD_PT_base):
-    bl_label = '三つ編み'
+class HGD_PT_curve_variation(HGD_PT_base):
+    bl_label = 'カーブの個体差'
     bl_order = 6
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        layout.label(text="1本の制御カーブから", icon='OUTLINER_OB_CURVE')
-        layout.label(text="三つ編み形状を生成します。")
+        layout.label(text="生成時に位置と長さへ少し差を付け、", icon='OUTLINER_OB_CURVE')
+        layout.label(text="同じ形が重なる問題を減らします。")
+        layout.prop(scene, 'hair_curve_variation_enabled')
+        layout.prop(scene, 'hair_curve_variation_seed')
+        layout.prop(scene, 'hair_curve_root_jitter')
+        layout.prop(scene, 'hair_curve_mid_jitter')
+        layout.prop(scene, 'hair_curve_tip_jitter')
+        layout.prop(scene, 'hair_curve_length_variation')
+        layout.label(text="配置点は動かしません。", icon='INFO')
+        layout.label(text="生成されるカーブだけに個体差を加えます。")
+        layout.label(text="長さのブレ0.15は約85%〜115%です。")
+
+
+class HGD_PT_braid(HGD_PT_base):
+    bl_label = '三つ編み'
+    bl_order = 7
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        layout.label(text="1本の制御カーブから、絡み合う", icon='OUTLINER_OB_CURVE')
+        layout.label(text="3本の表示用カーブを生成します。")
         layout.label(text="形を変えたい場合は制御カーブを編集し、")
         layout.label(text="更新ボタンを押してください。")
+        layout.label(text="制御カーブは形状制御専用です。", icon='INFO')
+        layout.label(text="髪として見えるのは3本の表示用カーブです。")
         layout.prop(scene, 'hair_braid_segments')
         layout.prop(scene, 'hair_braid_width')
         layout.prop(scene, 'hair_braid_radius')
@@ -221,7 +243,7 @@ class HGD_PT_braid(HGD_PT_base):
 
 class HGD_PT_curve_shape(HGD_PT_base):
     bl_label = 'カーブ形状'
-    bl_order = 7
+    bl_order = 8
 
     def draw(self, context):
         layout = self.layout
@@ -241,7 +263,21 @@ class HGD_PT_curve_shape(HGD_PT_base):
         layout.prop(scene, 'hair_taper_resolution')
         layout.label(text="毛先の太さを0にすると、先端が尖ります。", icon='INFO')
         layout.label(text="全体の太さはCurveのBevel Depthです。")
+        layout.label(text="三つ編み制御カーブには適用されません。")
         layout.operator('hgd.create_or_update_default_taper', icon='OUTLINER_OB_CURVE')
+        layout.separator()
+        layout.label(text="扁平断面は髪束を横長に見せます。", icon='INFO')
+        layout.label(text="先細りはTaperで管理し、断面形状とは別です。")
+        layout.prop(scene, 'hair_curve_profile_type')
+        layout.prop(scene, 'hair_curve_flat_width')
+        layout.prop(scene, 'hair_curve_flat_thickness')
+        layout.operator('hgd.create_or_update_flat_profile', icon='OUTLINER_OB_CURVE')
+        row = layout.row(align=True)
+        row.operator('hgd.apply_profile_to_selected_curves', text='選択カーブへ断面を適用')
+        row.operator('hgd.apply_profile_to_all_curves', text='全カーブへ断面を適用')
+        row = layout.row(align=True)
+        row.operator('hgd.clear_profile_from_selected_curves', text='選択カーブの断面解除')
+        row.operator('hgd.clear_profile_from_all_curves', text='全カーブの断面解除')
         layout.separator()
         layout.label(text="適用:", icon='CHECKMARK')
         row = layout.row(align=True)
@@ -255,7 +291,7 @@ class HGD_PT_curve_shape(HGD_PT_base):
 
 class HGD_PT_curve_batch_adjust(HGD_PT_base):
     bl_label = 'カーブ一括調整'
-    bl_order = 8
+    bl_order = 9
 
     def draw(self, context):
         layout = self.layout
@@ -275,13 +311,14 @@ class HGD_PT_curve_batch_adjust(HGD_PT_base):
 
 class HGD_PT_curve_follow(HGD_PT_base):
     bl_label = 'カーブ追従'
-    bl_order = 9
+    bl_order = 10
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
         layout.label(text="配置点移動後にカーブ根元を追従させます。", icon='INFO')
         layout.label(text="通常カーブと三つ編み制御カーブが対象です。")
+        layout.label(text="三つ編み表示カーブは更新で再生成します。")
         layout.prop(scene, 'hair_follow_update_selected_only')
         layout.prop(scene, 'hair_follow_keep_tip_offset')
         if not scene.hair_follow_keep_tip_offset:
@@ -291,7 +328,7 @@ class HGD_PT_curve_follow(HGD_PT_base):
 
 class HGD_PT_side_mirror(HGD_PT_base):
     bl_label = '左右ミラー'
-    bl_order = 10
+    bl_order = 11
 
     def draw(self, context):
         layout = self.layout
@@ -310,7 +347,7 @@ class HGD_PT_side_mirror(HGD_PT_base):
 
 class HGD_PT_validation(HGD_PT_base):
     bl_label = '検証'
-    bl_order = 11
+    bl_order = 12
 
     def draw(self, context):
         layout = self.layout
@@ -329,9 +366,23 @@ class HGD_PT_validation(HGD_PT_base):
         layout.label(text="Viewport ShadingのColorをObjectにしてください。")
 
 
+class HGD_PT_curve_organization(HGD_PT_base):
+    bl_label = 'カーブ整理'
+    bl_order = 13
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="生成済みカーブを部位別Collectionへ分け、", icon='OUTLINER_COLLECTION')
+        layout.label(text="領域ごとの色を反映します。")
+        layout.operator('hgd.organize_curves_by_region', text='カーブを部位別に整理', icon='OUTLINER_COLLECTION')
+        layout.operator('hgd.apply_curve_region_colors', text='部位別カラーを反映', icon='MATERIAL')
+        layout.label(text="色を確認するにはViewport Shadingの", icon='INFO')
+        layout.label(text="ColorをObjectにしてください。")
+
+
 class HGD_PT_display_cleanup(HGD_PT_base):
     bl_label = '表示と削除'
-    bl_order = 12
+    bl_order = 14
 
     def draw(self, context):
         layout = self.layout
@@ -366,7 +417,7 @@ class HGD_PT_display_cleanup(HGD_PT_base):
 
 class HGD_PT_help(HGD_PT_base):
     bl_label = 'ヘルプ'
-    bl_order = 13
+    bl_order = 15
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
@@ -402,11 +453,18 @@ class HGD_PT_help(HGD_PT_base):
         box.label(text="3. テーパー形状を作成/更新")
         box.label(text="4. 選択または全カーブへ適用")
         box.label(text="自動適用ONなら新規カーブにも反映されます。")
+        box.label(text="扁平断面は横長のProfile Objectです。")
+        box.label(text="Taperと併用できます。")
+        box = layout.box()
+        box.label(text="カーブの個体差について", icon='OUTLINER_OB_CURVE')
+        box.label(text="配置点は動かさず、生成カーブだけに")
+        box.label(text="位置ブレと長さブレを加えます。")
+        box.label(text="同じSeedなら再現しやすくなります。")
         box = layout.box()
         box.label(text="三つ編みについて", icon='OUTLINER_OB_CURVE')
         box.label(text="1本の制御カーブを編集します。")
-        box.label(text="表示用三つ編みは更新ボタンで再生成します。")
-        box.label(text="通常カーブ用テーパーとは別管理です。")
+        box.label(text="髪として見えるのは3本の表示用カーブです。")
+        box.label(text="制御カーブは形状制御専用です。")
         box = layout.box()
         box.label(text="配置点について", icon='MESH_UVSPHERE')
         box.label(text="現在の基本ガイド位置を参照します。")
@@ -422,12 +480,14 @@ classes = (
     HGD_PT_regions,
     HGD_PT_placement,
     HGD_PT_curve_strand,
+    HGD_PT_curve_variation,
     HGD_PT_braid,
     HGD_PT_curve_shape,
     HGD_PT_curve_batch_adjust,
     HGD_PT_curve_follow,
     HGD_PT_side_mirror,
     HGD_PT_validation,
+    HGD_PT_curve_organization,
     HGD_PT_display_cleanup,
     HGD_PT_help,
 )

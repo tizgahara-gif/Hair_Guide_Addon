@@ -9,7 +9,9 @@ PLACEMENT_POINTS = "PlacementPoints"
 CURVES = "Curves"
 WARNINGS = "Warnings"
 TAPER_OBJECTS = "TaperObjects"
-SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS, TAPER_OBJECTS)
+PROFILE_OBJECTS = "ProfileObjects"
+SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS, TAPER_OBJECTS, PROFILE_OBJECTS)
+CURVE_REGION_COLLECTIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape", "Braid")
 REGION_NAMES = ("Top", "Front", "Side", "Back_Upper", "Back_Middle", "Nape")
 POINT_REGIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape")
 REGION_COLORS = {
@@ -21,6 +23,16 @@ REGION_COLORS = {
     "Back_Upper": (0.65, 0.35, 1.0, 1.0),
     "Back_Middle": (1.0, 0.75, 0.2, 1.0),
     "Nape": (0.2, 1.0, 0.85, 1.0),
+}
+CURVE_REGION_COLORS = {
+    "Top": (0.1, 0.9, 0.2, 1.0),
+    "Front": (0.1, 0.35, 1.0, 1.0),
+    "Side_L": (1.0, 0.85, 0.1, 1.0),
+    "Side_R": (1.0, 0.85, 0.1, 1.0),
+    "Back_Upper": (1.0, 0.1, 0.1, 1.0),
+    "Back_Middle": (1.0, 0.45, 0.1, 1.0),
+    "Nape": (0.6, 0.2, 1.0, 1.0),
+    "Braid": (1.0, 0.25, 0.65, 1.0),
 }
 WARNING_COLOR = (1.0, 0.05, 0.02, 1.0)
 
@@ -38,7 +50,15 @@ def ensure_collection(name, parent=None):
 def ensure_system():
     root = ensure_collection(ROOT)
     children = {name: ensure_collection(name, root) for name in SYSTEM_COLLECTIONS}
+    ensure_curve_region_collections(children[CURVES])
     return root, children
+
+
+def ensure_curve_region_collections(curves_collection=None):
+    if curves_collection is None:
+        root = ensure_collection(ROOT)
+        curves_collection = ensure_collection(CURVES, root)
+    return {name: ensure_collection(name, curves_collection) for name in CURVE_REGION_COLLECTIONS}
 
 
 def get_system_collection(name, create=True):
@@ -56,6 +76,13 @@ def collection_objects_recursive(collection):
     for child in collection.children:
         objects.extend(collection_objects_recursive(child))
     return objects
+
+
+def collections_recursive(collection):
+    collections = [collection]
+    for child in collection.children:
+        collections.extend(collections_recursive(child))
+    return collections
 
 
 def generated_objects(type_filter=None):
@@ -141,7 +168,12 @@ def clear_collection_objects(collection_name, type_filter=None):
     collection = get_system_collection(collection_name, create=False)
     if not collection:
         return 0
-    objects = list(collection.objects)
+    objects = []
+    seen = set()
+    for obj in collection_objects_recursive(collection):
+        if obj.name not in seen:
+            objects.append(obj)
+            seen.add(obj.name)
     count = 0
     for obj in objects:
         if type_filter and obj.get("hair_guide_type") != type_filter:
@@ -160,8 +192,58 @@ def set_common_props(obj, guide_type, region="", scene=None):
     obj["hair_warning_type"] = obj.get("hair_warning_type", "")
     obj["hair_seed"] = getattr(scene, "hair_seed", 0) if scene else 0
     obj.color = REGION_COLORS.get(region, (0.9, 0.9, 0.9, 1.0))
+    if guide_type in {"curve", "braid_control", "braid_strand"}:
+        apply_curve_region_color(obj)
     if guide_type in {"guide", "region", "placement_point", "warning"} and scene:
         obj.show_in_front = getattr(scene, "hair_show_guides_in_front", True)
+
+
+def curve_region_key(obj_or_region, guide_type=None):
+    if hasattr(obj_or_region, "get"):
+        guide_type = obj_or_region.get("hair_guide_type", guide_type)
+        region = obj_or_region.get("hair_region", "")
+    else:
+        region = obj_or_region
+    if guide_type in {"braid_control", "braid_strand"}:
+        return "Braid"
+    return region if region in CURVE_REGION_COLLECTIONS else ""
+
+
+def get_curve_collection(region="", guide_type="curve"):
+    _, children = ensure_system()
+    curves = children[CURVES]
+    key = curve_region_key(region, guide_type)
+    if not key:
+        return curves
+    return ensure_curve_region_collections(curves)[key]
+
+
+def move_object_to_collection(obj, target_collection):
+    if not obj or not target_collection:
+        return False
+    curves_root = get_system_collection(CURVES)
+    if curves_root:
+        for collection in collections_recursive(curves_root):
+            if any(existing == obj for existing in collection.objects):
+                collection.objects.unlink(obj)
+    if not any(existing == obj for existing in target_collection.objects):
+        target_collection.objects.link(obj)
+    return True
+
+
+def organize_curve_object(obj):
+    if not obj or obj.get("hair_guide_type") not in {"curve", "braid_control", "braid_strand"}:
+        return False
+    target = get_curve_collection(obj.get("hair_region", ""), obj.get("hair_guide_type"))
+    return move_object_to_collection(obj, target)
+
+
+def apply_curve_region_color(obj):
+    if not obj or obj.get("hair_guide_type") not in {"curve", "braid_control", "braid_strand"}:
+        return False
+    key = curve_region_key(obj)
+    obj.color = CURVE_REGION_COLORS.get(key, (0.9, 0.9, 0.9, 1.0))
+    return True
 
 
 def head_bounds(obj):

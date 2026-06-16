@@ -21,6 +21,11 @@ STRAND_GENERATION_TYPES = (
     ("BRAID_CURVE", "三つ編みカーブ", "1本の制御カーブと三つ編み表示を生成します"),
 )
 
+CURVE_PROFILE_TYPES = (
+    ("ROUND", "丸", "CurveのBevel Depthで丸い断面を表示します"),
+    ("FLAT", "扁平", "Profile Objectで横長の扁平断面を表示します"),
+)
+
 PROPERTY_NAMES = (
     "hair_target_head_object", "hair_guide_scale", "hair_guide_offset",
     "hair_seed", "hair_density", "hair_symmetry_bias",
@@ -28,7 +33,10 @@ PROPERTY_NAMES = (
     "hair_size_variation", "hair_length_variation", "hair_strand_type",
     "hair_curve_length", "hair_curve_bevel_depth", "hair_curve_resolution",
     "hair_curve_root_radius", "hair_curve_tip_radius", "hair_curve_taper_strength",
-    "hair_curve_segment_count", "hair_warning_count", "hair_root_cluster_threshold",
+    "hair_curve_segment_count", "hair_curve_variation_enabled", "hair_curve_variation_seed",
+    "hair_curve_root_jitter", "hair_curve_mid_jitter", "hair_curve_tip_jitter",
+    "hair_curve_length_variation", "hair_curve_profile_type", "hair_curve_flat_width",
+    "hair_curve_flat_thickness", "hair_warning_count", "hair_root_cluster_threshold",
     "hair_batch_curve_length", "hair_batch_curve_bevel_depth", "hair_batch_curve_resolution",
     "hair_follow_keep_tip_offset", "hair_follow_update_selected_only",
     "hair_mirror_axis", "hair_mirror_overwrite_existing", "hair_mirror_copy_custom_properties",
@@ -186,6 +194,70 @@ def register():
         min=2,
         max=12,
         description="カーブ毛束を作成するときに使う制御点数。",
+    )
+    scene.hair_curve_variation_enabled = BoolProperty(
+        name="カーブの個体差を有効化",
+        default=True,
+        description="生成時にCurveへ小さな位置差と長さ差を加え、完全な重なりを防ぎます。",
+    )
+    scene.hair_curve_variation_seed = IntProperty(
+        name="個体差シード",
+        default=1,
+        min=0,
+        description="Curveの位置ブレと長さブレを再現するための乱数シード。同じ値なら同じ個体差になります。",
+    )
+    scene.hair_curve_root_jitter = FloatProperty(
+        name="根元の位置ブレ",
+        default=0.01,
+        min=0.0,
+        max=1.0,
+        precision=4,
+        description="生成時にCurveへ小さな位置差と長さ差を加え、完全な重なりを防ぎます。根元付近の位置ブレ量です。",
+    )
+    scene.hair_curve_mid_jitter = FloatProperty(
+        name="中間の位置ブレ",
+        default=0.035,
+        min=0.0,
+        max=1.0,
+        precision=4,
+        description="生成時にCurveへ小さな位置差と長さ差を加え、完全な重なりを防ぎます。中間付近の位置ブレ量です。",
+    )
+    scene.hair_curve_tip_jitter = FloatProperty(
+        name="毛先の位置ブレ",
+        default=0.06,
+        min=0.0,
+        max=1.0,
+        precision=4,
+        description="生成時にCurveへ小さな位置差と長さ差を加え、完全な重なりを防ぎます。毛先付近の位置ブレ量です。",
+    )
+    scene.hair_curve_length_variation = FloatProperty(
+        name="長さのブレ",
+        default=0.15,
+        min=0.0,
+        max=1.0,
+        description="生成時にCurveへ小さな位置差と長さ差を加え、完全な重なりを防ぎます。0.15なら約85%〜115%の長さ差です。",
+    )
+    scene.hair_curve_profile_type = EnumProperty(
+        name="断面タイプ",
+        items=CURVE_PROFILE_TYPES,
+        default="ROUND",
+        description="生成済み髪カーブの断面を丸または扁平に切り替えます。",
+    )
+    scene.hair_curve_flat_width = FloatProperty(
+        name="横幅",
+        default=0.08,
+        min=0.001,
+        max=2.0,
+        precision=4,
+        description="扁平断面Profile Objectの横幅です。",
+    )
+    scene.hair_curve_flat_thickness = FloatProperty(
+        name="厚み",
+        default=0.015,
+        min=0.001,
+        max=2.0,
+        precision=4,
+        description="扁平断面Profile Objectの厚みです。",
     )
 
     scene.hair_warning_count = IntProperty(
@@ -351,7 +423,7 @@ def register():
         default=0.025,
         min=0.0,
         precision=4,
-        description="三つ編み制御カーブの表示太さ。三つ編みMeshの太さではありません。",
+        description="三つ編み表示用カーブの太さ。制御カーブはWire表示で太さを持ちません。",
     )
     scene.hair_braid_auto_update = BoolProperty(
         name="自動更新",
