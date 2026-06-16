@@ -229,7 +229,6 @@ class HGD_PT_curve_strand(HGD_PT_base):
         layout.prop(scene, 'hair_strand_generation_type')
         if scene.hair_show_inline_help:
             layout.label(text="通常カーブ：1本の髪束ガイドを生成します。", icon='INFO')
-            layout.label(text="三つ編み：制御カーブと3本の表示カーブを生成します。")
             layout.label(text="ツイスト：制御カーブとドリル状の表示カーブを生成します。")
         layout.operator('hgd.create_curve_from_points', text='カーブ毛束を生成', icon='OUTLINER_OB_CURVE')
 
@@ -272,25 +271,6 @@ class HGD_PT_curve_variation(HGD_PT_base):
         layout.prop(scene, 'hair_curve_mid_jitter')
         layout.prop(scene, 'hair_curve_tip_jitter')
         layout.prop(scene, 'hair_curve_length_variation')
-        braid_box = layout.box()
-        braid_icon = 'TRIA_DOWN' if scene.hair_show_braid_settings else 'TRIA_RIGHT'
-        braid_box.prop(scene, 'hair_show_braid_settings', text='三つ編み設定', icon=braid_icon, toggle=True)
-        if scene.hair_show_braid_settings:
-            braid_box.prop(scene, 'hair_braid_segments')
-            braid_box.prop(scene, 'hair_braid_width')
-            braid_box.prop(scene, 'hair_braid_radius')
-            braid_box.prop(scene, 'hair_braid_taper')
-            braid_box.prop(scene, 'hair_braid_twist')
-            braid_box.prop(scene, 'hair_braid_resolution')
-            braid_box.prop(scene, 'hair_braid_bevel_depth')
-            braid_box.prop(scene, 'hair_braid_auto_update')
-            if scene.hair_show_inline_help:
-                braid_box.label(text="三つ編みは編み目単位で生成されます。")
-                braid_box.label(text="制御カーブ編集後に更新すると3本の表示カーブが再生成されます。")
-                braid_box.label(text="表示カーブを直接編集しても更新時に失われます。")
-        else:
-            braid_box.label(text="三つ編み詳細は非表示です。", icon='TRIA_RIGHT')
-
         twist_box = layout.box()
         twist_icon = 'TRIA_DOWN' if scene.hair_show_twist_settings else 'TRIA_RIGHT'
         twist_box.prop(scene, 'hair_show_twist_settings', text='ツイスト設定', icon=twist_icon, toggle=True)
@@ -320,7 +300,7 @@ class HGD_PT_curve_variation(HGD_PT_base):
             advanced_box.label(text="詳細/互換設定は非表示です。", icon='TRIA_RIGHT')
 
 
-class HGD_PT_braid(HGD_PT_base):
+class HGD_PT_flat_mesh(HGD_PT_base):
     bl_label = '扁平メッシュ化'
     bl_order = 7
 
@@ -368,12 +348,6 @@ class HGD_PT_curve_apply_update(HGD_PT_base):
         layout.operator('hgd.update_curve_roots_from_points', icon='OUTLINER_OB_CURVE')
         layout.separator()
         if scene.hair_show_inline_help:
-            layout.label(text="制御カーブ編集後は三つ編みを更新してください。", icon='INFO')
-            layout.label(text="自動更新は将来拡張です。現在は更新ボタンを使用してください。")
-        row = layout.row(align=True)
-        row.operator('hgd.update_selected_braids', text='選択三つ編みを更新')
-        row.operator('hgd.update_all_braids', text='全三つ編みを更新')
-        if scene.hair_show_inline_help:
             layout.label(text="制御カーブ編集後はツイストを更新してください。", icon='INFO')
         row = layout.row(align=True)
         row.operator('hgd.update_selected_twists', text='選択ツイストを更新')
@@ -388,7 +362,7 @@ class HGD_PT_side_mirror(HGD_PT_base):
         layout = self.layout
         scene = context.scene
         if scene.hair_show_inline_help:
-            layout.label(text="側頭部の配置点、カーブ、三つ編みを", icon='INFO')
+            layout.label(text="側頭部の配置点、カーブ、ツイストを", icon='INFO')
             layout.label(text="反対側へ複製します。")
             layout.label(text="選択中の左右対象のみ処理します。", icon='ERROR')
         layout.prop(scene, 'hair_mirror_axis')
@@ -470,6 +444,7 @@ class HGD_PT_display_cleanup(HGD_PT_base):
         layout.operator('hgd.clear_warnings', icon='TRASH')
         layout.operator('hgd.clear_placement_points', icon='TRASH')
         layout.operator('hgd.delete_hair_guides', text='ガイド削除', icon='TRASH')
+        layout.operator('hgd.clear_legacy_braid_objects', text='旧三つ編み生成物を削除', icon='TRASH')
         if scene.hair_show_inline_help:
             layout.label(text="すべて削除はガイド、配置点、")
             layout.label(text="カーブ、警告、テーパーを削除します。")
@@ -493,7 +468,6 @@ class HGD_PT_help(HGD_PT_base):
         box.label(text="・髪のガイド生成")
         box.label(text="・毛束配置点生成")
         box.label(text="・Bezierカーブ毛束生成")
-        box.label(text="・制御カーブ式の三つ編み生成")
         box.label(text="・カーブ毛束の先細り形状設定")
         box.label(text="・根元集中チェック")
         box = layout.box()
@@ -501,7 +475,6 @@ class HGD_PT_help(HGD_PT_base):
         box.label(text="・髪メッシュ自動生成")
         box.label(text="・頭部メッシュ編集")
         box.label(text="・カーブの自動メッシュ化")
-        box.label(text="・3本カーブの個別三つ編み編集")
         box.label(text="・Unity設定 / PhysBone設定")
         box = layout.box()
         box.label(text="推奨手順", icon='CHECKMARK')
@@ -527,13 +500,6 @@ class HGD_PT_help(HGD_PT_base):
         box.label(text="位置ブレと長さブレを加えます。")
         box.label(text="同じSeedなら再現しやすくなります。")
         box = layout.box()
-        box.label(text="三つ編みについて", icon='OUTLINER_OB_CURVE')
-        box.label(text="1本の制御カーブを編集します。")
-        box.label(text="髪として見えるのは3本の表示用カーブです。")
-        box.label(text="編み目ユニットを連続配置して3本の房を再生成します。")
-        box.label(text="表示カーブを直接編集しても更新時に失われます。")
-        box.label(text="制御カーブは形状制御専用です。")
-        box = layout.box()
         box.label(text="配置点について", icon='MESH_UVSPHERE')
         box.label(text="現在の基本ガイド位置を参照します。")
         box.label(text="基本ガイド移動後は「配置点を生成/更新」を押してください。")
@@ -550,7 +516,7 @@ classes = (
     HGD_PT_placement,
     HGD_PT_curve_strand,
     HGD_PT_curve_variation,
-    HGD_PT_braid,
+    HGD_PT_flat_mesh,
     HGD_PT_curve_apply_update,
     HGD_PT_side_mirror,
     HGD_PT_validation,

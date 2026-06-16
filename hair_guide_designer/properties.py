@@ -18,7 +18,6 @@ TAPER_PRESETS = (
 
 STRAND_GENERATION_TYPES = (
     ("NORMAL_CURVE", "通常カーブ", "1本の髪束ガイドカーブを生成します"),
-    ("BRAID_CURVE", "三つ編みカーブ", "1本の制御カーブと三つ編み表示を生成します"),
     ("TWIST_CURVE", "ツイストカーブ", "1本の制御カーブからドリル状・縦ロール状の表示カーブを生成します"),
 )
 
@@ -46,13 +45,10 @@ PROPERTY_NAMES = (
     "hair_use_shared_taper", "hair_taper_preset", "hair_taper_root_radius",
     "hair_taper_mid_radius", "hair_taper_tip_radius", "hair_taper_bevel_depth",
     "hair_taper_resolution", "hair_auto_apply_taper_to_new_curves",
-    "hair_strand_generation_type", "hair_braid_segments", "hair_braid_radius",
-    "hair_braid_width", "hair_braid_taper", "hair_braid_twist",
-    "hair_braid_resolution", "hair_braid_bevel_depth", "hair_braid_auto_update",
-    "hair_twist_segments", "hair_twist_radius", "hair_twist_turns",
+    "hair_strand_generation_type", "hair_twist_segments", "hair_twist_radius", "hair_twist_turns",
     "hair_twist_phase", "hair_twist_bevel_depth", "hair_twist_resolution",
     "hair_twist_taper_strength",
-    "hair_show_braid_settings", "hair_show_twist_settings", "hair_show_advanced_curve_settings",
+    "hair_show_twist_settings", "hair_show_advanced_curve_settings",
     "hair_show_guides_in_front", "hair_show_inline_help",
 )
 
@@ -156,7 +152,7 @@ def register():
         name="生成タイプ",
         items=STRAND_GENERATION_TYPES,
         default="NORMAL_CURVE",
-        description="通常カーブまたは三つ編みカーブのどちらを生成するか選択します。",
+        description="通常カーブまたはツイストカーブのどちらを生成するか選択します。",
     )
     scene.hair_curve_length = FloatProperty(
         name="毛束長さ",
@@ -441,11 +437,6 @@ def register():
         description="新しく生成するカーブ毛束へ共有テーパーを自動で適用します。",
     )
 
-    scene.hair_show_braid_settings = BoolProperty(
-        name="三つ編み設定を表示",
-        default=False,
-        description="三つ編みの詳細パラメータを表示します。",
-    )
     scene.hair_show_twist_settings = BoolProperty(
         name="ツイスト設定を表示",
         default=False,
@@ -457,60 +448,6 @@ def register():
         description="将来互換用のカーブ詳細パラメータを表示します。",
     )
 
-    scene.hair_braid_segments = IntProperty(
-        name="編み目数",
-        default=8,
-        min=2,
-        max=64,
-        description="三つ編み表示の交差ユニット数。1つが1回の編み目です。",
-    )
-    scene.hair_braid_radius = FloatProperty(
-        name="交差の奥行き",
-        default=0.04,
-        min=0.001,
-        max=2.0,
-        description="中央交差時の前後方向のふくらみ。大きいほど房の上下差が強く見えます。",
-    )
-    scene.hair_braid_width = FloatProperty(
-        name="横幅",
-        default=0.12,
-        min=0.001,
-        max=5.0,
-        description="三つ編み全体の横幅。大きいほど左右の房が広がります。",
-    )
-    scene.hair_braid_taper = FloatProperty(
-        name="毛先細り",
-        default=0.45,
-        min=0.0,
-        max=1.0,
-        description="毛先へ向かう三つ編みの細り具合。高いほど毛先が細くなります。",
-    )
-    scene.hair_braid_twist = FloatProperty(
-        name="編み込み倍率",
-        default=1.0,
-        min=0.0,
-        max=4.0,
-        description="編み目パターンの進み方を調整します。通常は1.0で使用します。",
-    )
-    scene.hair_braid_resolution = IntProperty(
-        name="解像度",
-        default=3,
-        min=1,
-        max=16,
-        description="制御カーブをサンプリングするときの滑らかさ。",
-    )
-    scene.hair_braid_bevel_depth = FloatProperty(
-        name="表示太さ",
-        default=0.018,
-        min=0.0,
-        precision=4,
-        description="三つ編み表示用カーブの太さ。制御カーブはWire表示で太さを持ちません。",
-    )
-    scene.hair_braid_auto_update = BoolProperty(
-        name="自動更新",
-        default=False,
-        description="将来拡張用です。現在は更新ボタンで三つ編み表示を再生成してください。",
-    )
     scene.hair_twist_segments = IntProperty(
         name="分割数",
         default=32,
