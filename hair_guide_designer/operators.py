@@ -39,6 +39,18 @@ BASIC_GUIDE_NAMES = {
     "HAIR_GUIDE_Center",
 }
 
+REGION_VISIBILITY_ITEMS = [
+    ("Top", "頭頂部", "頭頂部の表示切替"),
+    ("Front", "前髪", "前髪領域"),
+    ("Side", "側頭部", "左右の側頭部をまとめた領域"),
+    ("Side_L", "左側頭部", "左側頭部"),
+    ("Side_R", "右側頭部", "右側頭部"),
+    ("Back_Upper", "後頭部上層", "髪全体のボリューム領域"),
+    ("Back_Middle", "後頭部中層", "大きな毛束を配置する領域"),
+    ("Nape", "襟足", "首へ向かって落ちる短い毛束領域"),
+    ("ALL", "すべて", "すべての領域"),
+]
+
 
 def _remove_named_generated_guides(names):
     removed = 0
@@ -235,7 +247,7 @@ class HGD_OT_region_visibility(bpy.types.Operator):
     bl_label = "領域表示"
     bl_description = "髪の領域ごとに生成物を表示または非表示にします"
     bl_options = {'REGISTER', 'UNDO'}
-    region: EnumProperty(items=[("Front", "前髪", "前髪領域"), ("Side", "側頭部", "左右の側頭部をまとめた領域"), ("Side_L", "左側", "左側頭部"), ("Side_R", "右側", "右側頭部"), ("Back_Upper", "後頭部上層", "髪全体のボリューム領域"), ("Back_Middle", "後頭部中層", "大きな毛束を配置する領域"), ("Nape", "襟足", "首へ向かって落ちる短い毛束領域"), ("ALL", "すべて", "すべての領域")], default="ALL", description="表示または非表示にする髪領域")
+    region: EnumProperty(items=REGION_VISIBILITY_ITEMS, default="ALL", description="表示または非表示にする髪領域")
     action: EnumProperty(items=[("SHOW", "表示", ""), ("HIDE", "非表示", "")], default="SHOW", description="適用する表示操作")
 
     def execute(self, context):
@@ -1166,6 +1178,47 @@ def _clear_profile_from_curves(context, selected_only):
     return curves
 
 
+def _apply_shape_to_curves(context, selected_only):
+    curves = _generated_curves_from_context(context, selected_only)
+    if not curves:
+        return []
+    scene = context.scene
+    profile_obj = _create_or_update_flat_profile(context)[0] if scene.hair_curve_profile_type == "FLAT" else None
+    taper_obj = _create_or_update_default_taper(context)[0] if scene.hair_use_shared_taper else None
+    for obj in curves:
+        obj.data.resolution_u = scene.hair_curve_resolution
+        obj.data.bevel_depth = scene.hair_curve_bevel_depth
+        obj["hair_curve_bevel_depth"] = scene.hair_curve_bevel_depth
+        obj["hair_curve_resolution"] = scene.hair_curve_resolution
+        _apply_profile_to_curve_obj(context, obj, profile_obj)
+        if scene.hair_use_shared_taper:
+            _apply_taper_to_curve_obj(context, obj, taper_obj)
+        else:
+            obj.data.taper_object = None
+            obj["hair_use_taper"] = False
+            obj["hair_taper_object"] = ""
+        obj.data.resolution_u = scene.hair_curve_resolution
+        if scene.hair_curve_profile_type == "FLAT":
+            obj.data.bevel_depth = 0.0
+        else:
+            obj.data.bevel_depth = scene.hair_curve_bevel_depth
+        obj["hair_curve_bevel_depth"] = scene.hair_curve_bevel_depth
+        obj["hair_curve_resolution"] = scene.hair_curve_resolution
+    return curves
+
+
+def _clear_shape_from_curves(context, selected_only):
+    curves = _generated_curves_from_context(context, selected_only)
+    for obj in curves:
+        obj.data.bevel_object = None
+        obj.data.taper_object = None
+        obj.data.bevel_depth = 0.0
+        obj["hair_curve_profile_type"] = "NONE"
+        obj["hair_use_taper"] = False
+        obj["hair_taper_object"] = ""
+    return curves
+
+
 class HGD_OT_apply_taper_preset(bpy.types.Operator):
     bl_idname = "hgd.apply_taper_preset"
     bl_label = "プリセットを反映"
@@ -1332,6 +1385,95 @@ class HGD_OT_clear_profile_from_all_curves(bpy.types.Operator):
             self.report({'WARNING'}, "断面解除対象の生成カーブが見つかりません。")
             return {'CANCELLED'}
         self.report({'INFO'}, f"全カーブ {len(curves)} 本の断面を解除しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_load_selected_curve_settings(bpy.types.Operator):
+    bl_idname = "hgd.load_selected_curve_settings"
+    bl_label = "選択カーブ設定を読み込み"
+    bl_description = "選択中の生成カーブから太さ、解像度、断面、テーパー設定をScene設定へ読み込みます"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _generated_curves_from_context(context, True)
+        if not curves:
+            self.report({'WARNING'}, "設定読み込み対象の生成カーブが選択されていません。")
+            return {'CANCELLED'}
+        obj = context.object if context.object in curves else curves[0]
+        scene = context.scene
+        scene.hair_curve_bevel_depth = float(obj.get("hair_curve_bevel_depth", obj.data.bevel_depth))
+        scene.hair_curve_resolution = int(obj.get("hair_curve_resolution", obj.data.resolution_u))
+        profile_type = obj.get("hair_curve_profile_type")
+        if profile_type in {"ROUND", "FLAT"}:
+            scene.hair_curve_profile_type = profile_type
+        scene.hair_curve_flat_width = float(obj.get("hair_curve_flat_width", scene.hair_curve_flat_width))
+        scene.hair_curve_flat_thickness = float(obj.get("hair_curve_flat_thickness", scene.hair_curve_flat_thickness))
+        scene.hair_use_shared_taper = bool(obj.get("hair_use_taper", scene.hair_use_shared_taper))
+        scene.hair_taper_root_radius = float(obj.get("hair_taper_root_radius", scene.hair_taper_root_radius))
+        scene.hair_taper_mid_radius = float(obj.get("hair_taper_mid_radius", scene.hair_taper_mid_radius))
+        scene.hair_taper_tip_radius = float(obj.get("hair_taper_tip_radius", scene.hair_taper_tip_radius))
+        scene.hair_taper_resolution = int(obj.get("hair_taper_resolution", scene.hair_taper_resolution))
+        self.report({'INFO'}, f"選択カーブ設定を読み込みました: {obj.name}")
+        return {'FINISHED'}
+
+
+class HGD_OT_apply_shape_to_selected_curves(bpy.types.Operator):
+    bl_idname = "hgd.apply_shape_to_selected_curves"
+    bl_label = "選択カーブへ形状を適用"
+    bl_description = "現在の太さ、解像度、断面、テーパー設定を選択中の表示用カーブへまとめて適用します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _apply_shape_to_curves(context, True)
+        if not curves:
+            self.report({'WARNING'}, "形状適用対象の生成カーブが選択されていません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"選択カーブ {len(curves)} 本へ形状を適用しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_apply_shape_to_all_curves(bpy.types.Operator):
+    bl_idname = "hgd.apply_shape_to_all_curves"
+    bl_label = "全カーブへ形状を適用"
+    bl_description = "現在の太さ、解像度、断面、テーパー設定をすべての表示用カーブへまとめて適用します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _apply_shape_to_curves(context, False)
+        if not curves:
+            self.report({'WARNING'}, "形状適用対象の生成カーブが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"全カーブ {len(curves)} 本へ形状を適用しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_clear_shape_from_selected_curves(bpy.types.Operator):
+    bl_idname = "hgd.clear_shape_from_selected_curves"
+    bl_label = "選択カーブの形状を解除"
+    bl_description = "選択中の表示用カーブから断面Profileとテーパーを解除します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _clear_shape_from_curves(context, True)
+        if not curves:
+            self.report({'WARNING'}, "形状解除対象の生成カーブが選択されていません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"選択カーブ {len(curves)} 本の形状を解除しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_clear_shape_from_all_curves(bpy.types.Operator):
+    bl_idname = "hgd.clear_shape_from_all_curves"
+    bl_label = "全カーブの形状を解除"
+    bl_description = "すべての表示用カーブから断面Profileとテーパーを解除します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _clear_shape_from_curves(context, False)
+        if not curves:
+            self.report({'WARNING'}, "形状解除対象の生成カーブが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"全カーブ {len(curves)} 本の形状を解除しました。")
         return {'FINISHED'}
 
 
@@ -1651,6 +1793,11 @@ classes = (
     HGD_OT_apply_profile_to_all_curves,
     HGD_OT_clear_profile_from_selected_curves,
     HGD_OT_clear_profile_from_all_curves,
+    HGD_OT_load_selected_curve_settings,
+    HGD_OT_apply_shape_to_selected_curves,
+    HGD_OT_apply_shape_to_all_curves,
+    HGD_OT_clear_shape_from_selected_curves,
+    HGD_OT_clear_shape_from_all_curves,
     HGD_OT_update_selected_braids,
     HGD_OT_update_all_braids,
     HGD_OT_apply_curve_batch_settings,
