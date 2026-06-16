@@ -488,6 +488,13 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                     made += 1
                 self.report({'INFO'}, f"三つ編み制御カーブ{made}本と各3本の表示用カーブを生成しました。制御カーブを編集してから更新してください。")
                 return {'FINISHED'}
+            if context.scene.hair_strand_generation_type == "TWIST_CURVE":
+                made = 0
+                for point in points:
+                    _make_twist_from_point(context, point)
+                    made += 1
+                self.report({'INFO'}, f"ツイスト制御カーブ{made}本と表示用カーブを生成しました。制御カーブを編集してから更新してください。")
+                return {'FINISHED'}
             utils.ensure_system()
             scene = context.scene
             taper_obj = None
@@ -564,7 +571,7 @@ def _apply_curve_variation(obj, scene, source_name):
     obj["hair_curve_tip_jitter"] = scene.hair_curve_tip_jitter
     obj["hair_curve_length_variation"] = scene.hair_curve_length_variation
     length_scale = 1.0
-    if not scene.hair_curve_variation_enabled or obj.get("hair_guide_type") not in {"curve", "braid_control"}:
+    if not scene.hair_curve_variation_enabled or obj.get("hair_guide_type") not in {"curve", "braid_control", "twist_control"}:
         obj["hair_curve_length_scale"] = length_scale
         return length_scale
     spline = _first_bezier_spline(obj)
@@ -722,7 +729,7 @@ class HGD_OT_organize_curves_by_region(bpy.types.Operator):
     bl_description = "生成済みカーブをTop、Front、Side、Back、Nape、Braidの部位別Collectionへ移動します"
     bl_options = {'REGISTER', 'UNDO'}
 
-    TARGET_TYPES = {"curve", "braid_control", "braid_strand"}
+    TARGET_TYPES = {"curve", "braid_control", "braid_strand", "twist_control", "twist_strand"}
 
     def execute(self, context):
         if not bpy.data.collections.get(utils.ROOT):
@@ -746,7 +753,7 @@ class HGD_OT_apply_curve_region_colors(bpy.types.Operator):
     bl_description = "生成済みカーブ、三つ編み制御カーブ、三つ編み表示へ部位別のObject Colorを反映します"
     bl_options = {'REGISTER', 'UNDO'}
 
-    TARGET_TYPES = {"curve", "braid_control", "braid_strand"}
+    TARGET_TYPES = {"curve", "braid_control", "braid_strand", "twist_control", "twist_strand"}
 
     def execute(self, context):
         if not bpy.data.collections.get(utils.ROOT):
@@ -767,7 +774,7 @@ def _generated_curves_from_context(context, selected_only):
     objects = context.selected_objects if selected_only else utils.generated_objects()
     return [
         obj for obj in objects
-        if obj.type == "CURVE" and obj.get("hair_guide_type") in {"curve", "braid_strand"}
+        if obj.type == "CURVE" and obj.get("hair_guide_type") in {"curve", "braid_strand", "twist_strand"}
     ]
 
 
@@ -775,7 +782,7 @@ def _follow_targets_from_context(context, selected_only):
     objects = context.selected_objects if selected_only else utils.generated_objects()
     return [
         obj for obj in objects
-        if obj.type == "CURVE" and obj.get("hair_guide_type") in {"curve", "braid_control"}
+        if obj.type == "CURVE" and obj.get("hair_guide_type") in {"curve", "braid_control", "twist_control"}
     ]
 
 
@@ -956,6 +963,144 @@ def _braid_controls_from_context(context, selected_only):
     return [obj for obj in utils.generated_objects("braid_control") if obj.type == "CURVE"]
 
 
+def _next_twist_id():
+    index = 1
+    while True:
+        twist_id = f"{index:03d}"
+        if not bpy.data.objects.get(f"HGD_TWIST_CTRL_{twist_id}") and not bpy.data.objects.get(f"HGD_TWIST_STRAND_{twist_id}"):
+            return twist_id
+        index += 1
+
+
+def _set_twist_control_display(control_obj):
+    control_obj.data.bevel_depth = 0.0
+    control_obj.data.bevel_object = None
+    control_obj.data.taper_object = None
+    control_obj.display_type = "WIRE"
+    control_obj.show_in_front = True
+    control_obj["hair_guide_type"] = "twist_control"
+    control_obj["hair_use_taper"] = False
+    control_obj["hair_taper_object"] = ""
+    control_obj["hair_curve_profile_type"] = "NONE"
+
+
+def _twist_frame(tangent, previous_normal=None):
+    up = previous_normal or mathutils.Vector((0.0, 0.0, 1.0))
+    side = tangent.cross(up)
+    if side.length < 0.0001:
+        side = tangent.cross(mathutils.Vector((0.0, 1.0, 0.0)))
+    if side.length < 0.0001:
+        side = mathutils.Vector((1.0, 0.0, 0.0))
+    side.normalize()
+    normal = side.cross(tangent)
+    if normal.length < 0.0001:
+        normal = mathutils.Vector((0.0, 0.0, 1.0))
+    normal.normalize()
+    return side, normal
+
+
+def _create_or_replace_twist_strand(context, control_obj):
+    scene = context.scene
+    utils.ensure_system()
+    curves_collection = utils.get_curve_collection(control_obj.get("hair_region", ""), "twist_strand")
+    twist_id = control_obj.get("hair_twist_id", _next_twist_id())
+    for obj in list(utils.generated_objects()):
+        if obj.get("hair_twist_id") == twist_id and obj.get("hair_guide_type") == "twist_strand":
+            bpy.data.objects.remove(obj, do_unlink=True)
+    sample_count = max(scene.hair_twist_segments, 4)
+    samples = _sample_curve_world_points(control_obj, sample_count)
+    if len(samples) < 2:
+        return None
+    points = []
+    normal_hint = mathutils.Vector((0.0, 0.0, 1.0))
+    for index, sample in enumerate(samples):
+        prev_point = samples[max(index - 1, 0)]
+        next_point = samples[min(index + 1, len(samples) - 1)]
+        tangent = next_point - prev_point
+        if tangent.length < 0.0001:
+            tangent = mathutils.Vector((0.0, 0.0, -1.0))
+        tangent.normalize()
+        side, normal_hint = _twist_frame(tangent, normal_hint)
+        t = index / max(len(samples) - 1, 1)
+        angle = math.tau * scene.hair_twist_turns * t + scene.hair_twist_phase
+        taper = max(1.0 - scene.hair_twist_taper_strength * t, 0.05)
+        radius = scene.hair_twist_radius * taper
+        points.append(sample + side * math.cos(angle) * radius + normal_hint * math.sin(angle) * radius)
+    obj = utils.make_curve(
+        f"HGD_TWIST_STRAND_{twist_id}",
+        points,
+        curves_collection,
+        control_obj.get("hair_region", ""),
+        "twist_strand",
+        scene,
+        bevel=scene.hair_twist_bevel_depth,
+    )
+    obj.data.resolution_u = scene.hair_twist_resolution
+    obj["hair_source_point"] = control_obj.get("hair_source_point", "")
+    obj["hair_twist_id"] = twist_id
+    obj["hair_twist_control"] = control_obj.name
+    obj["hair_twist_segments"] = scene.hair_twist_segments
+    obj["hair_twist_radius"] = scene.hair_twist_radius
+    obj["hair_twist_turns"] = scene.hair_twist_turns
+    obj["hair_twist_phase"] = scene.hair_twist_phase
+    obj["hair_twist_bevel_depth"] = scene.hair_twist_bevel_depth
+    obj["hair_twist_resolution"] = scene.hair_twist_resolution
+    obj["hair_twist_taper_strength"] = scene.hair_twist_taper_strength
+    taper_obj = None
+    if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
+        taper_obj, _ = _create_or_update_default_taper(context)
+        _apply_taper_to_curve_obj(context, obj, taper_obj)
+    _apply_profile_to_curve_obj(context, obj)
+    if scene.hair_curve_profile_type == "FLAT":
+        obj.data.bevel_depth = 0.0
+    else:
+        obj.data.bevel_depth = scene.hair_twist_bevel_depth
+    return obj
+
+
+def _make_twist_from_point(context, point):
+    scene = context.scene
+    utils.ensure_system()
+    curves = utils.get_curve_collection(point.get("hair_region", "Front"), "twist_control")
+    twist_id = _next_twist_id()
+    region = point.get("hair_region", "Front")
+    direction = utils.string_to_vector(point.get("recommended_direction"), utils.direction_for_region(region))
+    length = float(point.get("recommended_length", scene.hair_curve_length))
+    root = point.location.copy()
+    control_points = []
+    for i in range(max(scene.hair_curve_segment_count, 2)):
+        t = i / max(scene.hair_curve_segment_count - 1, 1)
+        sag = mathutils.Vector((0.0, 0.0, -0.12 * length * t * t))
+        control_points.append(root + direction * length * t + sag)
+    control = utils.make_curve(f"HGD_TWIST_CTRL_{twist_id}", control_points, curves, region, "twist_control", scene, bevel=0.0)
+    control["hair_source_point"] = point.name
+    control["hair_root_id"] = point.name
+    control["hair_twist_id"] = twist_id
+    control.data.resolution_u = scene.hair_twist_resolution
+    _set_twist_control_display(control)
+    _apply_curve_variation(control, scene, point.name)
+    strand = _create_or_replace_twist_strand(context, control)
+    return control, strand
+
+
+def _twist_controls_from_context(context, selected_only):
+    if selected_only:
+        controls = []
+        seen = set()
+        for obj in context.selected_objects:
+            if obj.get("hair_guide_type") == "twist_control":
+                control = obj
+            elif obj.get("hair_guide_type") == "twist_strand":
+                control = bpy.data.objects.get(obj.get("hair_twist_control", ""))
+            else:
+                control = None
+            if control and control.get("hair_guide_type") == "twist_control" and control.name not in seen:
+                controls.append(control)
+                seen.add(control.name)
+        return controls
+    return [obj for obj in utils.generated_objects("twist_control") if obj.type == "CURVE"]
+
+
 def _swap_side(value, src_side, dst_side):
     if not value:
         return value
@@ -976,7 +1121,7 @@ def _copy_custom_properties(source, target):
 
 def _delete_generated_if_exists(name):
     existing = bpy.data.objects.get(name)
-    if not existing or existing.get("hair_guide_type") not in {"placement_point", "curve", "braid_control", "braid_strand", "braid_visual"}:
+    if not existing or existing.get("hair_guide_type") not in {"placement_point", "curve", "braid_control", "braid_strand", "braid_visual", "twist_control", "twist_strand"}:
         return False
     if existing not in utils.generated_objects():
         return False
@@ -1140,7 +1285,7 @@ def _create_or_update_flat_profile(context):
 
 def _apply_profile_to_curve_obj(context, obj, profile_obj=None):
     scene = context.scene
-    if obj.get("hair_guide_type") not in {"curve", "braid_strand"}:
+    if obj.get("hair_guide_type") not in {"curve", "braid_strand", "twist_strand"}:
         return False
     profile_type = scene.hair_curve_profile_type
     if profile_type == "FLAT":
@@ -1515,6 +1660,44 @@ class HGD_OT_update_all_braids(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_update_selected_twists(bpy.types.Operator):
+    bl_idname = "hgd.update_selected_twists"
+    bl_label = "選択ツイストを更新"
+    bl_description = "選択中のツイスト制御カーブから表示用ツイストカーブを再生成します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        controls = _twist_controls_from_context(context, True)
+        if not controls:
+            self.report({'WARNING'}, "ツイスト制御カーブが選択されていません。")
+            return {'CANCELLED'}
+        updated = 0
+        for control in controls:
+            if _create_or_replace_twist_strand(context, control):
+                updated += 1
+        self.report({'INFO'}, f"選択ツイストを{updated}本更新しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_update_all_twists(bpy.types.Operator):
+    bl_idname = "hgd.update_all_twists"
+    bl_label = "全ツイストを更新"
+    bl_description = "すべてのツイスト制御カーブから表示用ツイストカーブを再生成します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        controls = _twist_controls_from_context(context, False)
+        if not controls:
+            self.report({'WARNING'}, "ツイスト制御カーブが見つかりません。")
+            return {'CANCELLED'}
+        updated = 0
+        for control in controls:
+            if _create_or_replace_twist_strand(context, control):
+                updated += 1
+        self.report({'INFO'}, f"全ツイストを{updated}本更新しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_apply_curve_batch_settings(bpy.types.Operator):
     bl_idname = "hgd.apply_curve_batch_settings"
     bl_label = "カーブ一括設定を適用"
@@ -1598,7 +1781,7 @@ class HGD_OT_update_curve_roots_from_points(bpy.types.Operator):
 class HGD_OT_mirror_side(bpy.types.Operator):
     bl_idname = "hgd.mirror_side"
     bl_label = "左右ミラー"
-    bl_description = "選択したSide_LまたはSide_Rの配置点、生成カーブ、三つ編み制御カーブをX軸で反対側へ複製します"
+    bl_description = "選択したSide_LまたはSide_Rの配置点、生成カーブ、三つ編み/ツイスト制御カーブをX軸で反対側へ複製します"
     bl_options = {'REGISTER', 'UNDO'}
 
     direction: EnumProperty(
@@ -1609,7 +1792,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
 
     def execute(self, context):
         src_side, dst_side = ("Side_L", "Side_R") if self.direction == "L2R" else ("Side_R", "Side_L")
-        selected = [obj for obj in context.selected_objects if obj.get("hair_region") == src_side and obj.get("hair_guide_type") in {"placement_point", "curve", "braid_control"}]
+        selected = [obj for obj in context.selected_objects if obj.get("hair_region") == src_side and obj.get("hair_guide_type") in {"placement_point", "curve", "braid_control", "twist_control"}]
         if not selected:
             self.report({'WARNING'}, f"{src_side}のオブジェクトが選択されていません。")
             return {'CANCELLED'}
@@ -1742,6 +1925,55 @@ class HGD_OT_mirror_side(bpy.types.Operator):
                 lost_links += 1
             strands = _create_or_replace_braid_strands(context, new_obj)
             mirrored += 1 + len(strands)
+        twist_candidates = []
+        seen_twists = set()
+        for obj in selected:
+            if obj.get("hair_guide_type") == "twist_control" and obj.name not in seen_twists:
+                twist_candidates.append(obj)
+                seen_twists.add(obj.name)
+        for obj in twist_candidates:
+            twist_id = _next_twist_id()
+            new_name = f"HGD_TWIST_CTRL_{twist_id}"
+            if context.scene.hair_mirror_overwrite_existing:
+                _delete_generated_if_exists(new_name)
+            elif bpy.data.objects.get(new_name):
+                self.report({'WARNING'}, "ミラー先が既に存在し、上書きがオフです。連番名で作成します。")
+                new_name = utils.unique_name(new_name)
+            new_obj = obj.copy()
+            new_obj.data = obj.data.copy()
+            new_obj.name = new_name
+            new_obj.data.name = new_name + "Curve"
+            utils.get_curve_collection(dst_side, "twist_control").objects.link(new_obj)
+            if context.scene.hair_mirror_copy_custom_properties:
+                _copy_custom_properties(obj, new_obj)
+            else:
+                for key in list(new_obj.keys()):
+                    del new_obj[key]
+            for spline in new_obj.data.splines:
+                if spline.type != "BEZIER":
+                    continue
+                for point in spline.bezier_points:
+                    point.co.x *= -1
+                    point.handle_left.x *= -1
+                    point.handle_right.x *= -1
+            new_obj["hair_guide_type"] = "twist_control"
+            new_obj["hair_region"] = dst_side
+            utils.apply_curve_region_color(new_obj)
+            new_obj["hair_twist_id"] = twist_id
+            _set_twist_control_display(new_obj)
+            new_obj["hair_mirror_source"] = obj.name
+            new_obj["hair_mirror_pair"] = obj.name
+            obj["hair_mirror_pair"] = new_obj.name
+            source_name = obj.get("hair_source_point")
+            if source_name in point_map:
+                new_obj["hair_source_point"] = point_map[source_name]
+                new_obj["hair_root_id"] = point_map[source_name]
+            else:
+                new_obj["hair_source_point"] = ""
+                new_obj["hair_root_id"] = ""
+                lost_links += 1
+            strand = _create_or_replace_twist_strand(context, new_obj)
+            mirrored += 1 + (1 if strand else 0)
         self.report({'INFO'}, f"{mirrored}個をミラーしました。参照配置点を失ったカーブは{lost_links}本です。")
         return {'FINISHED'}
 
@@ -1749,7 +1981,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
 class HGD_OT_mirror_side_l_to_r(bpy.types.Operator):
     bl_idname = "hgd.mirror_side_l_to_r"
     bl_label = "左側→右側へミラー"
-    bl_description = "選択したSide_Lの配置点、カーブ、三つ編みをX軸でSide_Rへ複製します"
+    bl_description = "選択したSide_Lの配置点、カーブ、三つ編み/ツイストをX軸でSide_Rへ複製します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -1759,7 +1991,7 @@ class HGD_OT_mirror_side_l_to_r(bpy.types.Operator):
 class HGD_OT_mirror_side_r_to_l(bpy.types.Operator):
     bl_idname = "hgd.mirror_side_r_to_l"
     bl_label = "右側→左側へミラー"
-    bl_description = "選択したSide_Rの配置点、カーブ、三つ編みをX軸でSide_Lへ複製します"
+    bl_description = "選択したSide_Rの配置点、カーブ、三つ編み/ツイストをX軸でSide_Lへ複製します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -1800,6 +2032,8 @@ classes = (
     HGD_OT_clear_shape_from_all_curves,
     HGD_OT_update_selected_braids,
     HGD_OT_update_all_braids,
+    HGD_OT_update_selected_twists,
+    HGD_OT_update_all_twists,
     HGD_OT_apply_curve_batch_settings,
     HGD_OT_update_curve_roots_from_points,
     HGD_OT_mirror_side,

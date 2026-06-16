@@ -204,6 +204,7 @@ class HGD_PT_curve_strand(HGD_PT_base):
         if scene.hair_show_inline_help:
             layout.label(text="通常カーブ：1本の髪束ガイドを生成します。", icon='INFO')
             layout.label(text="三つ編み：制御カーブと3本の表示カーブを生成します。")
+            layout.label(text="ツイスト：制御カーブとドリル状の表示カーブを生成します。")
         layout.operator('hgd.create_curve_from_points', text='カーブ毛束を生成', icon='OUTLINER_OB_CURVE')
 
 
@@ -261,6 +262,16 @@ class HGD_PT_curve_variation(HGD_PT_base):
         layout.prop(scene, 'hair_curve_root_radius')
         layout.prop(scene, 'hair_curve_tip_radius')
         layout.prop(scene, 'hair_curve_taper_strength')
+        layout.label(text="ツイスト", icon='OUTLINER_OB_CURVE')
+        layout.prop(scene, 'hair_twist_segments')
+        layout.prop(scene, 'hair_twist_radius')
+        layout.prop(scene, 'hair_twist_turns')
+        layout.prop(scene, 'hair_twist_phase')
+        layout.prop(scene, 'hair_twist_bevel_depth')
+        layout.prop(scene, 'hair_twist_resolution')
+        layout.prop(scene, 'hair_twist_taper_strength')
+        if scene.hair_show_inline_help:
+            layout.label(text="ツイスト制御カーブは形状制御専用です。髪として見えるのは表示用カーブです。")
 
 
 class HGD_PT_braid(HGD_PT_base):
@@ -296,6 +307,11 @@ class HGD_PT_braid(HGD_PT_base):
         row = layout.row(align=True)
         row.operator('hgd.update_selected_braids', text='選択三つ編みを更新')
         row.operator('hgd.update_all_braids', text='全三つ編みを更新')
+        if scene.hair_show_inline_help:
+            layout.label(text="制御カーブ編集後はツイストを更新してください。", icon='INFO')
+        row = layout.row(align=True)
+        row.operator('hgd.update_selected_twists', text='選択ツイストを更新')
+        row.operator('hgd.update_all_twists', text='全ツイストを更新')
 
 
 class HGD_PT_side_mirror(HGD_PT_base):

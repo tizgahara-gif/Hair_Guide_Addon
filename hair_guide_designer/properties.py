@@ -19,6 +19,7 @@ TAPER_PRESETS = (
 STRAND_GENERATION_TYPES = (
     ("NORMAL_CURVE", "通常カーブ", "1本の髪束ガイドカーブを生成します"),
     ("BRAID_CURVE", "三つ編みカーブ", "1本の制御カーブと三つ編み表示を生成します"),
+    ("TWIST_CURVE", "ツイストカーブ", "1本の制御カーブからドリル状・縦ロール状の表示カーブを生成します"),
 )
 
 CURVE_PROFILE_TYPES = (
@@ -46,6 +47,9 @@ PROPERTY_NAMES = (
     "hair_strand_generation_type", "hair_braid_segments", "hair_braid_radius",
     "hair_braid_width", "hair_braid_taper", "hair_braid_twist",
     "hair_braid_resolution", "hair_braid_bevel_depth", "hair_braid_auto_update",
+    "hair_twist_segments", "hair_twist_radius", "hair_twist_turns",
+    "hair_twist_phase", "hair_twist_bevel_depth", "hair_twist_resolution",
+    "hair_twist_taper_strength",
     "hair_show_guides_in_front", "hair_show_inline_help",
 )
 
@@ -434,6 +438,56 @@ def register():
         name="自動更新",
         default=False,
         description="将来拡張用です。現在は更新ボタンで三つ編み表示を再生成してください。",
+    )
+    scene.hair_twist_segments = IntProperty(
+        name="分割数",
+        default=32,
+        min=4,
+        max=256,
+        description="ツイスト表示カーブを生成するサンプル分割数。",
+    )
+    scene.hair_twist_radius = FloatProperty(
+        name="巻き半径",
+        default=0.08,
+        min=0.0,
+        max=2.0,
+        description="制御カーブの周囲に作るツイストの半径。",
+    )
+    scene.hair_twist_turns = FloatProperty(
+        name="巻き数",
+        default=5.0,
+        min=0.0,
+        max=64.0,
+        description="根元から毛先までに何回巻くかを指定します。",
+    )
+    scene.hair_twist_phase = FloatProperty(
+        name="開始角度",
+        default=0.0,
+        min=-6.28318,
+        max=6.28318,
+        description="ツイストの開始角度をラジアンで調整します。",
+    )
+    scene.hair_twist_bevel_depth = FloatProperty(
+        name="表示太さ",
+        default=0.02,
+        min=0.0,
+        max=1.0,
+        precision=4,
+        description="ツイスト表示カーブの太さ。",
+    )
+    scene.hair_twist_resolution = IntProperty(
+        name="解像度",
+        default=3,
+        min=0,
+        max=12,
+        description="ツイスト表示カーブの滑らかさ。",
+    )
+    scene.hair_twist_taper_strength = FloatProperty(
+        name="毛先細り",
+        default=0.6,
+        min=0.0,
+        max=1.0,
+        description="毛先へ向かって巻き半径を細くする強さ。",
     )
 
 

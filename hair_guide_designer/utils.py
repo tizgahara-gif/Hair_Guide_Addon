@@ -11,7 +11,7 @@ WARNINGS = "Warnings"
 TAPER_OBJECTS = "TaperObjects"
 PROFILE_OBJECTS = "ProfileObjects"
 SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS, TAPER_OBJECTS, PROFILE_OBJECTS)
-CURVE_REGION_COLLECTIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape", "Braid")
+CURVE_REGION_COLLECTIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape", "Braid", "Twist")
 REGION_NAMES = ("Top", "Front", "Side", "Back_Upper", "Back_Middle", "Nape")
 POINT_REGIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape")
 REGION_COLORS = {
@@ -33,6 +33,7 @@ CURVE_REGION_COLORS = {
     "Back_Middle": (1.0, 0.45, 0.1, 1.0),
     "Nape": (0.6, 0.2, 1.0, 1.0),
     "Braid": (1.0, 0.25, 0.65, 1.0),
+    "Twist": (0.2, 1.0, 1.0, 1.0),
 }
 WARNING_COLOR = (1.0, 0.05, 0.02, 1.0)
 
@@ -192,7 +193,7 @@ def set_common_props(obj, guide_type, region="", scene=None):
     obj["hair_warning_type"] = obj.get("hair_warning_type", "")
     obj["hair_seed"] = getattr(scene, "hair_seed", 0) if scene else 0
     obj.color = REGION_COLORS.get(region, (0.9, 0.9, 0.9, 1.0))
-    if guide_type in {"curve", "braid_control", "braid_strand"}:
+    if guide_type in {"curve", "braid_control", "braid_strand", "twist_control", "twist_strand"}:
         apply_curve_region_color(obj)
     if guide_type in {"guide", "region", "placement_point", "warning"} and scene:
         obj.show_in_front = getattr(scene, "hair_show_guides_in_front", True)
@@ -206,6 +207,8 @@ def curve_region_key(obj_or_region, guide_type=None):
         region = obj_or_region
     if guide_type in {"braid_control", "braid_strand"}:
         return "Braid"
+    if guide_type in {"twist_control", "twist_strand"}:
+        return "Twist"
     return region if region in CURVE_REGION_COLLECTIONS else ""
 
 
@@ -232,14 +235,14 @@ def move_object_to_collection(obj, target_collection):
 
 
 def organize_curve_object(obj):
-    if not obj or obj.get("hair_guide_type") not in {"curve", "braid_control", "braid_strand"}:
+    if not obj or obj.get("hair_guide_type") not in {"curve", "braid_control", "braid_strand", "twist_control", "twist_strand"}:
         return False
     target = get_curve_collection(obj.get("hair_region", ""), obj.get("hair_guide_type"))
     return move_object_to_collection(obj, target)
 
 
 def apply_curve_region_color(obj):
-    if not obj or obj.get("hair_guide_type") not in {"curve", "braid_control", "braid_strand"}:
+    if not obj or obj.get("hair_guide_type") not in {"curve", "braid_control", "braid_strand", "twist_control", "twist_strand"}:
         return False
     key = curve_region_key(obj)
     obj.color = CURVE_REGION_COLORS.get(key, (0.9, 0.9, 0.9, 1.0))
