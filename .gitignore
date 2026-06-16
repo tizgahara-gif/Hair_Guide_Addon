@@ -1,0 +1,53 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Blender backup / temp files
+*.blend1
+*.blend2
+*.blend@
+*.blend~
+*.blend
+*.blend.gz
+
+# Packages / archives
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs / temp
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Databases / binary data
+*.db
+*.sqlite
+*.sqlite3
+*.bin
+*.dat
+
+# Media assets - not used by this add-on
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.mp4
+*.mov
+*.wav
+*.mp3
+*.ogg
