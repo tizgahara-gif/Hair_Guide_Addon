@@ -248,20 +248,6 @@ class HGD_PT_curve_variation(HGD_PT_base):
         layout.prop(scene, 'hair_curve_bevel_depth', text='カーブの太さ')
         layout.prop(scene, 'hair_curve_resolution')
         layout.prop(scene, 'hair_curve_segment_count')
-        layout.label(text="断面", icon='OUTLINER_OB_CURVE')
-        if scene.hair_show_inline_help:
-            layout.label(text="丸断面は円柱状、扁平断面は板状の髪束に近い表示です。")
-            layout.label(text="扁平断面はBlenderのProfile Objectに依存します。")
-            layout.label(text="表示されない場合は丸断面へ自動Fallbackします。")
-        layout.prop(scene, 'hair_curve_profile_type')
-        layout.prop(scene, 'hair_flat_profile_fallback_to_round')
-        layout.prop(scene, 'hair_curve_flat_width')
-        layout.prop(scene, 'hair_curve_flat_thickness')
-        if scene.hair_show_inline_help:
-            layout.label(text="安定出力が必要な場合は、元Curveを残して扁平メッシュを生成できます。")
-        row = layout.row(align=True)
-        row.operator('hgd.create_flat_mesh_from_selected_curves', text='選択カーブを扁平メッシュ化')
-        row.operator('hgd.create_flat_mesh_from_all_curves', text='全カーブを扁平メッシュ化')
         layout.label(text="先細り", icon='OUTLINER_OB_CURVE')
         if scene.hair_show_inline_help:
             layout.label(text="毛先の太さを0にすると先端が尖ります。")
@@ -335,8 +321,28 @@ class HGD_PT_curve_variation(HGD_PT_base):
 
 
 class HGD_PT_braid(HGD_PT_base):
-    bl_label = 'カーブ適用・更新'
+    bl_label = '扁平メッシュ化'
     bl_order = 7
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        if scene.hair_show_inline_help:
+            layout.label(text="選択した表示用Curveから、", icon='MESH_DATA')
+            layout.label(text="別オブジェクトとして扁平メッシュを生成します。")
+            layout.label(text="元Curveは削除されません。")
+        layout.prop(scene, 'hair_flat_mesh_width')
+        layout.prop(scene, 'hair_flat_mesh_thickness')
+        layout.prop(scene, 'hair_flat_mesh_samples')
+        layout.prop(scene, 'hair_flat_mesh_ring_segments')
+        layout.prop(scene, 'hair_flat_mesh_solidify_thickness')
+        layout.prop(scene, 'hair_flat_mesh_add_subdivision')
+        layout.operator('hgd.create_flat_mesh_from_selected_curves', text='選択Curveを扁平メッシュ化', icon='MESH_DATA')
+
+
+class HGD_PT_curve_apply_update(HGD_PT_base):
+    bl_label = 'カーブ適用・更新'
+    bl_order = 8
 
     def draw(self, context):
         layout = self.layout
@@ -513,8 +519,8 @@ class HGD_PT_help(HGD_PT_base):
         box.label(text="3. テーパー形状を作成/更新")
         box.label(text="4. 選択または全カーブへ適用")
         box.label(text="自動適用ONなら新規カーブにも反映されます。")
-        box.label(text="扁平断面は横長のProfile Objectです。")
-        box.label(text="Taperと併用できます。")
+        box.label(text="扁平化は選択Curveから別メッシュとして生成します。")
+        box.label(text="元Curveは編集用として残ります。")
         box = layout.box()
         box.label(text="カーブの個体差について", icon='OUTLINER_OB_CURVE')
         box.label(text="配置点は動かさず、生成カーブだけに")
@@ -545,6 +551,7 @@ classes = (
     HGD_PT_curve_strand,
     HGD_PT_curve_variation,
     HGD_PT_braid,
+    HGD_PT_curve_apply_update,
     HGD_PT_side_mirror,
     HGD_PT_validation,
     HGD_PT_curve_organization,

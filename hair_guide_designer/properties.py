@@ -24,7 +24,6 @@ STRAND_GENERATION_TYPES = (
 
 CURVE_PROFILE_TYPES = (
     ("ROUND", "丸", "CurveのBevel Depthで丸い断面を表示します"),
-    ("FLAT", "扁平", "Profile Objectで横長の扁平断面を表示します"),
 )
 
 PROPERTY_NAMES = (
@@ -38,7 +37,9 @@ PROPERTY_NAMES = (
     "hair_curve_variation_randomize_seed_per_generation",
     "hair_curve_root_jitter", "hair_curve_mid_jitter", "hair_curve_tip_jitter",
     "hair_curve_length_variation", "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
-    "hair_curve_flat_thickness", "hair_warning_count", "hair_root_cluster_threshold",
+    "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_thickness",
+    "hair_flat_mesh_samples", "hair_flat_mesh_ring_segments", "hair_flat_mesh_solidify_thickness",
+    "hair_flat_mesh_add_subdivision", "hair_warning_count", "hair_root_cluster_threshold",
     "hair_batch_curve_length", "hair_batch_curve_bevel_depth", "hair_batch_curve_resolution",
     "hair_follow_keep_tip_offset", "hair_follow_update_selected_only",
     "hair_mirror_axis", "hair_mirror_overwrite_existing", "hair_mirror_copy_custom_properties",
@@ -257,7 +258,7 @@ def register():
         name="断面タイプ",
         items=CURVE_PROFILE_TYPES,
         default="ROUND",
-        description="生成済み髪カーブの断面を丸または扁平に切り替えます。",
+        description="互換用設定です。Curve表示は丸断面のみ使用し、扁平化はメッシュ生成で行います。",
     )
     scene.hair_flat_profile_fallback_to_round = BoolProperty(
         name="扁平断面が不安定な場合は丸断面に戻す",
@@ -279,6 +280,49 @@ def register():
         max=2.0,
         precision=4,
         description="扁平断面Profile Objectの厚みです。",
+    )
+    scene.hair_flat_mesh_width = FloatProperty(
+        name="扁平メッシュ幅",
+        default=0.08,
+        min=0.001,
+        max=2.0,
+        precision=4,
+        description="扁平メッシュ生成時の楕円断面の横幅です。",
+    )
+    scene.hair_flat_mesh_thickness = FloatProperty(
+        name="扁平メッシュ厚み",
+        default=0.012,
+        min=0.001,
+        max=2.0,
+        precision=4,
+        description="扁平メッシュ生成時の楕円断面の厚みです。",
+    )
+    scene.hair_flat_mesh_samples = IntProperty(
+        name="サンプル数",
+        default=24,
+        min=2,
+        max=512,
+        description="扁平メッシュ生成時にCurveを評価サンプリングする点数です。",
+    )
+    scene.hair_flat_mesh_ring_segments = IntProperty(
+        name="断面分割数",
+        default=8,
+        min=4,
+        max=32,
+        description="扁平メッシュの楕円断面リング分割数です。",
+    )
+    scene.hair_flat_mesh_solidify_thickness = FloatProperty(
+        name="Solidify厚み",
+        default=0.01,
+        min=0.0,
+        max=1.0,
+        precision=4,
+        description="生成した扁平メッシュへ追加するSolidify Modifierの厚みです。",
+    )
+    scene.hair_flat_mesh_add_subdivision = BoolProperty(
+        name="Subdivisionを追加",
+        default=True,
+        description="生成した扁平メッシュへSubdivision Surface Modifierを追加します。",
     )
 
     scene.hair_warning_count = IntProperty(
