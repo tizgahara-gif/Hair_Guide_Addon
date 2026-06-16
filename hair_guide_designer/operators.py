@@ -616,6 +616,28 @@ class HGD_OT_clear_all_generated(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_toggle_in_front_generated_helpers(bpy.types.Operator):
+    bl_idname = "hgd.toggle_in_front_generated_helpers"
+    bl_label = "最前面表示を反映"
+    bl_description = "生成済みのガイド、領域線、配置点、警告へ最前面表示設定を反映します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    TARGET_TYPES = {"guide", "region", "placement_point", "warning"}
+
+    def execute(self, context):
+        if not bpy.data.collections.get(utils.ROOT):
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
+            return {'CANCELLED'}
+        count = 0
+        show = context.scene.hair_show_guides_in_front
+        for obj in utils.generated_objects():
+            if obj.get("hair_guide_type") in self.TARGET_TYPES:
+                obj.show_in_front = show
+                count += 1
+        self.report({'INFO'}, f"ガイドと配置点の最前面表示を更新しました。対象: {count} 個。")
+        return {'FINISHED'}
+
+
 def _generated_curves_from_context(context, selected_only):
     objects = context.selected_objects if selected_only else utils.generated_objects("curve")
     return [obj for obj in objects if obj.type == "CURVE" and obj.get("hair_guide_type") == "curve"]
@@ -1316,6 +1338,7 @@ classes = (
     HGD_OT_check_root_clustering,
     HGD_OT_clear_warnings,
     HGD_OT_clear_all_generated,
+    HGD_OT_toggle_in_front_generated_helpers,
     HGD_OT_apply_taper_preset,
     HGD_OT_create_or_update_default_taper,
     HGD_OT_apply_taper_to_selected_curves,

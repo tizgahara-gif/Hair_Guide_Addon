@@ -160,6 +160,8 @@ def set_common_props(obj, guide_type, region="", scene=None):
     obj["hair_warning_type"] = obj.get("hair_warning_type", "")
     obj["hair_seed"] = getattr(scene, "hair_seed", 0) if scene else 0
     obj.color = REGION_COLORS.get(region, (0.9, 0.9, 0.9, 1.0))
+    if guide_type in {"guide", "region", "placement_point", "warning"} and scene:
+        obj.show_in_front = getattr(scene, "hair_show_guides_in_front", True)
 
 
 def head_bounds(obj):

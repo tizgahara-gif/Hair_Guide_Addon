@@ -335,7 +335,12 @@ class HGD_PT_display_cleanup(HGD_PT_base):
 
     def draw(self, context):
         layout = self.layout
+        scene = context.scene
         layout.label(text="表示切替と削除を行います。", icon='INFO')
+        layout.label(text="頭部メッシュに隠れて見えにくい場合に使用します。")
+        layout.prop(scene, 'hair_show_guides_in_front')
+        layout.operator('hgd.toggle_in_front_generated_helpers', icon='HIDE_OFF')
+        layout.separator()
         row = layout.row(align=True)
         op = row.operator('hgd.show_hide_guides', text='ガイド表示', icon='HIDE_OFF')
         op.hide = False

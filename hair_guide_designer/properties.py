@@ -38,6 +38,7 @@ PROPERTY_NAMES = (
     "hair_strand_generation_type", "hair_braid_segments", "hair_braid_radius",
     "hair_braid_width", "hair_braid_taper", "hair_braid_twist",
     "hair_braid_resolution", "hair_braid_bevel_depth", "hair_braid_auto_update",
+    "hair_show_guides_in_front",
 )
 
 
@@ -61,6 +62,11 @@ def register():
         min=-1.0,
         max=1.0,
         description="ガイドラインを頭部から少し離して配置する距離",
+    )
+    scene.hair_show_guides_in_front = BoolProperty(
+        name="ガイドと配置点を最前面表示",
+        default=True,
+        description="生成したガイドカーブと配置点を、他のメッシュより手前に表示します。",
     )
 
     scene.hair_seed = IntProperty(
