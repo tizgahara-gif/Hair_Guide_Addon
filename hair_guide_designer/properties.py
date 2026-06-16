@@ -35,6 +35,7 @@ PROPERTY_NAMES = (
     "hair_curve_length", "hair_curve_bevel_depth", "hair_curve_resolution",
     "hair_curve_root_radius", "hair_curve_tip_radius", "hair_curve_taper_strength",
     "hair_curve_segment_count", "hair_curve_variation_enabled", "hair_curve_variation_seed",
+    "hair_curve_variation_randomize_seed_per_generation",
     "hair_curve_root_jitter", "hair_curve_mid_jitter", "hair_curve_tip_jitter",
     "hair_curve_length_variation", "hair_curve_profile_type", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_warning_count", "hair_root_cluster_threshold",
@@ -214,6 +215,11 @@ def register():
         default=1,
         min=0,
         description="Curveの位置ブレと長さブレを再現するための乱数シード。同じ値なら同じ個体差になります。",
+    )
+    scene.hair_curve_variation_randomize_seed_per_generation = BoolProperty(
+        name="生成ごとにシードをランダム化",
+        default=False,
+        description="有効にすると、カーブ生成ごとに個体差Seedを変え、同じ配置点から生成しても違うブレになります。",
     )
     scene.hair_curve_root_jitter = FloatProperty(
         name="根元の位置ブレ",

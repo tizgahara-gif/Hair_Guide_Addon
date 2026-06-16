@@ -270,7 +270,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
     bl_description = "既存の配置点と警告を削除し、現在の基本ガイド位置から配置点を再生成します。既存のカーブは削除されません"
     bl_options = {'REGISTER', 'UNDO'}
 
-    BASE_COUNTS = {"Top": 5, "Front": 7, "Side_L": 4, "Side_R": 4, "Back_Upper": 6, "Back_Middle": 9, "Nape": 5}
+    BASE_COUNTS = {"Top": 5, "Front": 7, "Side_L": 4, "Side_R": 4, "Back_Upper": 6, "Back_Middle": 6, "Nape": 5}
 
     def execute(self, context):
         try:
@@ -528,9 +528,10 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 obj["taper_strength"] = scene.hair_curve_taper_strength
                 obj["segment_count"] = scene.hair_curve_segment_count
                 _apply_curve_variation(obj, scene, point.name)
+                _apply_profile_to_curve_obj(context, obj)
                 if scene.hair_auto_apply_taper_to_new_curves:
                     _apply_taper_to_curve_obj(context, obj, taper_obj)
-                _apply_profile_to_curve_obj(context, obj)
+                _ensure_curve_visible_geometry(context, obj)
                 made += 1
             self.report({'INFO'}, f"カーブ毛束を{made}本生成しました。")
             return {'FINISHED'}
@@ -555,6 +556,16 @@ def _stable_curve_variation_rng(scene, source_name):
     return random.Random(scene.hair_curve_variation_seed + stable_id)
 
 
+def _stable_curve_variation_rng_for_obj(scene, obj, source_name):
+    stable_key = f"{source_name}|{obj.name}|{obj.get('hair_region', '')}|{obj.get('hair_guide_type', '')}"
+    stable_id = sum(ord(char) for char in stable_key)
+    if scene.hair_curve_variation_randomize_seed_per_generation:
+        runtime_seed = random.SystemRandom().randint(0, 2_147_483_647)
+    else:
+        runtime_seed = scene.hair_curve_variation_seed + stable_id
+    return random.Random(runtime_seed), runtime_seed
+
+
 def _variation_jitter_amount(scene, t):
     if t < 0.34:
         return scene.hair_curve_root_jitter
@@ -570,16 +581,21 @@ def _apply_curve_variation(obj, scene, source_name):
     obj["hair_curve_mid_jitter"] = scene.hair_curve_mid_jitter
     obj["hair_curve_tip_jitter"] = scene.hair_curve_tip_jitter
     obj["hair_curve_length_variation"] = scene.hair_curve_length_variation
+    obj["hair_curve_variation_randomized"] = scene.hair_curve_variation_randomize_seed_per_generation
     length_scale = 1.0
     if not scene.hair_curve_variation_enabled or obj.get("hair_guide_type") not in {"curve", "braid_control", "twist_control"}:
+        obj["hair_curve_variation_runtime_seed"] = 0
         obj["hair_curve_length_scale"] = length_scale
         return length_scale
     spline = _first_bezier_spline(obj)
     if not spline:
+        obj["hair_curve_variation_runtime_seed"] = 0
         obj["hair_curve_length_scale"] = length_scale
         return length_scale
-    rng = _stable_curve_variation_rng(scene, source_name)
-    length_var = max(scene.hair_curve_length_variation, 0.0)
+    rng, runtime_seed = _stable_curve_variation_rng_for_obj(scene, obj, source_name)
+    obj["hair_curve_variation_runtime_seed"] = runtime_seed
+    side_multiplier = 1.35 if obj.get("hair_region", "") in {"Side_L", "Side_R"} else 1.0
+    length_var = max(scene.hair_curve_length_variation * side_multiplier, 0.0)
     length_scale = rng.uniform(max(1.0 - length_var, 0.01), 1.0 + length_var)
     root = spline.bezier_points[0].co.copy()
     for point in spline.bezier_points:
@@ -589,7 +605,9 @@ def _apply_curve_variation(obj, scene, source_name):
     point_count = len(spline.bezier_points)
     for index, point in enumerate(spline.bezier_points):
         t = index / max(point_count - 1, 1)
-        amount = _variation_jitter_amount(scene, t)
+        amount = _variation_jitter_amount(scene, t) * side_multiplier
+        if t < 0.34:
+            amount = min(amount, 0.04)
         offset = mathutils.Vector((
             rng.uniform(-amount, amount),
             rng.uniform(-amount, amount),
@@ -913,9 +931,10 @@ def _create_or_replace_braid_strands(context, control_obj):
         obj["hair_braid_width"] = scene.hair_braid_width
         obj["hair_braid_taper"] = scene.hair_braid_taper
         obj["hair_braid_twist"] = scene.hair_braid_twist
+        _apply_profile_to_curve_obj(context, obj)
         if scene.hair_auto_apply_taper_to_new_curves:
             _apply_taper_to_curve_obj(context, obj, taper_obj)
-        _apply_profile_to_curve_obj(context, obj)
+        _ensure_curve_visible_geometry(context, obj)
         created.append(obj)
     return created
 
@@ -1049,12 +1068,14 @@ def _create_or_replace_twist_strand(context, control_obj):
     taper_obj = None
     if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
         taper_obj, _ = _create_or_update_default_taper(context)
-        _apply_taper_to_curve_obj(context, obj, taper_obj)
     _apply_profile_to_curve_obj(context, obj)
+    if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
+        _apply_taper_to_curve_obj(context, obj, taper_obj)
     if scene.hair_curve_profile_type == "FLAT":
         obj.data.bevel_depth = 0.0
     else:
         obj.data.bevel_depth = scene.hair_twist_bevel_depth
+    _ensure_curve_visible_geometry(context, obj)
     return obj
 
 
@@ -1145,6 +1166,26 @@ TAPER_PRESET_LABELS = {
 }
 
 
+def _fallback_curve_bevel(scene, obj):
+    guide_type = obj.get("hair_guide_type")
+    if guide_type == "braid_strand":
+        return scene.hair_braid_bevel_depth
+    if guide_type == "twist_strand":
+        return scene.hair_twist_bevel_depth
+    return scene.hair_curve_bevel_depth
+
+
+def _ensure_curve_visible_geometry(context, obj):
+    if obj.get("hair_guide_type") not in {"curve", "braid_strand", "twist_strand"}:
+        return False
+    if obj.data.bevel_object is None and obj.data.bevel_depth <= 0.0:
+        obj.data.bevel_depth = _fallback_curve_bevel(context.scene, obj)
+        obj["hair_curve_profile_type"] = "ROUND"
+        obj["hair_profile_fallback_warning"] = "表示ジオメトリがないため丸断面へ戻しました。"
+        return True
+    return False
+
+
 def _create_or_update_default_taper(context):
     scene = context.scene
     _, collections = utils.ensure_system()
@@ -1195,7 +1236,6 @@ def _create_or_update_default_taper(context):
 
 def _apply_taper_to_curve_obj(context, obj, taper_obj=None):
     scene = context.scene
-    obj.data.bevel_depth = scene.hair_taper_bevel_depth
     obj.data.resolution_u = scene.hair_taper_resolution
     if scene.hair_use_shared_taper:
         taper_obj = taper_obj or _create_or_update_default_taper(context)[0]
@@ -1213,6 +1253,9 @@ def _apply_taper_to_curve_obj(context, obj, taper_obj=None):
     obj["hair_taper_tip_radius"] = scene.hair_taper_tip_radius
     if obj.get("hair_curve_profile_type") == "FLAT":
         obj.data.bevel_depth = 0.0
+    else:
+        obj.data.bevel_depth = _fallback_curve_bevel(scene, obj)
+    _ensure_curve_visible_geometry(context, obj)
 
 
 def _apply_taper_to_curves(context, selected_only):
@@ -1289,16 +1332,26 @@ def _apply_profile_to_curve_obj(context, obj, profile_obj=None):
         return False
     profile_type = scene.hair_curve_profile_type
     if profile_type == "FLAT":
-        profile_obj = profile_obj or _create_or_update_flat_profile(context)[0]
-        obj.data.bevel_depth = 0.0
-        obj.data.bevel_object = profile_obj
+        try:
+            profile_obj = profile_obj or _create_or_update_flat_profile(context)[0]
+        except Exception:
+            profile_obj = None
+        if profile_obj:
+            obj.data.bevel_object = profile_obj
+            obj.data.bevel_depth = 0.0
+        else:
+            obj.data.bevel_object = None
+            obj.data.bevel_depth = _fallback_curve_bevel(scene, obj)
+            profile_type = "ROUND"
+            obj["hair_profile_fallback_warning"] = "扁平断面Profileを作成できなかったため丸断面へ戻しました。"
     else:
         obj.data.bevel_object = None
-        obj.data.bevel_depth = scene.hair_curve_bevel_depth
+        obj.data.bevel_depth = _fallback_curve_bevel(scene, obj)
         profile_type = "ROUND"
     obj["hair_curve_profile_type"] = profile_type
     obj["hair_curve_flat_width"] = scene.hair_curve_flat_width
     obj["hair_curve_flat_thickness"] = scene.hair_curve_flat_thickness
+    _ensure_curve_visible_geometry(context, obj)
     return True
 
 
@@ -1308,7 +1361,10 @@ def _apply_profile_to_curves(context, selected_only):
         return []
     profile_obj = None
     if context.scene.hair_curve_profile_type == "FLAT":
-        profile_obj = _create_or_update_flat_profile(context)[0]
+        try:
+            profile_obj = _create_or_update_flat_profile(context)[0]
+        except Exception:
+            profile_obj = None
     for obj in curves:
         _apply_profile_to_curve_obj(context, obj, profile_obj)
     return curves
@@ -1328,7 +1384,12 @@ def _apply_shape_to_curves(context, selected_only):
     if not curves:
         return []
     scene = context.scene
-    profile_obj = _create_or_update_flat_profile(context)[0] if scene.hair_curve_profile_type == "FLAT" else None
+    profile_obj = None
+    if scene.hair_curve_profile_type == "FLAT":
+        try:
+            profile_obj = _create_or_update_flat_profile(context)[0]
+        except Exception:
+            profile_obj = None
     taper_obj = _create_or_update_default_taper(context)[0] if scene.hair_use_shared_taper else None
     for obj in curves:
         obj.data.resolution_u = scene.hair_curve_resolution

@@ -225,6 +225,7 @@ class HGD_PT_curve_variation(HGD_PT_base):
         layout.label(text="断面", icon='OUTLINER_OB_CURVE')
         if scene.hair_show_inline_help:
             layout.label(text="丸断面は円柱状、扁平断面は板状の髪束に近い表示です。")
+            layout.label(text="扁平断面はProfile Objectを使用します。表示されない場合は丸断面に戻して形状を適用してください。")
         layout.prop(scene, 'hair_curve_profile_type')
         layout.prop(scene, 'hair_curve_flat_width')
         layout.prop(scene, 'hair_curve_flat_thickness')
@@ -241,8 +242,13 @@ class HGD_PT_curve_variation(HGD_PT_base):
         layout.label(text="個体差", icon='INFO')
         if scene.hair_show_inline_help:
             layout.label(text="配置点は動かさず、生成されるCurveだけにブレを加えます。")
+            layout.label(text="同じ配置点から複数生成した場合も、Curve名を含めてブレを変えます。")
         layout.prop(scene, 'hair_curve_variation_enabled')
         layout.prop(scene, 'hair_curve_variation_seed')
+        layout.prop(scene, 'hair_curve_variation_randomize_seed_per_generation')
+        if scene.hair_show_inline_help:
+            layout.label(text="ONにすると、同じ配置点から複数生成してもブレが変わります。")
+            layout.label(text="再現性が必要な場合はOFFにしてください。")
         layout.prop(scene, 'hair_curve_root_jitter')
         layout.prop(scene, 'hair_curve_mid_jitter')
         layout.prop(scene, 'hair_curve_tip_jitter')
