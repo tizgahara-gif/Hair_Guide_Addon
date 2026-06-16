@@ -37,7 +37,7 @@ PROPERTY_NAMES = (
     "hair_curve_segment_count", "hair_curve_variation_enabled", "hair_curve_variation_seed",
     "hair_curve_variation_randomize_seed_per_generation",
     "hair_curve_root_jitter", "hair_curve_mid_jitter", "hair_curve_tip_jitter",
-    "hair_curve_length_variation", "hair_curve_profile_type", "hair_curve_flat_width",
+    "hair_curve_length_variation", "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_warning_count", "hair_root_cluster_threshold",
     "hair_batch_curve_length", "hair_batch_curve_bevel_depth", "hair_batch_curve_resolution",
     "hair_follow_keep_tip_offset", "hair_follow_update_selected_only",
@@ -77,9 +77,9 @@ def register():
         description="ガイドラインを頭部から少し離して配置する距離",
     )
     scene.hair_show_guides_in_front = BoolProperty(
-        name="ガイドと配置点を最前面表示",
+        name="最前面表示中",
         default=True,
-        description="生成したガイドカーブと配置点を、他のメッシュより手前に表示します。",
+        description="生成したガイド、領域線、配置点、警告の最前面表示状態です。",
     )
     scene.hair_show_inline_help = BoolProperty(
         name="ヘルプを表示",
@@ -258,6 +258,11 @@ def register():
         default="ROUND",
         description="生成済み髪カーブの断面を丸または扁平に切り替えます。",
     )
+    scene.hair_flat_profile_fallback_to_round = BoolProperty(
+        name="扁平断面が不安定な場合は丸断面に戻す",
+        default=True,
+        description="扁平断面でジオメトリが表示されない環境向けに、丸断面へ自動Fallbackします。",
+    )
     scene.hair_curve_flat_width = FloatProperty(
         name="横幅",
         default=0.08,
@@ -392,18 +397,18 @@ def register():
     )
 
     scene.hair_braid_segments = IntProperty(
-        name="編み数",
+        name="編み込み数",
         default=12,
         min=2,
         max=64,
-        description="三つ編み表示を構成する房の数。",
+        description="三つ編み表示の左右入れ替わり回数。多いほど細かく編み込まれます。",
     )
     scene.hair_braid_radius = FloatProperty(
-        name="太さ",
+        name="交差の奥行き",
         default=0.08,
         min=0.001,
         max=2.0,
-        description="三つ編み房のふくらみ方向の太さ。",
+        description="中央交差時の前後方向のふくらみ。大きいほど房の上下差が強く見えます。",
     )
     scene.hair_braid_width = FloatProperty(
         name="横幅",
@@ -420,11 +425,11 @@ def register():
         description="毛先へ向かう三つ編みの細り具合。高いほど毛先が細くなります。",
     )
     scene.hair_braid_twist = FloatProperty(
-        name="ねじれ量",
+        name="編み込み倍率",
         default=1.0,
         min=0.0,
         max=4.0,
-        description="左右交互の房の強さ。高いほど編み込みの左右差が強くなります。",
+        description="編み込み周期の倍率。高いほど左右レーンの入れ替わりが増えます。",
     )
     scene.hair_braid_resolution = IntProperty(
         name="解像度",

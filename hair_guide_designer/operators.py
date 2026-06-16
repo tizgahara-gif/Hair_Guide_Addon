@@ -721,8 +721,8 @@ class HGD_OT_clear_all_generated(bpy.types.Operator):
 
 class HGD_OT_toggle_in_front_generated_helpers(bpy.types.Operator):
     bl_idname = "hgd.toggle_in_front_generated_helpers"
-    bl_label = "最前面表示を反映"
-    bl_description = "生成済みのガイド、領域線、配置点、警告へ最前面表示設定を反映します"
+    bl_label = "最前面表示を切り替え"
+    bl_description = "生成済みのガイド、領域線、配置点、警告の最前面表示をON/OFFします"
     bl_options = {'REGISTER', 'UNDO'}
 
     TARGET_TYPES = {"guide", "region", "placement_point", "warning"}
@@ -731,13 +731,18 @@ class HGD_OT_toggle_in_front_generated_helpers(bpy.types.Operator):
         if not bpy.data.collections.get(utils.ROOT):
             self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
+        scene = context.scene
+        scene.hair_show_guides_in_front = not scene.hair_show_guides_in_front
+        show = scene.hair_show_guides_in_front
         count = 0
-        show = context.scene.hair_show_guides_in_front
         for obj in utils.generated_objects():
             if obj.get("hair_guide_type") in self.TARGET_TYPES:
                 obj.show_in_front = show
                 count += 1
-        self.report({'INFO'}, f"ガイドと配置点の最前面表示を更新しました。対象: {count} 個。")
+        if show:
+            self.report({'INFO'}, f"ガイドと配置点を最前面表示にしました。対象: {count} 個。")
+        else:
+            self.report({'INFO'}, f"ガイドと配置点の最前面表示を解除しました。対象: {count} 個。")
         return {'FINISHED'}
 
 
@@ -861,6 +866,43 @@ def _braid_side_vector(tangent):
     return side
 
 
+BRAID_LANE_PATTERN = (
+    {"A": -1.0, "B": 0.0, "C": 1.0},
+    {"A": 0.0, "B": -1.0, "C": 1.0},
+    {"A": 1.0, "B": -1.0, "C": 0.0},
+    {"A": 1.0, "B": 0.0, "C": -1.0},
+    {"A": 0.0, "B": 1.0, "C": -1.0},
+    {"A": -1.0, "B": 1.0, "C": 0.0},
+)
+
+
+def _smoothstep(value):
+    value = max(0.0, min(1.0, value))
+    return value * value * (3.0 - 2.0 * value)
+
+
+def _interpolated_braid_lane(label, step, local):
+    current = BRAID_LANE_PATTERN[step % len(BRAID_LANE_PATTERN)][label]
+    next_lane = BRAID_LANE_PATTERN[(step + 1) % len(BRAID_LANE_PATTERN)][label]
+    return current + (next_lane - current) * _smoothstep(local)
+
+
+def _braid_frame(tangent, previous_normal=None):
+    world_up = mathutils.Vector((0.0, 0.0, 1.0))
+    side = tangent.cross(world_up)
+    if side.length < 0.0001:
+        fallback = previous_normal if previous_normal and previous_normal.length > 0.0001 else mathutils.Vector((1.0, 0.0, 0.0))
+        side = fallback.cross(tangent)
+    if side.length < 0.0001:
+        side = mathutils.Vector((1.0, 0.0, 0.0))
+    side.normalize()
+    normal = side.cross(tangent)
+    if normal.length < 0.0001:
+        normal = previous_normal if previous_normal and previous_normal.length > 0.0001 else world_up
+    normal.normalize()
+    return side, normal
+
+
 def _set_braid_control_display(control_obj):
     control_obj.data.bevel_depth = 0.0
     control_obj.data.taper_object = None
@@ -879,12 +921,13 @@ def _create_or_replace_braid_strands(context, control_obj):
     for obj in list(utils.generated_objects()):
         if obj.get("hair_braid_id") == braid_id and obj.get("hair_guide_type") in {"braid_strand", "braid_visual"}:
             bpy.data.objects.remove(obj, do_unlink=True)
-    sample_count = max(scene.hair_braid_segments, 2) + 1
+    repeat_count = max(int(scene.hair_braid_segments), 2)
+    sample_count = repeat_count * 8 + 1
     samples = _sample_curve_world_points(control_obj, sample_count)
     if len(samples) < 2:
         return []
-    phases = (("A", 0.0), ("B", 2.09439510239), ("C", 4.18879020478))
-    strand_points = {label: [] for label, _phase in phases}
+    strand_labels = ("A", "B", "C")
+    strand_points = {label: [] for label in strand_labels}
     normal_hint = mathutils.Vector((0.0, 0.0, 1.0))
     for index, sample in enumerate(samples):
         prev_point = samples[max(index - 1, 0)]
@@ -893,20 +936,23 @@ def _create_or_replace_braid_strands(context, control_obj):
         if tangent.length < 0.0001:
             tangent = mathutils.Vector((0.0, 0.0, -1.0))
         tangent.normalize()
-        side = _braid_side_vector(tangent)
-        normal = side.cross(tangent)
-        if normal.length < 0.0001:
-            normal = normal_hint
-        normal.normalize()
+        side, normal = _braid_frame(tangent, normal_hint)
         normal_hint = normal
         t = index / max(len(samples) - 1, 1)
         taper_scale = max(1.0 - scene.hair_braid_taper * t, 0.05)
-        angle_base = t * scene.hair_braid_twist * math.tau
-        for label, phase in phases:
-            angle = angle_base + phase
-            offset = math.sin(angle) * scene.hair_braid_width * taper_scale
-            depth = math.cos(angle) * scene.hair_braid_radius * taper_scale * 0.35
-            strand_points[label].append(sample + side * offset + normal * depth)
+        braid_phase = t * repeat_count * max(scene.hair_braid_twist, 0.0)
+        step = math.floor(braid_phase)
+        local = braid_phase - step
+        transition_strength = _smoothstep(local) * (1.0 - _smoothstep(max(0.0, local - 0.5) * 2.0))
+        for strand_index, label in enumerate(strand_labels):
+            lane = _interpolated_braid_lane(label, step, local)
+            center_cross = 1.0 - min(abs(lane), 1.0)
+            over = 1.0 if ((step + strand_index) % 2 == 0) else -1.0
+            side_offset = lane * scene.hair_braid_width * 0.5 * taper_scale
+            cross_strength = center_cross * (0.55 + 0.45 * transition_strength)
+            depth_offset = scene.hair_braid_radius * cross_strength * over * 0.45 * taper_scale
+            lift_offset = scene.hair_braid_radius * center_cross * 0.15 * taper_scale
+            strand_points[label].append(sample + side * side_offset + normal * (depth_offset + lift_offset))
     taper_obj = None
     if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
         taper_obj, _ = _create_or_update_default_taper(context)
@@ -1175,6 +1221,14 @@ def _fallback_curve_bevel(scene, obj):
     return scene.hair_curve_bevel_depth
 
 
+def _fallback_to_round_profile(scene, obj):
+    obj.data.bevel_object = None
+    obj.data.bevel_depth = _fallback_curve_bevel(scene, obj)
+    obj["hair_curve_profile_type"] = "ROUND"
+    obj["hair_profile_fallback_warning"] = "扁平断面Profileを作成できなかったため丸断面へ戻しました。"
+    return False
+
+
 def _ensure_curve_visible_geometry(context, obj):
     if obj.get("hair_guide_type") not in {"curve", "braid_strand", "twist_strand"}:
         return False
@@ -1300,6 +1354,8 @@ def _create_or_update_flat_profile(context):
             collection.objects.link(existing)
     curve = existing.data
     curve.dimensions = "2D"
+    curve.fill_mode = "FULL"
+    curve.use_path = False
     curve.resolution_u = 12
     while curve.splines:
         curve.splines.remove(curve.splines[0])
@@ -1330,29 +1386,31 @@ def _apply_profile_to_curve_obj(context, obj, profile_obj=None):
     scene = context.scene
     if obj.get("hair_guide_type") not in {"curve", "braid_strand", "twist_strand"}:
         return False
+
     profile_type = scene.hair_curve_profile_type
-    if profile_type == "FLAT":
+    if profile_type != "FLAT":
+        _fallback_to_round_profile(scene, obj)
+        obj["hair_profile_fallback_warning"] = ""
+    elif scene.hair_flat_profile_fallback_to_round:
+        _fallback_to_round_profile(scene, obj)
+        obj["hair_profile_fallback_warning"] = "扁平断面Fallback設定により丸断面へ戻しました。"
+    else:
         try:
             profile_obj = profile_obj or _create_or_update_flat_profile(context)[0]
         except Exception:
             profile_obj = None
-        if profile_obj:
+        if profile_obj is None or profile_obj.type != "CURVE":
+            _fallback_to_round_profile(scene, obj)
+        else:
             obj.data.bevel_object = profile_obj
             obj.data.bevel_depth = 0.0
-        else:
-            obj.data.bevel_object = None
-            obj.data.bevel_depth = _fallback_curve_bevel(scene, obj)
-            profile_type = "ROUND"
-            obj["hair_profile_fallback_warning"] = "扁平断面Profileを作成できなかったため丸断面へ戻しました。"
-    else:
-        obj.data.bevel_object = None
-        obj.data.bevel_depth = _fallback_curve_bevel(scene, obj)
-        profile_type = "ROUND"
-    obj["hair_curve_profile_type"] = profile_type
+            obj["hair_curve_profile_type"] = "FLAT"
+            obj["hair_profile_fallback_warning"] = ""
+
     obj["hair_curve_flat_width"] = scene.hair_curve_flat_width
     obj["hair_curve_flat_thickness"] = scene.hair_curve_flat_thickness
     _ensure_curve_visible_geometry(context, obj)
-    return True
+    return obj.get("hair_curve_profile_type") == "FLAT"
 
 
 def _apply_profile_to_curves(context, selected_only):

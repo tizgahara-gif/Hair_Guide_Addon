@@ -28,16 +28,48 @@ def _draw_status(layout, scene):
     box.label(text=f"警告: {scene.hair_warning_count or warning_count}", icon='ERROR' if (scene.hair_warning_count or warning_count) else 'CHECKMARK')
 
 
+REGION_STATE_LABELS = {
+    "VISIBLE": ("表示中", 'CHECKMARK'),
+    "HIDDEN": ("非表示中", 'HIDE_ON'),
+    "MIXED": ("一部表示", 'ERROR'),
+    "EMPTY": ("対象なし", 'QUESTION'),
+}
+
+
 def _region_buttons(layout, label, region, note, show_help=True):
+    state = utils.get_region_visibility_state(region)
+    state_label, state_icon = REGION_STATE_LABELS.get(state, ("不明", 'QUESTION'))
     row = layout.row(align=True)
-    op = row.operator('hgd.region_visibility', text=f"{label}を表示", icon='HIDE_OFF')
+    sub = row.row(align=True)
+    sub.enabled = state != "VISIBLE"
+    op = sub.operator('hgd.region_visibility', text=f"{label}を表示", icon='HIDE_OFF')
     op.region = region
     op.action = 'SHOW'
-    op = row.operator('hgd.region_visibility', text=f"{label}を非表示", icon='HIDE_ON')
+    sub = row.row(align=True)
+    sub.enabled = state != "HIDDEN"
+    op = sub.operator('hgd.region_visibility', text=f"{label}を非表示", icon='HIDE_ON')
     op.region = region
     op.action = 'HIDE'
+    layout.label(text=f"状態: {state_label}", icon=state_icon)
     if show_help:
         layout.label(text=note, icon='INFO')
+
+
+def _all_region_buttons(layout):
+    state = utils.get_region_visibility_state("ALL")
+    sub = layout.row(align=True)
+    show_col = sub.row(align=True)
+    show_col.enabled = state != "VISIBLE"
+    op = show_col.operator('hgd.region_visibility', text='全領域表示', icon='HIDE_OFF')
+    op.region = 'ALL'
+    op.action = 'SHOW'
+    hide_col = sub.row(align=True)
+    hide_col.enabled = state != "HIDDEN"
+    op = hide_col.operator('hgd.region_visibility', text='全領域非表示', icon='HIDE_ON')
+    op.region = 'ALL'
+    op.action = 'HIDE'
+    state_label, state_icon = REGION_STATE_LABELS.get(state, ("不明", 'QUESTION'))
+    layout.label(text=f"全領域の状態: {state_label}", icon=state_icon)
 
 
 class HGD_PT_base(bpy.types.Panel):
@@ -142,13 +174,7 @@ class HGD_PT_regions(HGD_PT_base):
         _region_buttons(layout, "後頭部上層", "Back_Upper", "後頭部上層：髪全体のボリューム。", show_help)
         _region_buttons(layout, "後頭部中層", "Back_Middle", "後頭部中層：大きな毛束を配置する領域。", show_help)
         _region_buttons(layout, "襟足", "Nape", "襟足：首へ向かって落ちる短い毛束領域。", show_help)
-        row = layout.row(align=True)
-        op = row.operator('hgd.region_visibility', text='全領域表示', icon='HIDE_OFF')
-        op.region = 'ALL'
-        op.action = 'SHOW'
-        op = row.operator('hgd.region_visibility', text='全領域非表示', icon='HIDE_ON')
-        op.region = 'ALL'
-        op.action = 'HIDE'
+        _all_region_buttons(layout)
 
 
 class HGD_PT_placement(HGD_PT_base):
@@ -225,8 +251,10 @@ class HGD_PT_curve_variation(HGD_PT_base):
         layout.label(text="断面", icon='OUTLINER_OB_CURVE')
         if scene.hair_show_inline_help:
             layout.label(text="丸断面は円柱状、扁平断面は板状の髪束に近い表示です。")
-            layout.label(text="扁平断面はProfile Objectを使用します。表示されない場合は丸断面に戻して形状を適用してください。")
+            layout.label(text="扁平断面はBlenderのProfile Objectに依存します。")
+            layout.label(text="表示されない場合は丸断面へ自動Fallbackします。")
         layout.prop(scene, 'hair_curve_profile_type')
+        layout.prop(scene, 'hair_flat_profile_fallback_to_round')
         layout.prop(scene, 'hair_curve_flat_width')
         layout.prop(scene, 'hair_curve_flat_thickness')
         layout.label(text="先細り", icon='OUTLINER_OB_CURVE')
@@ -264,6 +292,7 @@ class HGD_PT_curve_variation(HGD_PT_base):
         layout.prop(scene, 'hair_braid_auto_update')
         if scene.hair_show_inline_help:
             layout.label(text="三つ編み制御カーブは形状制御専用です。髪として見えるのは3本の表示用カーブです。")
+            layout.label(text="3本の房は左右レーンを入れ替え、中央交差時に前後差を付けます。")
             layout.label(text="根元半径・毛先半径・先細り強度は将来用の保存値です。")
         layout.prop(scene, 'hair_curve_root_radius')
         layout.prop(scene, 'hair_curve_tip_radius')
@@ -391,21 +420,19 @@ class HGD_PT_display_cleanup(HGD_PT_base):
         if scene.hair_show_inline_help:
             layout.label(text="表示切替と削除を行います。", icon='INFO')
             layout.label(text="頭部メッシュに隠れて見えにくい場合に使用します。")
-        layout.prop(scene, 'hair_show_guides_in_front')
-        layout.operator('hgd.toggle_in_front_generated_helpers', icon='HIDE_OFF')
+        if scene.hair_show_guides_in_front:
+            layout.label(text="最前面表示: ON", icon='CHECKMARK')
+            layout.operator('hgd.toggle_in_front_generated_helpers', text='最前面表示を解除', icon='HIDE_ON')
+        else:
+            layout.label(text="最前面表示: OFF", icon='HIDE_OFF')
+            layout.operator('hgd.toggle_in_front_generated_helpers', text='最前面表示にする', icon='HIDE_OFF')
         layout.separator()
         row = layout.row(align=True)
         op = row.operator('hgd.show_hide_guides', text='ガイド表示', icon='HIDE_OFF')
         op.hide = False
         op = row.operator('hgd.show_hide_guides', text='ガイド非表示', icon='HIDE_ON')
         op.hide = True
-        row = layout.row(align=True)
-        op = row.operator('hgd.region_visibility', text='全領域表示', icon='HIDE_OFF')
-        op.region = 'ALL'
-        op.action = 'SHOW'
-        op = row.operator('hgd.region_visibility', text='全領域非表示', icon='HIDE_ON')
-        op.region = 'ALL'
-        op.action = 'HIDE'
+        _all_region_buttons(layout)
         layout.separator()
         if scene.hair_show_inline_help:
             layout.label(text="HairGuideSystem内の生成物のみ削除します。", icon='INFO')
@@ -472,6 +499,7 @@ class HGD_PT_help(HGD_PT_base):
         box.label(text="三つ編みについて", icon='OUTLINER_OB_CURVE')
         box.label(text="1本の制御カーブを編集します。")
         box.label(text="髪として見えるのは3本の表示用カーブです。")
+        box.label(text="表示用カーブは左右位置を入れ替える三つ編み軌道で再生成されます。")
         box.label(text="制御カーブは形状制御専用です。")
         box = layout.box()
         box.label(text="配置点について", icon='MESH_UVSPHERE')

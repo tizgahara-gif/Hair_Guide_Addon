@@ -357,6 +357,27 @@ def set_region_visibility(region, hide):
     return count
 
 
+def _matches_region(obj_region, region):
+    if region == "ALL":
+        return any(_matches_region(obj_region, item) for item in REGION_NAMES)
+    if region == "Side":
+        return obj_region in {"Side", "Side_L", "Side_R"}
+    return obj_region == region
+
+
+def get_region_visibility_state(region):
+    """Return VISIBLE, HIDDEN, MIXED, or EMPTY for generated objects in a hair region."""
+    targets = [obj for obj in generated_objects() if _matches_region(obj.get("hair_region", ""), region)]
+    if not targets:
+        return "EMPTY"
+    hidden_count = sum(1 for obj in targets if obj.hide_viewport)
+    if hidden_count == 0:
+        return "VISIBLE"
+    if hidden_count == len(targets):
+        return "HIDDEN"
+    return "MIXED"
+
+
 def make_arc_points(center, radius_x, radius_y, z, start_angle, end_angle, count):
     points = []
     for i in range(count):
