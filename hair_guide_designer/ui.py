@@ -257,6 +257,11 @@ class HGD_PT_curve_variation(HGD_PT_base):
         layout.prop(scene, 'hair_flat_profile_fallback_to_round')
         layout.prop(scene, 'hair_curve_flat_width')
         layout.prop(scene, 'hair_curve_flat_thickness')
+        if scene.hair_show_inline_help:
+            layout.label(text="安定出力が必要な場合は、元Curveを残して扁平メッシュを生成できます。")
+        row = layout.row(align=True)
+        row.operator('hgd.create_flat_mesh_from_selected_curves', text='選択カーブを扁平メッシュ化')
+        row.operator('hgd.create_flat_mesh_from_all_curves', text='全カーブを扁平メッシュ化')
         layout.label(text="先細り", icon='OUTLINER_OB_CURVE')
         if scene.hair_show_inline_help:
             layout.label(text="毛先の太さを0にすると先端が尖ります。")
@@ -281,32 +286,52 @@ class HGD_PT_curve_variation(HGD_PT_base):
         layout.prop(scene, 'hair_curve_mid_jitter')
         layout.prop(scene, 'hair_curve_tip_jitter')
         layout.prop(scene, 'hair_curve_length_variation')
-        layout.label(text="三つ編み", icon='OUTLINER_OB_CURVE')
-        layout.prop(scene, 'hair_braid_segments')
-        layout.prop(scene, 'hair_braid_width')
-        layout.prop(scene, 'hair_braid_radius')
-        layout.prop(scene, 'hair_braid_taper')
-        layout.prop(scene, 'hair_braid_twist')
-        layout.prop(scene, 'hair_braid_resolution')
-        layout.prop(scene, 'hair_braid_bevel_depth')
-        layout.prop(scene, 'hair_braid_auto_update')
-        if scene.hair_show_inline_help:
-            layout.label(text="三つ編み制御カーブは形状制御専用です。髪として見えるのは3本の表示用カーブです。")
-            layout.label(text="3本の房は左右レーンを入れ替え、中央交差時に前後差を付けます。")
-            layout.label(text="根元半径・毛先半径・先細り強度は将来用の保存値です。")
-        layout.prop(scene, 'hair_curve_root_radius')
-        layout.prop(scene, 'hair_curve_tip_radius')
-        layout.prop(scene, 'hair_curve_taper_strength')
-        layout.label(text="ツイスト", icon='OUTLINER_OB_CURVE')
-        layout.prop(scene, 'hair_twist_segments')
-        layout.prop(scene, 'hair_twist_radius')
-        layout.prop(scene, 'hair_twist_turns')
-        layout.prop(scene, 'hair_twist_phase')
-        layout.prop(scene, 'hair_twist_bevel_depth')
-        layout.prop(scene, 'hair_twist_resolution')
-        layout.prop(scene, 'hair_twist_taper_strength')
-        if scene.hair_show_inline_help:
-            layout.label(text="ツイスト制御カーブは形状制御専用です。髪として見えるのは表示用カーブです。")
+        braid_box = layout.box()
+        braid_icon = 'TRIA_DOWN' if scene.hair_show_braid_settings else 'TRIA_RIGHT'
+        braid_box.prop(scene, 'hair_show_braid_settings', text='三つ編み設定', icon=braid_icon, toggle=True)
+        if scene.hair_show_braid_settings:
+            braid_box.prop(scene, 'hair_braid_segments')
+            braid_box.prop(scene, 'hair_braid_width')
+            braid_box.prop(scene, 'hair_braid_radius')
+            braid_box.prop(scene, 'hair_braid_taper')
+            braid_box.prop(scene, 'hair_braid_twist')
+            braid_box.prop(scene, 'hair_braid_resolution')
+            braid_box.prop(scene, 'hair_braid_bevel_depth')
+            braid_box.prop(scene, 'hair_braid_auto_update')
+            if scene.hair_show_inline_help:
+                braid_box.label(text="三つ編みは編み目単位で生成されます。")
+                braid_box.label(text="制御カーブ編集後に更新すると3本の表示カーブが再生成されます。")
+                braid_box.label(text="表示カーブを直接編集しても更新時に失われます。")
+        else:
+            braid_box.label(text="三つ編み詳細は非表示です。", icon='TRIA_RIGHT')
+
+        twist_box = layout.box()
+        twist_icon = 'TRIA_DOWN' if scene.hair_show_twist_settings else 'TRIA_RIGHT'
+        twist_box.prop(scene, 'hair_show_twist_settings', text='ツイスト設定', icon=twist_icon, toggle=True)
+        if scene.hair_show_twist_settings:
+            twist_box.prop(scene, 'hair_twist_segments')
+            twist_box.prop(scene, 'hair_twist_radius')
+            twist_box.prop(scene, 'hair_twist_turns')
+            twist_box.prop(scene, 'hair_twist_phase')
+            twist_box.prop(scene, 'hair_twist_bevel_depth')
+            twist_box.prop(scene, 'hair_twist_resolution')
+            twist_box.prop(scene, 'hair_twist_taper_strength')
+            if scene.hair_show_inline_help:
+                twist_box.label(text="ツイスト制御カーブは形状制御専用です。髪として見えるのは表示用カーブです。")
+        else:
+            twist_box.label(text="ツイスト詳細は非表示です。", icon='TRIA_RIGHT')
+
+        advanced_box = layout.box()
+        advanced_icon = 'TRIA_DOWN' if scene.hair_show_advanced_curve_settings else 'TRIA_RIGHT'
+        advanced_box.prop(scene, 'hair_show_advanced_curve_settings', text='詳細/互換設定', icon=advanced_icon, toggle=True)
+        if scene.hair_show_advanced_curve_settings:
+            advanced_box.prop(scene, 'hair_curve_root_radius')
+            advanced_box.prop(scene, 'hair_curve_tip_radius')
+            advanced_box.prop(scene, 'hair_curve_taper_strength')
+            if scene.hair_show_inline_help:
+                advanced_box.label(text="根元半径・毛先半径・先細り強度は将来用の保存値です。")
+        else:
+            advanced_box.label(text="詳細/互換設定は非表示です。", icon='TRIA_RIGHT')
 
 
 class HGD_PT_braid(HGD_PT_base):
@@ -419,7 +444,7 @@ class HGD_PT_display_cleanup(HGD_PT_base):
         scene = context.scene
         if scene.hair_show_inline_help:
             layout.label(text="表示切替と削除を行います。", icon='INFO')
-            layout.label(text="頭部メッシュに隠れて見えにくい場合に使用します。")
+            layout.label(text="ガイド、配置点、表示用カーブを頭部メッシュより手前に表示します。")
         if scene.hair_show_guides_in_front:
             layout.label(text="最前面表示: ON", icon='CHECKMARK')
             layout.operator('hgd.toggle_in_front_generated_helpers', text='最前面表示を解除', icon='HIDE_ON')
@@ -499,7 +524,8 @@ class HGD_PT_help(HGD_PT_base):
         box.label(text="三つ編みについて", icon='OUTLINER_OB_CURVE')
         box.label(text="1本の制御カーブを編集します。")
         box.label(text="髪として見えるのは3本の表示用カーブです。")
-        box.label(text="表示用カーブは左右位置を入れ替える三つ編み軌道で再生成されます。")
+        box.label(text="編み目ユニットを連続配置して3本の房を再生成します。")
+        box.label(text="表示カーブを直接編集しても更新時に失われます。")
         box.label(text="制御カーブは形状制御専用です。")
         box = layout.box()
         box.label(text="配置点について", icon='MESH_UVSPHERE')

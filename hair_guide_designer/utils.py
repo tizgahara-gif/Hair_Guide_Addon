@@ -10,7 +10,8 @@ CURVES = "Curves"
 WARNINGS = "Warnings"
 TAPER_OBJECTS = "TaperObjects"
 PROFILE_OBJECTS = "ProfileObjects"
-SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS, TAPER_OBJECTS, PROFILE_OBJECTS)
+FLAT_MESHES = "FlatMeshes"
+SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS, TAPER_OBJECTS, PROFILE_OBJECTS, FLAT_MESHES)
 CURVE_REGION_COLLECTIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape", "Braid", "Twist")
 REGION_NAMES = ("Top", "Front", "Side", "Back_Upper", "Back_Middle", "Nape")
 POINT_REGIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape")
@@ -36,6 +37,8 @@ CURVE_REGION_COLORS = {
     "Twist": (0.2, 1.0, 1.0, 1.0),
 }
 WARNING_COLOR = (1.0, 0.05, 0.02, 1.0)
+IN_FRONT_GENERATED_TYPES = {"guide", "region", "placement_point", "warning", "curve", "braid_strand", "twist_strand"}
+CONTROL_CURVE_TYPES = {"braid_control", "twist_control"}
 
 
 def ensure_collection(name, parent=None):
@@ -148,6 +151,67 @@ def sample_curve_world_points(obj, count):
     return samples
 
 
+def _cubic_bezier(p0, p1, p2, p3, t):
+    inv = 1.0 - t
+    return (
+        p0 * (inv ** 3)
+        + p1 * (3.0 * inv * inv * t)
+        + p2 * (3.0 * inv * t * t)
+        + p3 * (t ** 3)
+    )
+
+
+def sample_curve_world_points_evaluated(obj, count):
+    """Sample the first spline in world space, including Bezier handles for Bezier curves."""
+    if not obj or obj.type != "CURVE":
+        return []
+    spline = next((item for item in obj.data.splines if item.type == "BEZIER" and item.bezier_points), None)
+    if spline is None:
+        return sample_curve_world_points(obj, count)
+    bezier_points = spline.bezier_points
+    if len(bezier_points) == 1:
+        point = obj.matrix_world @ bezier_points[0].co
+        return [point.copy() for _ in range(max(count, 1))]
+
+    dense = []
+    segment_samples = 12
+    for index in range(len(bezier_points) - 1):
+        current = bezier_points[index]
+        next_point = bezier_points[index + 1]
+        p0 = obj.matrix_world @ current.co
+        p1 = obj.matrix_world @ current.handle_right
+        p2 = obj.matrix_world @ next_point.handle_left
+        p3 = obj.matrix_world @ next_point.co
+        for sample_index in range(segment_samples):
+            if index > 0 and sample_index == 0:
+                continue
+            dense.append(_cubic_bezier(p0, p1, p2, p3, sample_index / segment_samples))
+    dense.append(obj.matrix_world @ bezier_points[-1].co)
+    if len(dense) < 2:
+        return dense
+    lengths = []
+    total = 0.0
+    for start, end in zip(dense, dense[1:]):
+        total += (end - start).length
+        lengths.append(total)
+    if total == 0.0:
+        return [dense[0].copy() for _ in range(max(count, 1))]
+    samples = []
+    for index in range(max(count, 2)):
+        target = total * (index / max(count - 1, 1))
+        segment_index = 0
+        previous = 0.0
+        for idx, end_length in enumerate(lengths):
+            if target <= end_length:
+                segment_index = idx
+                break
+            previous = end_length
+        segment_length = max(lengths[segment_index] - previous, 0.000001)
+        factor = (target - previous) / segment_length
+        samples.append(dense[segment_index].lerp(dense[segment_index + 1], factor))
+    return samples
+
+
 def get_curve_world_center(obj):
     points = _spline_control_points_world(obj)
     if not points:
@@ -195,8 +259,10 @@ def set_common_props(obj, guide_type, region="", scene=None):
     obj.color = REGION_COLORS.get(region, (0.9, 0.9, 0.9, 1.0))
     if guide_type in {"curve", "braid_control", "braid_strand", "twist_control", "twist_strand"}:
         apply_curve_region_color(obj)
-    if guide_type in {"guide", "region", "placement_point", "warning"} and scene:
+    if guide_type in IN_FRONT_GENERATED_TYPES and scene:
         obj.show_in_front = getattr(scene, "hair_show_guides_in_front", True)
+    if guide_type in CONTROL_CURVE_TYPES:
+        obj.show_in_front = True
 
 
 def curve_region_key(obj_or_region, guide_type=None):

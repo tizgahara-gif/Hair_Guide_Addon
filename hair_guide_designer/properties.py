@@ -51,6 +51,7 @@ PROPERTY_NAMES = (
     "hair_twist_segments", "hair_twist_radius", "hair_twist_turns",
     "hair_twist_phase", "hair_twist_bevel_depth", "hair_twist_resolution",
     "hair_twist_taper_strength",
+    "hair_show_braid_settings", "hair_show_twist_settings", "hair_show_advanced_curve_settings",
     "hair_show_guides_in_front", "hair_show_inline_help",
 )
 
@@ -79,7 +80,7 @@ def register():
     scene.hair_show_guides_in_front = BoolProperty(
         name="最前面表示中",
         default=True,
-        description="生成したガイド、領域線、配置点、警告の最前面表示状態です。",
+        description="生成したガイド、領域線、配置点、警告、表示用カーブの最前面表示状態です。",
     )
     scene.hair_show_inline_help = BoolProperty(
         name="ヘルプを表示",
@@ -396,30 +397,46 @@ def register():
         description="新しく生成するカーブ毛束へ共有テーパーを自動で適用します。",
     )
 
+    scene.hair_show_braid_settings = BoolProperty(
+        name="三つ編み設定を表示",
+        default=False,
+        description="三つ編みの詳細パラメータを表示します。",
+    )
+    scene.hair_show_twist_settings = BoolProperty(
+        name="ツイスト設定を表示",
+        default=False,
+        description="ツイストの詳細パラメータを表示します。",
+    )
+    scene.hair_show_advanced_curve_settings = BoolProperty(
+        name="詳細/互換設定を表示",
+        default=False,
+        description="将来互換用のカーブ詳細パラメータを表示します。",
+    )
+
     scene.hair_braid_segments = IntProperty(
-        name="編み込み数",
-        default=12,
+        name="編み目数",
+        default=8,
         min=2,
         max=64,
-        description="三つ編み表示の左右入れ替わり回数。多いほど細かく編み込まれます。",
+        description="三つ編み表示の交差ユニット数。1つが1回の編み目です。",
     )
     scene.hair_braid_radius = FloatProperty(
         name="交差の奥行き",
-        default=0.08,
+        default=0.04,
         min=0.001,
         max=2.0,
         description="中央交差時の前後方向のふくらみ。大きいほど房の上下差が強く見えます。",
     )
     scene.hair_braid_width = FloatProperty(
         name="横幅",
-        default=0.18,
+        default=0.12,
         min=0.001,
         max=5.0,
         description="三つ編み全体の横幅。大きいほど左右の房が広がります。",
     )
     scene.hair_braid_taper = FloatProperty(
         name="毛先細り",
-        default=0.65,
+        default=0.45,
         min=0.0,
         max=1.0,
         description="毛先へ向かう三つ編みの細り具合。高いほど毛先が細くなります。",
@@ -429,7 +446,7 @@ def register():
         default=1.0,
         min=0.0,
         max=4.0,
-        description="編み込み周期の倍率。高いほど左右レーンの入れ替わりが増えます。",
+        description="編み目パターンの進み方を調整します。通常は1.0で使用します。",
     )
     scene.hair_braid_resolution = IntProperty(
         name="解像度",
@@ -440,7 +457,7 @@ def register():
     )
     scene.hair_braid_bevel_depth = FloatProperty(
         name="表示太さ",
-        default=0.025,
+        default=0.018,
         min=0.0,
         precision=4,
         description="三つ編み表示用カーブの太さ。制御カーブはWire表示で太さを持ちません。",

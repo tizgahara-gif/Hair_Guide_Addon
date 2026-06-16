@@ -709,7 +709,7 @@ class HGD_OT_clear_all_generated(bpy.types.Operator):
             self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
         total = 0
-        for collection_name in (utils.GUIDES, utils.REGIONS, utils.PLACEMENT_POINTS, utils.CURVES, utils.WARNINGS, utils.TAPER_OBJECTS, utils.PROFILE_OBJECTS):
+        for collection_name in (utils.GUIDES, utils.REGIONS, utils.PLACEMENT_POINTS, utils.CURVES, utils.WARNINGS, utils.TAPER_OBJECTS, utils.PROFILE_OBJECTS, utils.FLAT_MESHES):
             total += utils.clear_collection_objects(collection_name)
         context.scene.hair_warning_count = 0
         if total == 0:
@@ -722,10 +722,10 @@ class HGD_OT_clear_all_generated(bpy.types.Operator):
 class HGD_OT_toggle_in_front_generated_helpers(bpy.types.Operator):
     bl_idname = "hgd.toggle_in_front_generated_helpers"
     bl_label = "最前面表示を切り替え"
-    bl_description = "生成済みのガイド、領域線、配置点、警告の最前面表示をON/OFFします"
+    bl_description = "生成済みのガイド、配置点、警告、表示用カーブの最前面表示をON/OFFします"
     bl_options = {'REGISTER', 'UNDO'}
 
-    TARGET_TYPES = {"guide", "region", "placement_point", "warning"}
+    TARGET_TYPES = {"guide", "region", "placement_point", "warning", "curve", "braid_strand", "twist_strand"}
 
     def execute(self, context):
         if not bpy.data.collections.get(utils.ROOT):
@@ -740,9 +740,9 @@ class HGD_OT_toggle_in_front_generated_helpers(bpy.types.Operator):
                 obj.show_in_front = show
                 count += 1
         if show:
-            self.report({'INFO'}, f"ガイドと配置点を最前面表示にしました。対象: {count} 個。")
+            self.report({'INFO'}, f"ガイド・配置点・表示カーブを最前面表示にしました。対象: {count} 個。")
         else:
-            self.report({'INFO'}, f"ガイドと配置点の最前面表示を解除しました。対象: {count} 個。")
+            self.report({'INFO'}, f"ガイド・配置点・表示カーブの最前面表示を解除しました。対象: {count} 個。")
         return {'FINISHED'}
 
 
@@ -921,9 +921,9 @@ def _create_or_replace_braid_strands(context, control_obj):
     for obj in list(utils.generated_objects()):
         if obj.get("hair_braid_id") == braid_id and obj.get("hair_guide_type") in {"braid_strand", "braid_visual"}:
             bpy.data.objects.remove(obj, do_unlink=True)
-    repeat_count = max(int(scene.hair_braid_segments), 2)
-    sample_count = repeat_count * 8 + 1
-    samples = _sample_curve_world_points(control_obj, sample_count)
+    braid_steps = max(int(scene.hair_braid_segments), 2)
+    sample_count = max(braid_steps * 8 + 1, 24)
+    samples = utils.sample_curve_world_points_evaluated(control_obj, sample_count)
     if len(samples) < 2:
         return []
     strand_labels = ("A", "B", "C")
@@ -940,19 +940,17 @@ def _create_or_replace_braid_strands(context, control_obj):
         normal_hint = normal
         t = index / max(len(samples) - 1, 1)
         taper_scale = max(1.0 - scene.hair_braid_taper * t, 0.05)
-        braid_phase = t * repeat_count * max(scene.hair_braid_twist, 0.0)
+        braid_phase = t * braid_steps * max(scene.hair_braid_twist, 0.0)
         step = math.floor(braid_phase)
         local = braid_phase - step
-        transition_strength = _smoothstep(local) * (1.0 - _smoothstep(max(0.0, local - 0.5) * 2.0))
         for strand_index, label in enumerate(strand_labels):
             lane = _interpolated_braid_lane(label, step, local)
             center_cross = 1.0 - min(abs(lane), 1.0)
             over = 1.0 if ((step + strand_index) % 2 == 0) else -1.0
             side_offset = lane * scene.hair_braid_width * 0.5 * taper_scale
-            cross_strength = center_cross * (0.55 + 0.45 * transition_strength)
-            depth_offset = scene.hair_braid_radius * cross_strength * over * 0.45 * taper_scale
-            lift_offset = scene.hair_braid_radius * center_cross * 0.15 * taper_scale
-            strand_points[label].append(sample + side * side_offset + normal * (depth_offset + lift_offset))
+            side_offset *= (1.0 - 0.15 * center_cross)
+            depth_offset = scene.hair_braid_radius * center_cross * over * 0.35 * taper_scale
+            strand_points[label].append(sample + side * side_offset + normal * depth_offset)
     taper_obj = None
     if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
         taper_obj, _ = _create_or_update_default_taper(context)
@@ -1437,6 +1435,108 @@ def _clear_profile_from_curves(context, selected_only):
     return curves
 
 
+def _flat_mesh_taper_scale(scene, obj, t):
+    if obj.get("hair_use_taper") or getattr(obj.data, "taper_object", None):
+        root = float(obj.get("hair_taper_root_radius", scene.hair_taper_root_radius))
+        mid = float(obj.get("hair_taper_mid_radius", scene.hair_taper_mid_radius))
+        tip = float(obj.get("hair_taper_tip_radius", scene.hair_taper_tip_radius))
+    else:
+        strength = float(getattr(scene, "hair_curve_taper_strength", 0.65))
+        root = 1.0
+        tip = max(1.0 - strength, 0.05)
+        mid = (root + tip) * 0.5
+    if t <= 0.5:
+        local = t / 0.5
+        return max(root + (mid - root) * local, 0.01)
+    local = (t - 0.5) / 0.5
+    return max(mid + (tip - mid) * local, 0.01)
+
+
+def _flat_mesh_name_for_curve(curve_obj):
+    base = f"HGD_FLAT_MESH_{curve_obj.name.split('.')[0]}"
+    existing = bpy.data.objects.get(base)
+    if existing and existing.get("hair_guide_type") == "flat_mesh":
+        bpy.data.objects.remove(existing, do_unlink=True)
+        return base
+    if existing:
+        return utils.unique_name(base)
+    return base
+
+
+def _create_flat_mesh_from_curve(context, curve_obj):
+    scene = context.scene
+    if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "braid_strand", "twist_strand"}:
+        return None
+    sample_count = max(int(getattr(scene, "hair_curve_segment_count", 4)) * 8 + 1, 24)
+    if curve_obj.get("hair_guide_type") == "braid_strand":
+        sample_count = max(int(scene.hair_braid_segments) * 8 + 1, 24)
+    elif curve_obj.get("hair_guide_type") == "twist_strand":
+        sample_count = max(int(scene.hair_twist_segments), 24)
+    samples = utils.sample_curve_world_points_evaluated(curve_obj, sample_count)
+    if len(samples) < 2:
+        return None
+
+    ring_count = 8
+    half_width = scene.hair_curve_flat_width * 0.5
+    half_thickness = scene.hair_curve_flat_thickness * 0.5
+    vertices = []
+    faces = []
+    normal_hint = mathutils.Vector((0.0, 0.0, 1.0))
+    for index, sample in enumerate(samples):
+        prev_point = samples[max(index - 1, 0)]
+        next_point = samples[min(index + 1, len(samples) - 1)]
+        tangent = next_point - prev_point
+        if tangent.length < 0.0001:
+            tangent = mathutils.Vector((0.0, 0.0, 1.0))
+        tangent.normalize()
+        side, normal = _braid_frame(tangent, normal_hint)
+        normal_hint = normal
+        t = index / max(len(samples) - 1, 1)
+        taper = _flat_mesh_taper_scale(scene, curve_obj, t)
+        for ring_index in range(ring_count):
+            angle = math.tau * ring_index / ring_count
+            vertex = sample + side * (math.cos(angle) * half_width * taper) + normal * (math.sin(angle) * half_thickness * taper)
+            vertices.append(tuple(vertex))
+    for index in range(len(samples) - 1):
+        base = index * ring_count
+        next_base = (index + 1) * ring_count
+        for ring_index in range(ring_count):
+            faces.append((
+                base + ring_index,
+                base + (ring_index + 1) % ring_count,
+                next_base + (ring_index + 1) % ring_count,
+                next_base + ring_index,
+            ))
+    faces.append(tuple(reversed(range(ring_count))))
+    last_base = (len(samples) - 1) * ring_count
+    faces.append(tuple(last_base + ring_index for ring_index in range(ring_count)))
+
+    _, collections = utils.ensure_system()
+    collection = collections[utils.FLAT_MESHES]
+    mesh_name = _flat_mesh_name_for_curve(curve_obj)
+    mesh = bpy.data.meshes.new(mesh_name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(mesh_name, mesh)
+    collection.objects.link(obj)
+    obj.color = curve_obj.color
+    utils.set_common_props(obj, "flat_mesh", curve_obj.get("hair_region", ""), scene)
+    obj["hair_source_curve"] = curve_obj.name
+    obj["hair_flat_width"] = scene.hair_curve_flat_width
+    obj["hair_flat_thickness"] = scene.hair_curve_flat_thickness
+    obj["hair_flat_mesh_sample_count"] = len(samples)
+    return obj
+
+
+def _create_flat_meshes_from_curves(context, selected_only):
+    created = []
+    for curve_obj in _generated_curves_from_context(context, selected_only):
+        mesh_obj = _create_flat_mesh_from_curve(context, curve_obj)
+        if mesh_obj:
+            created.append(mesh_obj)
+    return created
+
+
 def _apply_shape_to_curves(context, selected_only):
     curves = _generated_curves_from_context(context, selected_only)
     if not curves:
@@ -1649,6 +1749,36 @@ class HGD_OT_clear_profile_from_all_curves(bpy.types.Operator):
             self.report({'WARNING'}, "断面解除対象の生成カーブが見つかりません。")
             return {'CANCELLED'}
         self.report({'INFO'}, f"全カーブ {len(curves)} 本の断面を解除しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_create_flat_mesh_from_selected_curves(bpy.types.Operator):
+    bl_idname = "hgd.create_flat_mesh_from_selected_curves"
+    bl_label = "選択カーブから扁平メッシュ生成"
+    bl_description = "選択中の表示用カーブをサンプリングし、元Curveを残したまま扁平な楕円断面メッシュを生成します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        meshes = _create_flat_meshes_from_curves(context, True)
+        if not meshes:
+            self.report({'WARNING'}, "扁平メッシュ化できる表示用カーブが選択されていません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"選択カーブから扁平メッシュを{len(meshes)}個生成しました。元Curveは残しています。")
+        return {'FINISHED'}
+
+
+class HGD_OT_create_flat_mesh_from_all_curves(bpy.types.Operator):
+    bl_idname = "hgd.create_flat_mesh_from_all_curves"
+    bl_label = "全カーブから扁平メッシュ生成"
+    bl_description = "すべての表示用カーブをサンプリングし、元Curveを残したまま扁平な楕円断面メッシュを生成します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        meshes = _create_flat_meshes_from_curves(context, False)
+        if not meshes:
+            self.report({'WARNING'}, "扁平メッシュ化できる表示用カーブが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"全カーブから扁平メッシュを{len(meshes)}個生成しました。元Curveは残しています。")
         return {'FINISHED'}
 
 
@@ -2144,6 +2274,8 @@ classes = (
     HGD_OT_apply_profile_to_all_curves,
     HGD_OT_clear_profile_from_selected_curves,
     HGD_OT_clear_profile_from_all_curves,
+    HGD_OT_create_flat_mesh_from_selected_curves,
+    HGD_OT_create_flat_mesh_from_all_curves,
     HGD_OT_load_selected_curve_settings,
     HGD_OT_apply_shape_to_selected_curves,
     HGD_OT_apply_shape_to_all_curves,
