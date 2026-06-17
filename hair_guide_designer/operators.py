@@ -2102,6 +2102,72 @@ class HGD_OT_clear_legacy_braid_objects(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def _copy_mirrored_curve_data_world_x(source, target):
+    new_data = source.data.copy()
+    new_data.name = target.name + "Curve"
+    target_world_inv = target.matrix_world.inverted()
+    for spline in new_data.splines:
+        if spline.type != "BEZIER":
+            continue
+        for point in spline.bezier_points:
+            co_world = source.matrix_world @ point.co
+            left_world = source.matrix_world @ point.handle_left
+            right_world = source.matrix_world @ point.handle_right
+            co_world.x *= -1
+            left_world.x *= -1
+            right_world.x *= -1
+            point.co = target_world_inv @ co_world
+            point.handle_left = target_world_inv @ left_world
+            point.handle_right = target_world_inv @ right_world
+    return new_data
+
+
+class HGD_OT_mirror_side_guide_base(bpy.types.Operator):
+    bl_options = {'REGISTER', 'UNDO'}
+    source_name = ""
+    target_name = ""
+    target_region = "Side"
+
+    def execute(self, context):
+        source = utils.get_guide_object(self.source_name)
+        target = utils.get_guide_object(self.target_name)
+        if not source or source.type != "CURVE":
+            self.report({'WARNING'}, f"コピー元ガイドが見つかりません: {self.source_name}")
+            return {'CANCELLED'}
+        if not target or target.type != "CURVE":
+            self.report({'WARNING'}, f"コピー先ガイドが見つかりません: {self.target_name}")
+            return {'CANCELLED'}
+        old_data = target.data
+        target.data = _copy_mirrored_curve_data_world_x(source, target)
+        if old_data and old_data.users == 0:
+            bpy.data.curves.remove(old_data)
+        target["hair_guide_type"] = "guide"
+        target["hair_region"] = self.target_region
+        target["hair_guide_level"] = target.get("hair_guide_level", source.get("hair_guide_level", "basic"))
+        target.show_in_front = getattr(context.scene, "hair_show_guides_in_front", target.show_in_front)
+        target.color = utils.REGION_COLORS.get(self.target_region, utils.REGION_COLORS.get("Side", (0.9, 0.9, 0.9, 1.0)))
+        self.report({'INFO'}, f"{source.name} を {target.name} へミラーしました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_mirror_side_guide_l_to_r(HGD_OT_mirror_side_guide_base):
+    bl_idname = "hgd.mirror_side_guide_l_to_r"
+    bl_label = "左側頭ガイド → 右へミラー"
+    bl_description = "HAIR_GUIDE_SideBoundary_Lの編集済みCurveをWorld X=0基準でHAIR_GUIDE_SideBoundary_Rへ反映します"
+    source_name = "HAIR_GUIDE_SideBoundary_L"
+    target_name = "HAIR_GUIDE_SideBoundary_R"
+    target_region = "Side_R"
+
+
+class HGD_OT_mirror_side_guide_r_to_l(HGD_OT_mirror_side_guide_base):
+    bl_idname = "hgd.mirror_side_guide_r_to_l"
+    bl_label = "右側頭ガイド → 左へミラー"
+    bl_description = "HAIR_GUIDE_SideBoundary_Rの編集済みCurveをWorld X=0基準でHAIR_GUIDE_SideBoundary_Lへ反映します"
+    source_name = "HAIR_GUIDE_SideBoundary_R"
+    target_name = "HAIR_GUIDE_SideBoundary_L"
+    target_region = "Side_L"
+
+
 class HGD_OT_mirror_side(bpy.types.Operator):
     bl_idname = "hgd.mirror_side"
     bl_label = "左右ミラー"
@@ -2308,6 +2374,8 @@ classes = (
     HGD_OT_apply_curve_batch_settings,
     HGD_OT_update_curve_roots_from_points,
     HGD_OT_clear_legacy_braid_objects,
+    HGD_OT_mirror_side_guide_l_to_r,
+    HGD_OT_mirror_side_guide_r_to_l,
     HGD_OT_mirror_side,
     HGD_OT_mirror_side_l_to_r,
     HGD_OT_mirror_side_r_to_l,
