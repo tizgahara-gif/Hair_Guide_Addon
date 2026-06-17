@@ -6,6 +6,14 @@ from bpy.props import EnumProperty
 from . import utils
 
 
+def cm_to_m(value):
+    return float(value) * 0.01
+
+
+def m_to_cm(value):
+    return float(value) * 100.0
+
+
 def require_head(context, operator):
     head = context.scene.hair_target_head_object
     if not head or head.type != "MESH":
@@ -272,6 +280,24 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
 
     BASE_COUNTS = {"Top": 5, "Front": 7, "Side_L": 4, "Side_R": 4, "Back_Upper": 6, "Back_Middle": 6, "Nape": 5}
 
+    @staticmethod
+    def _preference_counts():
+        mapping = {
+            "Top": "point_count_top",
+            "Front": "point_count_front",
+            "Side_L": "point_count_side_l",
+            "Side_R": "point_count_side_r",
+            "Back_Upper": "point_count_back_upper",
+            "Back_Middle": "point_count_back_middle",
+            "Nape": "point_count_nape",
+        }
+        prefs = bpy.context.preferences.addons.get(__package__)
+        prefs = prefs.preferences if prefs else None
+        return {
+            region: getattr(prefs, attr, HGD_OT_generate_placement_points.BASE_COUNTS[region])
+            for region, attr in mapping.items()
+        }
+
     def execute(self, context):
         try:
             head = require_head(context, self)
@@ -289,7 +315,9 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             used_fallback = False
             rng = random.Random(scene.hair_seed)
             count_total = 0
-            for region, base_count in self.BASE_COUNTS.items():
+            for region, base_count in self._preference_counts().items():
+                if base_count <= 0:
+                    continue
                 count = base_count if region == "Top" else max(1, round(base_count * scene.hair_density))
                 positions = self._guide_positions(region, count, guides, min_v, max_v, center, size, scene.hair_guide_offset)
                 if positions is None:
@@ -302,7 +330,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                     obj = utils.make_marker(point_name, loc, max(radius, 0.004), collection, region, "placement_point", scene)
                     position_type = self._position_type(region, i, loc, center, size)
                     direction = self._recommended_direction(region, position_type, loc.x - center.x)
-                    length = scene.hair_curve_length * (1.0 + rng.uniform(-scene.hair_length_variation, scene.hair_length_variation))
+                    length = cm_to_m(scene.hair_curve_length_cm) * (1.0 + rng.uniform(-scene.hair_length_variation, scene.hair_length_variation))
                     size_rec = max(scene.hair_curve_root_radius * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation)), 0.001)
                     obj["hair_root_id"] = obj.name
                     obj["recommended_size"] = size_rec
@@ -443,12 +471,15 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
 
     def _jittered(self, region, base, rng, scene):
         variation = 0.5 if region == "Top" else 1.0
-        x_jit = rng.uniform(-scene.hair_width_variation, scene.hair_width_variation) * variation
+        width_var = cm_to_m(scene.hair_width_variation_cm)
+        height_var = cm_to_m(scene.hair_height_variation_cm)
+        depth_var = cm_to_m(scene.hair_depth_variation_cm)
+        x_jit = rng.uniform(-width_var, width_var) * variation
         if region == "Side_R":
             x_jit *= 1.0 - scene.hair_symmetry_bias * 0.65
         elif region == "Side_L":
             x_jit *= 1.0 - scene.hair_symmetry_bias * 0.35
-        return base + mathutils.Vector((x_jit, rng.uniform(-scene.hair_depth_variation, scene.hair_depth_variation) * variation, rng.uniform(-scene.hair_height_variation, scene.hair_height_variation) * variation))
+        return base + mathutils.Vector((x_jit, rng.uniform(-depth_var, depth_var) * variation, rng.uniform(-height_var, height_var) * variation))
 
 
 class HGD_OT_clear_placement_points(bpy.types.Operator):
@@ -497,7 +528,10 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
             for point in points:
                 region = point.get("hair_region", "Front")
                 direction = utils.string_to_vector(point.get("recommended_direction"), utils.direction_for_region(region))
-                length = float(point.get("recommended_length", scene.hair_curve_length))
+                if scene.hair_use_placement_recommended_length:
+                    length = float(point.get("recommended_length", cm_to_m(scene.hair_curve_length_cm)))
+                else:
+                    length = cm_to_m(scene.hair_curve_length_cm)
                 root = point.location.copy()
                 segment_count = max(scene.hair_curve_segment_count, 2)
                 curve_points = []
@@ -510,7 +544,9 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 obj = utils.make_curve(utils.unique_numbered(prefix), curve_points, curves, region, "curve", scene, bevel=scene.hair_curve_bevel_depth)
                 obj["hair_root_id"] = point.name
                 obj["hair_source_point"] = point.name
-                obj["hair_curve_length"] = scene.hair_curve_length
+                obj["hair_curve_length"] = length
+                obj["hair_curve_length_cm"] = m_to_cm(length)
+                obj["hair_use_placement_recommended_length"] = scene.hair_use_placement_recommended_length
                 obj["hair_curve_bevel_depth"] = scene.hair_curve_bevel_depth
                 obj["hair_curve_resolution"] = scene.hair_curve_resolution
                 obj["hair_mirror_pair"] = ""
@@ -526,6 +562,8 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 if scene.hair_auto_apply_taper_to_new_curves:
                     _apply_taper_to_curve_obj(context, obj, taper_obj)
                 _ensure_curve_visible_geometry(context, obj)
+                if scene.hair_card_auto_apply_to_new_curves:
+                    _apply_display_mode_to_curve(context, obj)
                 made += 1
             self.report({'INFO'}, f"カーブ毛束を{made}本生成しました。")
             return {'FINISHED'}
@@ -562,18 +600,21 @@ def _stable_curve_variation_rng_for_obj(scene, obj, source_name):
 
 def _variation_jitter_amount(scene, t):
     if t < 0.34:
-        return scene.hair_curve_root_jitter
+        return cm_to_m(scene.hair_curve_root_jitter_cm)
     if t < 0.67:
-        return scene.hair_curve_mid_jitter
-    return scene.hair_curve_tip_jitter
+        return cm_to_m(scene.hair_curve_mid_jitter_cm)
+    return cm_to_m(scene.hair_curve_tip_jitter_cm)
 
 
 def _apply_curve_variation(obj, scene, source_name):
     obj["hair_curve_variation_enabled"] = scene.hair_curve_variation_enabled
     obj["hair_curve_variation_seed"] = scene.hair_curve_variation_seed
-    obj["hair_curve_root_jitter"] = scene.hair_curve_root_jitter
-    obj["hair_curve_mid_jitter"] = scene.hair_curve_mid_jitter
-    obj["hair_curve_tip_jitter"] = scene.hair_curve_tip_jitter
+    obj["hair_curve_root_jitter"] = cm_to_m(scene.hair_curve_root_jitter_cm)
+    obj["hair_curve_mid_jitter"] = cm_to_m(scene.hair_curve_mid_jitter_cm)
+    obj["hair_curve_tip_jitter"] = cm_to_m(scene.hair_curve_tip_jitter_cm)
+    obj["hair_curve_root_jitter_cm"] = scene.hair_curve_root_jitter_cm
+    obj["hair_curve_mid_jitter_cm"] = scene.hair_curve_mid_jitter_cm
+    obj["hair_curve_tip_jitter_cm"] = scene.hair_curve_tip_jitter_cm
     obj["hair_curve_length_variation"] = scene.hair_curve_length_variation
     obj["hair_curve_variation_randomized"] = scene.hair_curve_variation_randomize_seed_per_generation
     length_scale = 1.0
@@ -950,6 +991,8 @@ def _create_or_replace_twist_strand(context, control_obj):
         _apply_taper_to_curve_obj(context, obj, taper_obj)
     obj.data.bevel_depth = scene.hair_twist_bevel_depth
     _ensure_curve_visible_geometry(context, obj)
+    if scene.hair_card_auto_apply_to_new_curves:
+        _apply_display_mode_to_curve(context, obj)
     return obj
 
 
@@ -960,7 +1003,10 @@ def _make_twist_from_point(context, point):
     twist_id = _next_twist_id()
     region = point.get("hair_region", "Front")
     direction = utils.string_to_vector(point.get("recommended_direction"), utils.direction_for_region(region))
-    length = float(point.get("recommended_length", scene.hair_curve_length))
+    if scene.hair_use_placement_recommended_length:
+        length = float(point.get("recommended_length", cm_to_m(scene.hair_curve_length_cm)))
+    else:
+        length = cm_to_m(scene.hair_curve_length_cm)
     root = point.location.copy()
     control_points = []
     for i in range(max(scene.hair_curve_segment_count, 2)):
@@ -971,6 +1017,9 @@ def _make_twist_from_point(context, point):
     control["hair_source_point"] = point.name
     control["hair_root_id"] = point.name
     control["hair_twist_id"] = twist_id
+    control["hair_curve_length"] = length
+    control["hair_curve_length_cm"] = m_to_cm(length)
+    control["hair_use_placement_recommended_length"] = scene.hair_use_placement_recommended_length
     control.data.resolution_u = scene.hair_twist_resolution
     _set_twist_control_display(control)
     _apply_curve_variation(control, scene, point.name)
@@ -1325,9 +1374,6 @@ def _create_flat_mesh_from_curve(context, curve_obj):
     obj["hair_flat_mesh_thickness"] = scene.hair_flat_mesh_thickness
     obj["hair_flat_mesh_samples"] = len(samples)
     obj["hair_flat_mesh_ring_segments"] = ring_count
-    solid = obj.modifiers.new("HGD_Solidify_0.01m", "SOLIDIFY")
-    solid.thickness = scene.hair_flat_mesh_solidify_thickness
-    solid.offset = 0.0
     if scene.hair_flat_mesh_add_subdivision:
         sub = obj.modifiers.new("HGD_Subdivision_Surface", "SUBSURF")
         sub.levels = 1
@@ -1342,6 +1388,115 @@ def _create_flat_meshes_from_curves(context, selected_only):
         if mesh_obj:
             created.append(mesh_obj)
     return created
+
+
+CARD_PREVIEW_PREFIX = "HGD_CARD_PREVIEW_"
+
+
+def _card_preview_name_for_curve(curve_obj):
+    return f"{CARD_PREVIEW_PREFIX}{curve_obj.name.split('.')[0]}"
+
+
+def _remove_card_preview_for_curve(curve_obj):
+    for obj in list(utils.generated_objects("card_preview")):
+        if obj.get("hair_source_curve") == curve_obj.name or obj.name == _card_preview_name_for_curve(curve_obj):
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+
+def _set_card_preview_visible(curve_obj, visible):
+    for obj in utils.generated_objects("card_preview"):
+        if obj.get("hair_source_curve") == curve_obj.name:
+            obj.hide_viewport = not visible
+            obj.hide_render = not visible
+
+
+def _card_width(scene, t):
+    if t <= 0.5:
+        return scene.hair_card_width_root + (scene.hair_card_width_mid - scene.hair_card_width_root) * (t / 0.5)
+    return scene.hair_card_width_mid + (scene.hair_card_width_tip - scene.hair_card_width_mid) * ((t - 0.5) / 0.5)
+
+
+def _create_or_update_card_preview(context, curve_obj):
+    scene = context.scene
+    if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
+        return None
+    _remove_card_preview_for_curve(curve_obj)
+    samples = utils.sample_curve_world_points_evaluated(curve_obj, max(scene.hair_card_samples, 2))
+    if len(samples) < 2:
+        return None
+    vertices = []
+    faces = []
+    normal_hint = mathutils.Vector((0.0, 0.0, 1.0))
+    for index, sample in enumerate(samples):
+        prev_point = samples[max(index - 1, 0)]
+        next_point = samples[min(index + 1, len(samples) - 1)]
+        tangent = next_point - prev_point
+        if tangent.length < 0.0001:
+            tangent = mathutils.Vector((0.0, 0.0, 1.0))
+        tangent.normalize()
+        side, normal_hint = _curve_frame(tangent, normal_hint)
+        t = index / max(len(samples) - 1, 1)
+        half_width = max(_card_width(scene, t), 0.0) * 0.5
+        vertices.append(tuple(sample - side * half_width))
+        vertices.append(tuple(sample + side * half_width))
+    for index in range(len(samples) - 1):
+        base = index * 2
+        faces.append((base, base + 1, base + 3, base + 2))
+    name = _card_preview_name_for_curve(curve_obj)
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    preview = bpy.data.objects.new(name, mesh)
+    _, collections = utils.ensure_system()
+    collections[utils.CARD_PREVIEWS].objects.link(preview)
+    utils.set_common_props(preview, "card_preview", curve_obj.get("hair_region", ""), scene)
+    preview.color = curve_obj.color
+    preview["hair_source_curve"] = curve_obj.name
+    preview["hair_card_width_root"] = scene.hair_card_width_root
+    preview["hair_card_width_mid"] = scene.hair_card_width_mid
+    preview["hair_card_width_tip"] = scene.hair_card_width_tip
+    preview["hair_card_samples"] = len(samples)
+    preview.show_in_front = curve_obj.show_in_front
+    curve_obj["hair_card_preview_object"] = preview.name
+    return preview
+
+
+def _apply_display_mode_to_curve(context, obj):
+    scene = context.scene
+    if obj.type != "CURVE" or obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
+        return False
+    mode = scene.hair_curve_display_mode
+    if mode == "CURVE":
+        obj.data.bevel_depth = 0.0
+        obj.data.bevel_object = None
+        obj.data.taper_object = None
+        _set_card_preview_visible(obj, False)
+    elif mode == "SOLID":
+        obj.data.bevel_object = None
+        obj.data.bevel_depth = _fallback_curve_bevel(scene, obj)
+        if scene.hair_use_shared_taper:
+            _apply_taper_to_curve_obj(context, obj)
+        else:
+            obj.data.taper_object = None
+            obj["hair_use_taper"] = False
+            obj["hair_taper_object"] = ""
+        _set_card_preview_visible(obj, False)
+        _ensure_curve_visible_geometry(context, obj)
+    elif mode == "CARD":
+        obj.data.bevel_depth = 0.0
+        obj.data.bevel_object = None
+        obj.data.taper_object = None
+        _create_or_update_card_preview(context, obj)
+        _set_card_preview_visible(obj, True)
+    obj["hair_curve_display_mode"] = mode
+    return True
+
+
+def _apply_display_mode_to_curves(context, selected_only):
+    curves = _generated_curves_from_context(context, selected_only)
+    for obj in curves:
+        _apply_display_mode_to_curve(context, obj)
+    return curves
 
 
 def _apply_shape_to_curves(context, selected_only):
@@ -1564,6 +1719,51 @@ class HGD_OT_create_flat_mesh_from_all_curves(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_export_flat_mesh_from_selected_curves(bpy.types.Operator):
+    bl_idname = "hgd.export_flat_mesh_from_selected_curves"
+    bl_label = "選択Curveを扁平メッシュ出力"
+    bl_description = "選択中の通常Curveまたはツイスト表示Curveから、元Curveを残したまま出力用の扁平Meshを生成します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        meshes = _create_flat_meshes_from_curves(context, True)
+        if not meshes:
+            self.report({'WARNING'}, "扁平メッシュ出力できる表示用Curveが選択されていません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"選択Curve {len(meshes)} 本を扁平メッシュ出力しました。元Curveは残しています。")
+        return {'FINISHED'}
+
+
+class HGD_OT_apply_display_mode_to_selected_curves(bpy.types.Operator):
+    bl_idname = "hgd.apply_display_mode_to_selected_curves"
+    bl_label = "選択Curveへ表示モードを適用"
+    bl_description = "選択中の通常Curveまたはツイスト表示Curveへ現在の表示モードを適用します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _apply_display_mode_to_curves(context, True)
+        if not curves:
+            self.report({'WARNING'}, "表示モードを適用できるCurveが選択されていません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"選択Curve {len(curves)} 本へ表示モード「{context.scene.hair_curve_display_mode}」を適用しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_apply_display_mode_to_all_curves(bpy.types.Operator):
+    bl_idname = "hgd.apply_display_mode_to_all_curves"
+    bl_label = "全Curveへ表示モードを適用"
+    bl_description = "すべての通常Curveとツイスト表示Curveへ現在の表示モードを適用します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _apply_display_mode_to_curves(context, False)
+        if not curves:
+            self.report({'WARNING'}, "表示モードを適用できるCurveが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"全Curve {len(curves)} 本へ表示モード「{context.scene.hair_curve_display_mode}」を適用しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_load_selected_curve_settings(bpy.types.Operator):
     bl_idname = "hgd.load_selected_curve_settings"
     bl_label = "選択カーブ設定を読み込み"
@@ -1577,8 +1777,13 @@ class HGD_OT_load_selected_curve_settings(bpy.types.Operator):
             return {'CANCELLED'}
         obj = context.object if context.object in curves else curves[0]
         scene = context.scene
+        length = float(obj.get("hair_curve_length", scene.hair_curve_length))
+        scene.hair_curve_length_cm = m_to_cm(length)
         scene.hair_curve_bevel_depth = float(obj.get("hair_curve_bevel_depth", obj.data.bevel_depth))
         scene.hair_curve_resolution = int(obj.get("hair_curve_resolution", obj.data.resolution_u))
+        scene.hair_curve_root_jitter_cm = m_to_cm(obj.get("hair_curve_root_jitter", cm_to_m(scene.hair_curve_root_jitter_cm)))
+        scene.hair_curve_mid_jitter_cm = m_to_cm(obj.get("hair_curve_mid_jitter", cm_to_m(scene.hair_curve_mid_jitter_cm)))
+        scene.hair_curve_tip_jitter_cm = m_to_cm(obj.get("hair_curve_tip_jitter", cm_to_m(scene.hair_curve_tip_jitter_cm)))
         scene.hair_curve_profile_type = "ROUND"
         scene.hair_use_shared_taper = bool(obj.get("hair_use_taper", scene.hair_use_shared_taper))
         scene.hair_taper_root_radius = float(obj.get("hair_taper_root_radius", scene.hair_taper_root_radius))
@@ -1984,6 +2189,9 @@ classes = (
     HGD_OT_clear_profile_from_all_curves,
     HGD_OT_create_flat_mesh_from_selected_curves,
     HGD_OT_create_flat_mesh_from_all_curves,
+    HGD_OT_export_flat_mesh_from_selected_curves,
+    HGD_OT_apply_display_mode_to_selected_curves,
+    HGD_OT_apply_display_mode_to_all_curves,
     HGD_OT_load_selected_curve_settings,
     HGD_OT_apply_shape_to_selected_curves,
     HGD_OT_apply_shape_to_all_curves,

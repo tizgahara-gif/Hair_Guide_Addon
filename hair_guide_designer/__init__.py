@@ -8,17 +8,45 @@ bl_info = {
     "category": "Object",
 }
 
+import bpy
+from bpy.props import IntProperty
+
 from . import properties, operators, ui
 
 modules = (properties, operators, ui)
 
+
+class HGD_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or "hair_guide_designer"
+
+    point_count_top: IntProperty(name="Top", default=5, min=0, max=5, description="頭頂部の配置点数")
+    point_count_front: IntProperty(name="Front", default=7, min=0, max=64, description="前髪領域の配置点数")
+    point_count_side_l: IntProperty(name="Side_L", default=4, min=0, max=64, description="左側頭部の配置点数")
+    point_count_side_r: IntProperty(name="Side_R", default=4, min=0, max=64, description="右側頭部の配置点数")
+    point_count_back_upper: IntProperty(name="Back_Upper", default=6, min=0, max=64, description="後頭部上層の配置点数")
+    point_count_back_middle: IntProperty(name="Back_Middle", default=6, min=0, max=64, description="後頭部中層の配置点数")
+    point_count_nape: IntProperty(name="Nape", default=5, min=0, max=64, description="襟足の配置点数")
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="配置点数")
+        layout.prop(self, "point_count_top")
+        layout.prop(self, "point_count_front")
+        layout.prop(self, "point_count_side_l")
+        layout.prop(self, "point_count_side_r")
+        layout.prop(self, "point_count_back_upper")
+        layout.prop(self, "point_count_back_middle")
+        layout.prop(self, "point_count_nape")
+
 def register():
+    bpy.utils.register_class(HGD_AddonPreferences)
     for module in modules:
         module.register()
 
 def unregister():
     for module in reversed(modules):
         module.unregister()
+    bpy.utils.unregister_class(HGD_AddonPreferences)
 
 if __name__ == "__main__":
     register()

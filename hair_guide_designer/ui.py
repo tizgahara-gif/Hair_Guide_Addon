@@ -205,9 +205,9 @@ class HGD_PT_placement(HGD_PT_base):
         layout.prop(scene, 'hair_seed')
         layout.prop(scene, 'hair_density')
         layout.prop(scene, 'hair_symmetry_bias')
-        layout.prop(scene, 'hair_height_variation')
-        layout.prop(scene, 'hair_width_variation')
-        layout.prop(scene, 'hair_depth_variation')
+        layout.prop(scene, 'hair_height_variation_cm')
+        layout.prop(scene, 'hair_width_variation_cm')
+        layout.prop(scene, 'hair_depth_variation_cm')
         layout.prop(scene, 'hair_size_variation')
         layout.prop(scene, 'hair_length_variation')
 
@@ -233,17 +233,49 @@ class HGD_PT_curve_strand(HGD_PT_base):
         layout.operator('hgd.create_curve_from_points', text='カーブ毛束を生成', icon='OUTLINER_OB_CURVE')
 
 
-class HGD_PT_curve_variation(HGD_PT_base):
-    bl_label = 'カーブ形状設定'
+class HGD_PT_display_mode(HGD_PT_base):
+    bl_label = '表示モード'
     bl_order = 6
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
         if scene.hair_show_inline_help:
-            layout.label(text="Curveの太さ・断面・先細り・個体差をまとめて設定します。", icon='OUTLINER_OB_CURVE')
+            layout.label(text="Curveを維持したまま表示方式を切り替えます。", icon='OUTLINER_OB_CURVE')
+            layout.label(text="CARDは制作中の非破壊プレビューです。")
+        layout.prop(scene, 'hair_curve_display_mode')
+        row = layout.row(align=True)
+        row.operator('hgd.apply_display_mode_to_selected_curves', text='選択Curveへ表示モード適用')
+        row.operator('hgd.apply_display_mode_to_all_curves', text='全Curveへ表示モード適用')
+        icon = 'TRIA_DOWN' if scene.hair_show_display_mode_settings else 'TRIA_RIGHT'
+        layout.prop(scene, 'hair_show_display_mode_settings', text='表示モード詳細', icon=icon, toggle=True)
+        if scene.hair_show_display_mode_settings:
+            box = layout.box()
+            box.label(text='CARDプレビュー', icon='MESH_PLANE')
+            box.prop(scene, 'hair_card_width_root')
+            box.prop(scene, 'hair_card_width_mid')
+            box.prop(scene, 'hair_card_width_tip')
+            box.prop(scene, 'hair_card_samples')
+            box.prop(scene, 'hair_card_auto_apply_to_new_curves')
+            if scene.hair_show_inline_help:
+                box.label(text='元Curveは削除されず、CardPreviewsに一時Meshを作ります。')
+
+
+class HGD_PT_curve_variation(HGD_PT_base):
+    bl_label = 'カーブ形状設定'
+    bl_order = 7
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        if scene.hair_show_inline_help:
+            layout.label(text="Curveの太さ・先細り・個体差をまとめて設定します。", icon='OUTLINER_OB_CURVE')
         layout.label(text="基本", icon='CHECKMARK')
-        layout.prop(scene, 'hair_curve_length')
+        layout.prop(scene, 'hair_curve_length_cm')
+        layout.prop(scene, 'hair_use_placement_recommended_length')
+        if scene.hair_show_inline_help:
+            layout.label(text="OFFの場合、現在の毛束長さ(cm)で生成します。")
+            layout.label(text="ONの場合、配置点保存の推奨長さを使います。")
         layout.prop(scene, 'hair_curve_bevel_depth', text='カーブの太さ')
         layout.prop(scene, 'hair_curve_resolution')
         layout.prop(scene, 'hair_curve_segment_count')
@@ -267,9 +299,9 @@ class HGD_PT_curve_variation(HGD_PT_base):
         if scene.hair_show_inline_help:
             layout.label(text="ONにすると、同じ配置点から複数生成してもブレが変わります。")
             layout.label(text="再現性が必要な場合はOFFにしてください。")
-        layout.prop(scene, 'hair_curve_root_jitter')
-        layout.prop(scene, 'hair_curve_mid_jitter')
-        layout.prop(scene, 'hair_curve_tip_jitter')
+        layout.prop(scene, 'hair_curve_root_jitter_cm')
+        layout.prop(scene, 'hair_curve_mid_jitter_cm')
+        layout.prop(scene, 'hair_curve_tip_jitter_cm')
         layout.prop(scene, 'hair_curve_length_variation')
         twist_box = layout.box()
         twist_icon = 'TRIA_DOWN' if scene.hair_show_twist_settings else 'TRIA_RIGHT'
@@ -301,28 +333,26 @@ class HGD_PT_curve_variation(HGD_PT_base):
 
 
 class HGD_PT_flat_mesh(HGD_PT_base):
-    bl_label = '扁平メッシュ化'
-    bl_order = 7
+    bl_label = 'メッシュ出力'
+    bl_order = 8
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
         if scene.hair_show_inline_help:
-            layout.label(text="選択した表示用Curveから、", icon='MESH_DATA')
-            layout.label(text="別オブジェクトとして扁平メッシュを生成します。")
-            layout.label(text="元Curveは削除されません。")
+            layout.label(text="選択した表示用Curveから出力用Meshを生成します。", icon='MESH_DATA')
+            layout.label(text="CARDプレビューとは別機能です。元Curveは削除されません。")
         layout.prop(scene, 'hair_flat_mesh_width')
         layout.prop(scene, 'hair_flat_mesh_thickness')
         layout.prop(scene, 'hair_flat_mesh_samples')
         layout.prop(scene, 'hair_flat_mesh_ring_segments')
-        layout.prop(scene, 'hair_flat_mesh_solidify_thickness')
         layout.prop(scene, 'hair_flat_mesh_add_subdivision')
-        layout.operator('hgd.create_flat_mesh_from_selected_curves', text='選択Curveを扁平メッシュ化', icon='MESH_DATA')
+        layout.operator('hgd.export_flat_mesh_from_selected_curves', text='選択Curveを扁平メッシュ出力', icon='MESH_DATA')
 
 
 class HGD_PT_curve_apply_update(HGD_PT_base):
     bl_label = 'カーブ適用・更新'
-    bl_order = 8
+    bl_order = 9
 
     def draw(self, context):
         layout = self.layout
@@ -515,6 +545,7 @@ classes = (
     HGD_PT_regions,
     HGD_PT_placement,
     HGD_PT_curve_strand,
+    HGD_PT_display_mode,
     HGD_PT_curve_variation,
     HGD_PT_flat_mesh,
     HGD_PT_curve_apply_update,
