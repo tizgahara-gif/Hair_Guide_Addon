@@ -19,12 +19,18 @@ def _draw_status(layout, scene):
     basic_count = len([obj for obj in guide_objects if obj.get("hair_guide_level") == "basic"])
     detailed_count = len([obj for obj in guide_objects if obj.get("hair_guide_level") == "detailed"])
     point_count = _count_generated("placement_point")
-    curve_count = _count_generated("curve")
+    display_curve_count = _count_generated("curve") + _count_generated("twist_strand")
+    twist_control_count = _count_generated("twist_control")
+    card_preview_count = _count_generated("card_preview")
+    output_mesh_count = _count_generated("card_mesh") + _count_generated("flat_mesh")
     warning_count = _count_generated("warning")
     box.label(text=f"基本ガイド: {basic_count}", icon='OUTLINER_OB_CURVE')
     box.label(text=f"詳細ガイド: {detailed_count}", icon='OUTLINER_OB_CURVE')
     box.label(text=f"配置点: {point_count}", icon='MESH_UVSPHERE')
-    box.label(text=f"カーブ: {curve_count}", icon='OUTLINER_OB_CURVE')
+    box.label(text=f"表示カーブ: {display_curve_count}", icon='OUTLINER_OB_CURVE')
+    box.label(text=f"制御カーブ: {twist_control_count}", icon='CURVE_BEZCURVE')
+    box.label(text=f"CARDプレビュー: {card_preview_count}", icon='MESH_PLANE')
+    box.label(text=f"出力メッシュ: {output_mesh_count}", icon='MESH_DATA')
     box.label(text=f"警告: {scene.hair_warning_count or warning_count}", icon='ERROR' if (scene.hair_warning_count or warning_count) else 'CHECKMARK')
 
 
@@ -97,15 +103,13 @@ class HGD_PT_quick_start(HGD_PT_base):
         if scene.hair_show_inline_help:
             box = layout.box()
             box.label(text="作業手順", icon='INFO')
-            box.label(text="1. 頭部メッシュを選択")
-            box.label(text="2. 頭部として登録")
-            box.label(text="3. 基本ガイドを生成")
-            box.label(text="4. 必要なら基本ガイドを移動")
-            box.label(text="5. 配置点を生成/更新")
-            box.label(text="6. カーブ形状設定で太さ・断面を決める")
-            box.label(text="7. 配置点を選択してカーブ生成")
-            box.label(text="8. 必要ならカーブ適用・更新で反映")
-            box.label(text="9. 根元集中を確認")
+            box.label(text="1. 頭部登録")
+            box.label(text="2. 基本ガイド生成")
+            box.label(text="3. 配置点生成")
+            box.label(text="4. カーブ形状設定で長さ・太さ・テーパー設定")
+            box.label(text="5. 配置点から通常Curve/ツイストCurve生成")
+            box.label(text="6. 表示モードでCurve/Solid/CARD切替")
+            box.label(text="7. 必要ならCARD実体化または扁平メッシュ出力")
         _draw_status(layout, scene)
 
 
@@ -242,7 +246,7 @@ class HGD_PT_display_mode(HGD_PT_base):
         scene = context.scene
         if scene.hair_show_inline_help:
             layout.label(text="Curveを維持したまま表示方式を切り替えます。", icon='OUTLINER_OB_CURVE')
-            layout.label(text="CARDは制作中の非破壊プレビューです。")
+            layout.label(text="CARDは元Curve線 + Preview Mesh表示の制作中プレビューです。")
         layout.prop(scene, 'hair_curve_display_mode')
         row = layout.row(align=True)
         row.operator('hgd.apply_display_mode_to_selected_curves', text='選択Curveへ表示モード適用')
@@ -311,7 +315,7 @@ class HGD_PT_curve_variation(HGD_PT_base):
             twist_box.prop(scene, 'hair_twist_radius')
             twist_box.prop(scene, 'hair_twist_turns')
             twist_box.prop(scene, 'hair_twist_phase')
-            twist_box.prop(scene, 'hair_twist_bevel_depth')
+            twist_box.prop(scene, 'hair_twist_bevel_depth_cm')
             twist_box.prop(scene, 'hair_twist_resolution')
             twist_box.prop(scene, 'hair_twist_taper_strength')
             if scene.hair_show_inline_help:
