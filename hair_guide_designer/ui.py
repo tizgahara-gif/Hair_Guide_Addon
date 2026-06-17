@@ -252,9 +252,9 @@ class HGD_PT_display_mode(HGD_PT_base):
         if scene.hair_show_display_mode_settings:
             box = layout.box()
             box.label(text='CARDプレビュー', icon='MESH_PLANE')
-            box.prop(scene, 'hair_card_width_root')
-            box.prop(scene, 'hair_card_width_mid')
-            box.prop(scene, 'hair_card_width_tip')
+            box.prop(scene, 'hair_card_width_root_cm')
+            box.prop(scene, 'hair_card_width_mid_cm')
+            box.prop(scene, 'hair_card_width_tip_cm')
             box.prop(scene, 'hair_card_samples')
             box.prop(scene, 'hair_card_auto_apply_to_new_curves')
             if scene.hair_show_inline_help:
@@ -276,7 +276,7 @@ class HGD_PT_curve_variation(HGD_PT_base):
         if scene.hair_show_inline_help:
             layout.label(text="OFFの場合、現在の毛束長さ(cm)で生成します。")
             layout.label(text="ONの場合、配置点保存の推奨長さを使います。")
-        layout.prop(scene, 'hair_curve_bevel_depth', text='カーブの太さ')
+        layout.prop(scene, 'hair_curve_bevel_depth_cm')
         layout.prop(scene, 'hair_curve_resolution')
         layout.prop(scene, 'hair_curve_segment_count')
         layout.label(text="先細り", icon='OUTLINER_OB_CURVE')
@@ -319,17 +319,6 @@ class HGD_PT_curve_variation(HGD_PT_base):
         else:
             twist_box.label(text="ツイスト詳細は非表示です。", icon='TRIA_RIGHT')
 
-        advanced_box = layout.box()
-        advanced_icon = 'TRIA_DOWN' if scene.hair_show_advanced_curve_settings else 'TRIA_RIGHT'
-        advanced_box.prop(scene, 'hair_show_advanced_curve_settings', text='詳細/互換設定', icon=advanced_icon, toggle=True)
-        if scene.hair_show_advanced_curve_settings:
-            advanced_box.prop(scene, 'hair_curve_root_radius')
-            advanced_box.prop(scene, 'hair_curve_tip_radius')
-            advanced_box.prop(scene, 'hair_curve_taper_strength')
-            if scene.hair_show_inline_help:
-                advanced_box.label(text="根元半径・毛先半径・先細り強度は将来用の保存値です。")
-        else:
-            advanced_box.label(text="詳細/互換設定は非表示です。", icon='TRIA_RIGHT')
 
 
 class HGD_PT_flat_mesh(HGD_PT_base):
@@ -342,12 +331,15 @@ class HGD_PT_flat_mesh(HGD_PT_base):
         if scene.hair_show_inline_help:
             layout.label(text="選択した表示用Curveから出力用Meshを生成します。", icon='MESH_DATA')
             layout.label(text="CARDプレビューとは別機能です。元Curveは削除されません。")
-        layout.prop(scene, 'hair_flat_mesh_width')
-        layout.prop(scene, 'hair_flat_mesh_thickness')
+        layout.prop(scene, 'hair_flat_mesh_width_cm')
+        layout.prop(scene, 'hair_flat_mesh_thickness_cm')
         layout.prop(scene, 'hair_flat_mesh_samples')
         layout.prop(scene, 'hair_flat_mesh_ring_segments')
         layout.prop(scene, 'hair_flat_mesh_add_subdivision')
         layout.operator('hgd.export_flat_mesh_from_selected_curves', text='選択Curveを扁平メッシュ出力', icon='MESH_DATA')
+        layout.separator()
+        layout.operator('hgd.convert_selected_card_preview_to_mesh', text='選択CurveのCARDプレビューを実体化', icon='MESH_PLANE')
+        layout.operator('hgd.convert_all_card_previews_to_mesh', text='全CARDプレビューを実体化', icon='MESH_GRID')
 
 
 class HGD_PT_curve_apply_update(HGD_PT_base):

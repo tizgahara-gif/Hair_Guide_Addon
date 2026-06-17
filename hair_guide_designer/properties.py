@@ -31,18 +31,18 @@ PROPERTY_NAMES = (
     "hair_height_variation", "hair_width_variation", "hair_depth_variation",
     "hair_height_variation_cm", "hair_width_variation_cm", "hair_depth_variation_cm",
     "hair_size_variation", "hair_length_variation", "hair_strand_type",
-    "hair_curve_length", "hair_curve_bevel_depth", "hair_curve_resolution",
+    "hair_curve_length", "hair_curve_bevel_depth", "hair_curve_bevel_depth_cm", "hair_curve_resolution",
     "hair_curve_length_cm", "hair_use_placement_recommended_length",
     "hair_curve_root_radius", "hair_curve_tip_radius", "hair_curve_taper_strength",
     "hair_curve_segment_count", "hair_curve_variation_enabled", "hair_curve_variation_seed",
     "hair_curve_variation_randomize_seed_per_generation",
     "hair_curve_root_jitter", "hair_curve_mid_jitter", "hair_curve_tip_jitter",
     "hair_curve_root_jitter_cm", "hair_curve_mid_jitter_cm", "hair_curve_tip_jitter_cm",
-    "hair_curve_length_variation", "hair_curve_display_mode", "hair_card_width_root",
-    "hair_card_width_mid", "hair_card_width_tip", "hair_card_samples",
+    "hair_curve_length_variation", "hair_curve_display_mode", "hair_card_width_root", "hair_card_width_root_cm",
+    "hair_card_width_mid", "hair_card_width_mid_cm", "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_samples",
     "hair_card_auto_apply_to_new_curves", "hair_show_display_mode_settings",
     "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
-    "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_thickness",
+    "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_width_cm", "hair_flat_mesh_thickness", "hair_flat_mesh_thickness_cm",
     "hair_flat_mesh_samples", "hair_flat_mesh_ring_segments", "hair_flat_mesh_solidify_thickness",
     "hair_flat_mesh_add_subdivision", "hair_warning_count", "hair_root_cluster_threshold",
     "hair_batch_curve_length", "hair_batch_curve_bevel_depth", "hair_batch_curve_resolution",
@@ -114,56 +114,56 @@ def register():
 
     scene.hair_height_variation = FloatProperty(
         name="高さの揺らぎ",
-        default=0.04,
+        default=0.0,
         min=0.0,
         max=1.0,
         description="上下方向のランダム変化。",
     )
     scene.hair_width_variation = FloatProperty(
         name="幅の揺らぎ",
-        default=0.035,
+        default=0.0,
         min=0.0,
         max=1.0,
         description="左右方向のランダム変化。",
     )
     scene.hair_depth_variation = FloatProperty(
         name="奥行きの揺らぎ",
-        default=0.04,
+        default=0.0,
         min=0.0,
         max=1.0,
         description="前後方向のランダム変化。",
     )
     scene.hair_height_variation_cm = FloatProperty(
         name="高さの揺らぎ(cm)",
-        default=4.0,
+        default=0.0,
         min=0.0,
         max=100.0,
         description="配置点生成時の上下方向のランダム変化をcm単位で指定します。内部ではmへ変換します。",
     )
     scene.hair_width_variation_cm = FloatProperty(
         name="幅の揺らぎ(cm)",
-        default=3.5,
+        default=0.0,
         min=0.0,
         max=100.0,
         description="配置点生成時の左右方向のランダム変化をcm単位で指定します。内部ではmへ変換します。",
     )
     scene.hair_depth_variation_cm = FloatProperty(
         name="奥行きの揺らぎ(cm)",
-        default=4.0,
+        default=0.0,
         min=0.0,
         max=100.0,
         description="配置点生成時の前後方向のランダム変化をcm単位で指定します。内部ではmへ変換します。",
     )
     scene.hair_size_variation = FloatProperty(
         name="サイズの揺らぎ",
-        default=0.25,
+        default=0.0,
         min=0.0,
         max=2.0,
         description="配置点の表示サイズと推奨毛束サイズのランダム変化。",
     )
     scene.hair_length_variation = FloatProperty(
         name="長さの揺らぎ",
-        default=0.25,
+        default=0.0,
         min=0.0,
         max=2.0,
         description="推奨毛束長さのランダム変化。",
@@ -201,11 +201,19 @@ def register():
         description="有効にすると配置点生成時に保存された推奨長さを使います。無効の場合は現在の毛束長さ(cm)を使います。",
     )
     scene.hair_curve_bevel_depth = FloatProperty(
-        name="太さ",
+        name="太さ(m・互換用)",
         default=0.012,
         min=0.0,
         precision=4,
-        description="生成するカーブ毛束の表示上の太さ。",
+        description="互換用のm単位カーブ太さです。通常UIではcm単位を使用します。",
+    )
+    scene.hair_curve_bevel_depth_cm = FloatProperty(
+        name="カーブの太さ(cm)",
+        default=1.2,
+        min=0.0,
+        max=200.0,
+        precision=2,
+        description="生成するカーブ毛束の表示上の太さをcm単位で指定します。内部ではmへ変換します。",
     )
     scene.hair_curve_resolution = IntProperty(
         name="解像度",
@@ -321,29 +329,23 @@ def register():
         description="Curveを維持したまま表示方式を切り替えます。",
     )
     scene.hair_card_width_root = FloatProperty(
-        name="CARD Root幅",
-        default=0.08,
-        min=0.001,
-        max=2.0,
-        precision=4,
-        description="CARDプレビューの根元側の幅です。",
+        name="CARD Root幅(m・互換用)",
+        default=0.08, min=0.001, max=2.0, precision=4,
+        description="互換用のm単位CARD幅です。通常UIではcm単位を使用します。",
     )
+    scene.hair_card_width_root_cm = FloatProperty(name="CARD Root幅(cm)", default=8.0, min=0.0, max=200.0, precision=2, description="CARDプレビュー根元側の幅をcm単位で指定します。内部ではmへ変換します。")
     scene.hair_card_width_mid = FloatProperty(
-        name="CARD Mid幅",
-        default=0.06,
-        min=0.001,
-        max=2.0,
-        precision=4,
-        description="CARDプレビューの中間の幅です。",
+        name="CARD Mid幅(m・互換用)",
+        default=0.06, min=0.001, max=2.0, precision=4,
+        description="互換用のm単位CARD幅です。通常UIではcm単位を使用します。",
     )
+    scene.hair_card_width_mid_cm = FloatProperty(name="CARD Mid幅(cm)", default=6.0, min=0.0, max=200.0, precision=2, description="CARDプレビュー中間の幅をcm単位で指定します。内部ではmへ変換します。")
     scene.hair_card_width_tip = FloatProperty(
-        name="CARD Tip幅",
-        default=0.005,
-        min=0.0,
-        max=2.0,
-        precision=4,
-        description="CARDプレビューの毛先側の幅です。",
+        name="CARD Tip幅(m・互換用)",
+        default=0.005, min=0.0, max=2.0, precision=4,
+        description="互換用のm単位CARD幅です。通常UIではcm単位を使用します。",
     )
+    scene.hair_card_width_tip_cm = FloatProperty(name="CARD Tip幅(cm)", default=0.5, min=0.0, max=200.0, precision=2, description="CARDプレビュー毛先側の幅をcm単位で指定します。内部ではmへ変換します。")
     scene.hair_card_samples = IntProperty(
         name="CARDサンプル数",
         default=24,
@@ -389,21 +391,17 @@ def register():
         description="扁平断面Profile Objectの厚みです。",
     )
     scene.hair_flat_mesh_width = FloatProperty(
-        name="扁平メッシュ幅",
-        default=0.08,
-        min=0.001,
-        max=2.0,
-        precision=4,
-        description="扁平メッシュ生成時の楕円断面の横幅です。",
+        name="扁平メッシュ幅(m・互換用)",
+        default=0.08, min=0.001, max=2.0, precision=4,
+        description="互換用のm単位幅です。通常UIではcm単位を使用します。",
     )
+    scene.hair_flat_mesh_width_cm = FloatProperty(name="扁平メッシュ幅(cm)", default=8.0, min=0.0, max=200.0, precision=2, description="扁平メッシュ生成時の楕円断面の横幅をcm単位で指定します。内部ではmへ変換します。")
     scene.hair_flat_mesh_thickness = FloatProperty(
-        name="扁平メッシュ厚み",
-        default=0.012,
-        min=0.001,
-        max=2.0,
-        precision=4,
-        description="扁平メッシュ生成時の楕円断面の厚みです。",
+        name="扁平メッシュ厚み(m・互換用)",
+        default=0.012, min=0.001, max=2.0, precision=4,
+        description="互換用のm単位厚みです。通常UIではcm単位を使用します。",
     )
+    scene.hair_flat_mesh_thickness_cm = FloatProperty(name="扁平メッシュ厚み(cm)", default=1.2, min=0.0, max=200.0, precision=2, description="扁平メッシュ生成時の楕円断面の厚みをcm単位で指定します。内部ではmへ変換します。")
     scene.hair_flat_mesh_samples = IntProperty(
         name="サンプル数",
         default=24,

@@ -12,7 +12,8 @@ TAPER_OBJECTS = "TaperObjects"
 PROFILE_OBJECTS = "ProfileObjects"
 FLAT_MESHES = "FlatMeshes"
 CARD_PREVIEWS = "CardPreviews"
-SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS, TAPER_OBJECTS, CARD_PREVIEWS, FLAT_MESHES)
+CARD_MESHES = "CardMeshes"
+SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS, TAPER_OBJECTS, CARD_PREVIEWS, CARD_MESHES, FLAT_MESHES)
 CURVE_REGION_COLLECTIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape", "Twist")
 REGION_NAMES = ("Top", "Front", "Side", "Back_Upper", "Back_Middle", "Nape")
 POINT_REGIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape")
@@ -326,7 +327,7 @@ def make_curve(name, points, collection, region, guide_type, scene, bevel=None):
     curve = bpy.data.curves.new(unique_name(name), "CURVE")
     curve.dimensions = "3D"
     curve.resolution_u = getattr(scene, "hair_curve_resolution", 12)
-    curve.bevel_depth = getattr(scene, "hair_curve_bevel_depth", 0.012) if bevel is None else bevel
+    curve.bevel_depth = getattr(scene, "hair_curve_bevel_depth_cm", 1.2) * 0.01 if bevel is None else bevel
     spl = curve.splines.new("BEZIER")
     spl.bezier_points.add(len(points) - 1)
     for point, co in zip(spl.bezier_points, points):
