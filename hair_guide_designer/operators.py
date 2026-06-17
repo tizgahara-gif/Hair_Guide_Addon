@@ -541,13 +541,13 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                     curve_points.append(root + direction * length * t + sag)
                 prefix = self._prefix(region)
                 curves = utils.get_curve_collection(region, "curve")
-                obj = utils.make_curve(utils.unique_numbered(prefix), curve_points, curves, region, "curve", scene, bevel=scene.hair_curve_bevel_depth)
+                obj = utils.make_curve(utils.unique_numbered(prefix), curve_points, curves, region, "curve", scene, bevel=cm_to_m(scene.hair_curve_bevel_depth_cm))
                 obj["hair_root_id"] = point.name
                 obj["hair_source_point"] = point.name
                 obj["hair_curve_length"] = length
                 obj["hair_curve_length_cm"] = m_to_cm(length)
                 obj["hair_use_placement_recommended_length"] = scene.hair_use_placement_recommended_length
-                obj["hair_curve_bevel_depth"] = scene.hair_curve_bevel_depth
+                obj["hair_curve_bevel_depth"] = cm_to_m(scene.hair_curve_bevel_depth_cm)
                 obj["hair_curve_resolution"] = scene.hair_curve_resolution
                 obj["hair_mirror_pair"] = ""
                 obj["hair_mirror_source"] = ""
@@ -1093,7 +1093,7 @@ def _fallback_curve_bevel(scene, obj):
     guide_type = obj.get("hair_guide_type")
     if guide_type == "twist_strand":
         return scene.hair_twist_bevel_depth
-    return scene.hair_curve_bevel_depth
+    return cm_to_m(scene.hair_curve_bevel_depth_cm)
 
 
 def _fallback_to_round_profile(scene, obj):
@@ -1329,8 +1329,8 @@ def _create_flat_mesh_from_curve(context, curve_obj):
         return None
 
     ring_count = max(int(scene.hair_flat_mesh_ring_segments), 4)
-    half_width = scene.hair_flat_mesh_width * 0.5
-    half_thickness = scene.hair_flat_mesh_thickness * 0.5
+    half_width = cm_to_m(scene.hair_flat_mesh_width_cm) * 0.5
+    half_thickness = cm_to_m(scene.hair_flat_mesh_thickness_cm) * 0.5
     vertices = []
     faces = []
     normal_hint = mathutils.Vector((0.0, 0.0, 1.0))
@@ -1370,8 +1370,10 @@ def _create_flat_mesh_from_curve(context, curve_obj):
     obj.color = curve_obj.color
     utils.set_common_props(obj, "flat_mesh", curve_obj.get("hair_region", ""), scene)
     obj["hair_source_curve"] = curve_obj.name
-    obj["hair_flat_mesh_width"] = scene.hair_flat_mesh_width
-    obj["hair_flat_mesh_thickness"] = scene.hair_flat_mesh_thickness
+    obj["hair_flat_mesh_width"] = cm_to_m(scene.hair_flat_mesh_width_cm)
+    obj["hair_flat_mesh_width_cm"] = scene.hair_flat_mesh_width_cm
+    obj["hair_flat_mesh_thickness"] = cm_to_m(scene.hair_flat_mesh_thickness_cm)
+    obj["hair_flat_mesh_thickness_cm"] = scene.hair_flat_mesh_thickness_cm
     obj["hair_flat_mesh_samples"] = len(samples)
     obj["hair_flat_mesh_ring_segments"] = ring_count
     if scene.hair_flat_mesh_add_subdivision:
@@ -1412,8 +1414,8 @@ def _set_card_preview_visible(curve_obj, visible):
 
 def _card_width(scene, t):
     if t <= 0.5:
-        return scene.hair_card_width_root + (scene.hair_card_width_mid - scene.hair_card_width_root) * (t / 0.5)
-    return scene.hair_card_width_mid + (scene.hair_card_width_tip - scene.hair_card_width_mid) * ((t - 0.5) / 0.5)
+        return cm_to_m(scene.hair_card_width_root_cm + (scene.hair_card_width_mid_cm - scene.hair_card_width_root_cm) * (t / 0.5))
+    return cm_to_m(scene.hair_card_width_mid_cm + (scene.hair_card_width_tip_cm - scene.hair_card_width_mid_cm) * ((t - 0.5) / 0.5))
 
 
 def _create_or_update_card_preview(context, curve_obj):
@@ -1452,14 +1454,88 @@ def _create_or_update_card_preview(context, curve_obj):
     utils.set_common_props(preview, "card_preview", curve_obj.get("hair_region", ""), scene)
     preview.color = curve_obj.color
     preview["hair_source_curve"] = curve_obj.name
-    preview["hair_card_width_root"] = scene.hair_card_width_root
-    preview["hair_card_width_mid"] = scene.hair_card_width_mid
-    preview["hair_card_width_tip"] = scene.hair_card_width_tip
+    preview["hair_card_width_root"] = cm_to_m(scene.hair_card_width_root_cm)
+    preview["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
+    preview["hair_card_width_mid"] = cm_to_m(scene.hair_card_width_mid_cm)
+    preview["hair_card_width_mid_cm"] = scene.hair_card_width_mid_cm
+    preview["hair_card_width_tip"] = cm_to_m(scene.hair_card_width_tip_cm)
+    preview["hair_card_width_tip_cm"] = scene.hair_card_width_tip_cm
     preview["hair_card_samples"] = len(samples)
     preview.show_in_front = curve_obj.show_in_front
     curve_obj["hair_card_preview_object"] = preview.name
     return preview
 
+
+
+def _card_mesh_name_for_curve(curve_obj):
+    base = f"HGD_CARD_MESH_{curve_obj.name.split('.')[0]}"
+    return utils.unique_name(base) if bpy.data.objects.get(base) else base
+
+
+def _curve_has_card_preview(curve_obj):
+    if curve_obj.get("hair_curve_display_mode") == "CARD":
+        return True
+    preview_name = curve_obj.get("hair_card_preview_object", "")
+    if preview_name and bpy.data.objects.get(preview_name):
+        return True
+    return any(obj.get("hair_source_curve") == curve_obj.name for obj in utils.generated_objects("card_preview"))
+
+
+def _create_card_mesh_from_curve(context, curve_obj):
+    scene = context.scene
+    if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
+        return None
+    if not _curve_has_card_preview(curve_obj):
+        return None
+    samples = utils.sample_curve_world_points_evaluated(curve_obj, max(scene.hair_card_samples, 2))
+    if len(samples) < 2:
+        return None
+    vertices = []
+    faces = []
+    normal_hint = mathutils.Vector((0.0, 0.0, 1.0))
+    for index, sample in enumerate(samples):
+        prev_point = samples[max(index - 1, 0)]
+        next_point = samples[min(index + 1, len(samples) - 1)]
+        tangent = next_point - prev_point
+        if tangent.length < 0.0001:
+            tangent = mathutils.Vector((0.0, 0.0, 1.0))
+        tangent.normalize()
+        side, normal_hint = _curve_frame(tangent, normal_hint)
+        t = index / max(len(samples) - 1, 1)
+        half_width = max(_card_width(scene, t), 0.0) * 0.5
+        vertices.append(tuple(sample - side * half_width))
+        vertices.append(tuple(sample + side * half_width))
+    for index in range(len(samples) - 1):
+        base = index * 2
+        faces.append((base, base + 1, base + 3, base + 2))
+    _, collections = utils.ensure_system()
+    name = _card_mesh_name_for_curve(curve_obj)
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    collections[utils.CARD_MESHES].objects.link(obj)
+    utils.set_common_props(obj, "card_mesh", curve_obj.get("hair_region", ""), scene)
+    obj.color = curve_obj.color
+    obj["hair_source_curve"] = curve_obj.name
+    obj["hair_region"] = curve_obj.get("hair_region", "")
+    obj["hair_card_width_root"] = cm_to_m(scene.hair_card_width_root_cm)
+    obj["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
+    obj["hair_card_width_mid"] = cm_to_m(scene.hair_card_width_mid_cm)
+    obj["hair_card_width_mid_cm"] = scene.hair_card_width_mid_cm
+    obj["hair_card_width_tip"] = cm_to_m(scene.hair_card_width_tip_cm)
+    obj["hair_card_width_tip_cm"] = scene.hair_card_width_tip_cm
+    obj["hair_card_samples"] = len(samples)
+    return obj
+
+
+def _create_card_meshes_from_curves(context, selected_only):
+    created = []
+    for curve_obj in _generated_curves_from_context(context, selected_only):
+        mesh_obj = _create_card_mesh_from_curve(context, curve_obj)
+        if mesh_obj:
+            created.append(mesh_obj)
+    return created
 
 def _apply_display_mode_to_curve(context, obj):
     scene = context.scene
@@ -1507,10 +1583,10 @@ def _apply_shape_to_curves(context, selected_only):
     taper_obj = _create_or_update_default_taper(context)[0] if scene.hair_use_shared_taper else None
     for obj in curves:
         obj.data.resolution_u = scene.hair_curve_resolution
-        obj.data.bevel_depth = scene.hair_curve_bevel_depth
+        obj.data.bevel_depth = cm_to_m(scene.hair_curve_bevel_depth_cm)
         obj.data.bevel_object = None
         obj["hair_curve_profile_type"] = "ROUND"
-        obj["hair_curve_bevel_depth"] = scene.hair_curve_bevel_depth
+        obj["hair_curve_bevel_depth"] = cm_to_m(scene.hair_curve_bevel_depth_cm)
         obj["hair_curve_resolution"] = scene.hair_curve_resolution
         if scene.hair_use_shared_taper:
             _apply_taper_to_curve_obj(context, obj, taper_obj)
@@ -1519,8 +1595,8 @@ def _apply_shape_to_curves(context, selected_only):
             obj["hair_use_taper"] = False
             obj["hair_taper_object"] = ""
         obj.data.resolution_u = scene.hair_curve_resolution
-        obj.data.bevel_depth = scene.hair_curve_bevel_depth
-        obj["hair_curve_bevel_depth"] = scene.hair_curve_bevel_depth
+        obj.data.bevel_depth = cm_to_m(scene.hair_curve_bevel_depth_cm)
+        obj["hair_curve_bevel_depth"] = cm_to_m(scene.hair_curve_bevel_depth_cm)
         obj["hair_curve_resolution"] = scene.hair_curve_resolution
     return curves
 
@@ -1734,6 +1810,36 @@ class HGD_OT_export_flat_mesh_from_selected_curves(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_convert_selected_card_preview_to_mesh(bpy.types.Operator):
+    bl_idname = "hgd.convert_selected_card_preview_to_mesh"
+    bl_label = "選択CurveのCARDプレビューを実体化"
+    bl_description = "選択中のCARDプレビュー対象Curveから、元Curveとプレビューを残したまま実体Meshを生成します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        meshes = _create_card_meshes_from_curves(context, True)
+        if not meshes:
+            self.report({'WARNING'}, "実体化できるCARDプレビュー付きCurveが選択されていません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"選択CurveのCARDプレビューを{len(meshes)}個実体化しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_convert_all_card_previews_to_mesh(bpy.types.Operator):
+    bl_idname = "hgd.convert_all_card_previews_to_mesh"
+    bl_label = "全CARDプレビューを実体化"
+    bl_description = "すべてのCARDプレビュー対象Curveから、元Curveとプレビューを残したまま実体Meshを生成します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        meshes = _create_card_meshes_from_curves(context, False)
+        if not meshes:
+            self.report({'WARNING'}, "実体化できるCARDプレビュー付きCurveが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"CARDプレビューを{len(meshes)}個実体化しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_apply_display_mode_to_selected_curves(bpy.types.Operator):
     bl_idname = "hgd.apply_display_mode_to_selected_curves"
     bl_label = "選択Curveへ表示モードを適用"
@@ -1779,6 +1885,7 @@ class HGD_OT_load_selected_curve_settings(bpy.types.Operator):
         scene = context.scene
         length = float(obj.get("hair_curve_length", scene.hair_curve_length))
         scene.hair_curve_length_cm = m_to_cm(length)
+        scene.hair_curve_bevel_depth_cm = m_to_cm(float(obj.get("hair_curve_bevel_depth", obj.data.bevel_depth)))
         scene.hair_curve_bevel_depth = float(obj.get("hair_curve_bevel_depth", obj.data.bevel_depth))
         scene.hair_curve_resolution = int(obj.get("hair_curve_resolution", obj.data.resolution_u))
         scene.hair_curve_root_jitter_cm = m_to_cm(obj.get("hair_curve_root_jitter", cm_to_m(scene.hair_curve_root_jitter_cm)))
@@ -2190,6 +2297,8 @@ classes = (
     HGD_OT_create_flat_mesh_from_selected_curves,
     HGD_OT_create_flat_mesh_from_all_curves,
     HGD_OT_export_flat_mesh_from_selected_curves,
+    HGD_OT_convert_selected_card_preview_to_mesh,
+    HGD_OT_convert_all_card_previews_to_mesh,
     HGD_OT_apply_display_mode_to_selected_curves,
     HGD_OT_apply_display_mode_to_all_curves,
     HGD_OT_load_selected_curve_settings,
