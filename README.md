@@ -95,6 +95,10 @@ HAIR_GUIDE_Center
 
 **基本ガイドを生成** は、上記6本の基本ガイドを作成します。既存の基本ガイドがある場合は基本ガイドだけを削除して作り直し、配置点、カーブ、警告、頭部メッシュは削除しません。
 
+基本ガイドの初期位置は頭部Bounding Boxを基準にします。`HAIR_GUIDE_Hairline` は額前面側、`HAIR_GUIDE_BackVolume` と `HAIR_GUIDE_Nape` は後頭部・首側の外側へ余裕を持って生成し、頭部メッシュへ埋まりにくい位置から調整を始められるようにしています。`HAIR_GUIDE_SideBoundary_L/R` はFrontとBackを端から端まで長く横断する線ではなく、Front HairlineとBack Volumeの間をつなぐ短めの補助ガイドとして生成します。
+
+基本ガイド生成後は、Object Modeで各ガイドを髪型に合わせて手動調整してから **配置点を生成/更新** を実行してください。配置点生成は調整後の `HAIR_GUIDE_SideBoundary_L/R` を含む基本ガイド位置を参照します。
+
 ### 領域表示
 
 髪の領域を表示・非表示します。

@@ -102,15 +102,22 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
             hairline_z = min_v.z + size.z * 0.66
             back_volume_z = min_v.z + size.z * 0.58
             nape_z = min_v.z + size.z * 0.18
-            front_y = min_v.y - offset
-            back_y = max_v.y + offset
+            front_out = min_v.y - max(scene.hair_guide_offset, size.y * 0.08)
+            back_out = max_v.y + max(scene.hair_guide_offset, size.y * 0.08)
+
+            hairline_points = utils.make_arc_points(center, rx * 0.72, ry * 0.55, hairline_z, 3.6, 5.8, 5)
+            for point in hairline_points:
+                point.y = min(point.y, front_out)
+            back_points = utils.make_arc_points(center, rx * 0.78, ry * 0.72, back_volume_z, 0.15, 3.0, 5)
+            for point in back_points:
+                point.y = max(point.y, back_out)
 
             guide_specs = [
-                ("HAIR_GUIDE_Hairline", utils.make_arc_points(center, rx * 0.72, ry * 0.55, hairline_z, 3.6, 5.8, 5), "Front"),
-                ("HAIR_GUIDE_SideBoundary_L", [mathutils.Vector((center.x - rx, front_y, hairline_z)), mathutils.Vector((center.x - rx, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x - rx * 0.7, back_y, back_volume_z))], "Side"),
-                ("HAIR_GUIDE_SideBoundary_R", [mathutils.Vector((center.x + rx, front_y, hairline_z)), mathutils.Vector((center.x + rx, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x + rx * 0.7, back_y, back_volume_z))], "Side"),
-                ("HAIR_GUIDE_BackVolume", utils.make_arc_points(center, rx * 0.78, ry * 0.72, back_volume_z, 0.15, 3.0, 5), "Back_Middle"),
-                ("HAIR_GUIDE_Nape", [mathutils.Vector((center.x - rx * 0.45, back_y, nape_z)), mathutils.Vector((center.x, back_y + offset, nape_z - size.z * 0.03)), mathutils.Vector((center.x + rx * 0.45, back_y, nape_z))], "Nape"),
+                ("HAIR_GUIDE_Hairline", hairline_points, "Front"),
+                ("HAIR_GUIDE_SideBoundary_L", [mathutils.Vector((center.x - rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x - rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x - rx * 0.82, back_out - size.y * 0.16, back_volume_z + size.z * 0.02))], "Side"),
+                ("HAIR_GUIDE_SideBoundary_R", [mathutils.Vector((center.x + rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x + rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x + rx * 0.82, back_out - size.y * 0.16, back_volume_z + size.z * 0.02))], "Side"),
+                ("HAIR_GUIDE_BackVolume", back_points, "Back_Middle"),
+                ("HAIR_GUIDE_Nape", [mathutils.Vector((center.x - rx * 0.35, back_out, nape_z)), mathutils.Vector((center.x, back_out + size.y * 0.02, nape_z - size.z * 0.03)), mathutils.Vector((center.x + rx * 0.35, back_out, nape_z))], "Nape"),
                 ("HAIR_GUIDE_Center", [mathutils.Vector((center.x, center.y, top)), mathutils.Vector((center.x, center.y, nape_z))], "Back_Middle"),
             ]
             for name, points, region in guide_specs:
