@@ -125,8 +125,8 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
 
 class HGD_OT_create_detailed_guides(bpy.types.Operator):
     bl_idname = "hgd.create_detailed_guides"
-    bl_label = "詳細ガイドを追加"
-    bl_description = "頭頂、ハチ、耳周り、後頭部などの詳細参照線を追加します"
+    bl_label = "未登録詳細ガイド"
+    bl_description = "未登録の補助参照線生成オペレーターです"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2338,7 +2338,6 @@ class HGD_OT_mirror_side_r_to_l(bpy.types.Operator):
 classes = (
     HGD_OT_set_target_head,
     HGD_OT_create_hair_guides,
-    HGD_OT_create_detailed_guides,
     HGD_OT_delete_hair_guides,
     HGD_OT_show_hide_guides,
     HGD_OT_region_visibility,

@@ -17,7 +17,6 @@ def _draw_status(layout, scene):
         box.label(text="先に頭部メッシュを選択してください。")
     guide_objects = [obj for obj in utils.generated_objects() if obj.get("hair_guide_type") in {"guide", "region"}]
     basic_count = len([obj for obj in guide_objects if obj.get("hair_guide_level") == "basic"])
-    detailed_count = len([obj for obj in guide_objects if obj.get("hair_guide_level") == "detailed"])
     point_count = _count_generated("placement_point")
     display_curve_count = _count_generated("curve") + _count_generated("twist_strand")
     twist_control_count = _count_generated("twist_control")
@@ -25,7 +24,6 @@ def _draw_status(layout, scene):
     output_mesh_count = _count_generated("card_mesh") + _count_generated("flat_mesh")
     warning_count = _count_generated("warning")
     box.label(text=f"基本ガイド: {basic_count}", icon='OUTLINER_OB_CURVE')
-    box.label(text=f"詳細ガイド: {detailed_count}", icon='OUTLINER_OB_CURVE')
     box.label(text=f"配置点: {point_count}", icon='MESH_UVSPHERE')
     box.label(text=f"表示カーブ: {display_curve_count}", icon='OUTLINER_OB_CURVE')
     box.label(text=f"制御カーブ: {twist_control_count}", icon='CURVE_BEZCURVE')
@@ -104,7 +102,7 @@ class HGD_PT_quick_start(HGD_PT_base):
             box = layout.box()
             box.label(text="作業手順", icon='INFO')
             box.label(text="1. 頭部登録")
-            box.label(text="2. 基本ガイド生成")
+            box.label(text="2. 基本ガイドを生成")
             box.label(text="3. 配置点生成")
             box.label(text="4. カーブ形状設定で長さ・太さ・テーパー設定")
             box.label(text="5. 配置点から通常Curve/ツイストCurve生成")
@@ -150,10 +148,8 @@ class HGD_PT_guide_lines(HGD_PT_base):
         op = row.operator('hgd.show_hide_guides', text='ガイド非表示', icon='HIDE_ON')
         op.hide = True
         layout.operator('hgd.create_hair_guides', text='基本ガイドを生成', icon='OUTLINER_OB_CURVE')
-        layout.operator('hgd.create_hair_guides', text='基本ガイドを再生成', icon='OUTLINER_OB_CURVE')
-        layout.operator('hgd.create_detailed_guides', text='詳細ガイドを追加', icon='OUTLINER_OB_CURVE')
         if scene.hair_show_inline_help:
-            layout.label(text="基本ガイドのみ生成します。再実行しても基本のみ更新します。")
+            layout.label(text="基本ガイドのみ生成します。")
         layout.operator('hgd.delete_hair_guides', text='ガイド削除', icon='TRASH')
         if scene.hair_show_inline_help:
             layout.label(text="生成されたガイドのみ削除します。")
@@ -510,7 +506,7 @@ class HGD_PT_help(HGD_PT_base):
         box.label(text="・Unity設定 / PhysBone設定")
         box = layout.box()
         box.label(text="推奨手順", icon='CHECKMARK')
-        box.label(text="1. 基本ガイド生成")
+        box.label(text="1. 基本ガイドを生成")
         box.label(text="2. 配置点生成")
         box.label(text="3. 必要なら配置点調整")
         box.label(text="4. カーブ毛束生成")
