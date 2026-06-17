@@ -969,7 +969,7 @@ def _create_or_replace_twist_strand(context, control_obj):
         control_obj.get("hair_region", ""),
         "twist_strand",
         scene,
-        bevel=scene.hair_twist_bevel_depth,
+        bevel=cm_to_m(scene.hair_twist_bevel_depth_cm),
     )
     obj.data.resolution_u = scene.hair_twist_resolution
     obj["hair_source_point"] = control_obj.get("hair_source_point", "")
@@ -979,7 +979,8 @@ def _create_or_replace_twist_strand(context, control_obj):
     obj["hair_twist_radius"] = scene.hair_twist_radius
     obj["hair_twist_turns"] = scene.hair_twist_turns
     obj["hair_twist_phase"] = scene.hair_twist_phase
-    obj["hair_twist_bevel_depth"] = scene.hair_twist_bevel_depth
+    obj["hair_twist_bevel_depth"] = cm_to_m(scene.hair_twist_bevel_depth_cm)
+    obj["hair_twist_bevel_depth_cm"] = scene.hair_twist_bevel_depth_cm
     obj["hair_twist_resolution"] = scene.hair_twist_resolution
     obj["hair_twist_taper_strength"] = scene.hair_twist_taper_strength
     taper_obj = None
@@ -989,7 +990,7 @@ def _create_or_replace_twist_strand(context, control_obj):
     obj["hair_curve_profile_type"] = "ROUND"
     if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
         _apply_taper_to_curve_obj(context, obj, taper_obj)
-    obj.data.bevel_depth = scene.hair_twist_bevel_depth
+    obj.data.bevel_depth = cm_to_m(scene.hair_twist_bevel_depth_cm)
     _ensure_curve_visible_geometry(context, obj)
     if scene.hair_card_auto_apply_to_new_curves:
         _apply_display_mode_to_curve(context, obj)
@@ -1092,7 +1093,7 @@ TAPER_PRESET_LABELS = {
 def _fallback_curve_bevel(scene, obj):
     guide_type = obj.get("hair_guide_type")
     if guide_type == "twist_strand":
-        return scene.hair_twist_bevel_depth
+        return cm_to_m(getattr(scene, "hair_twist_bevel_depth_cm", m_to_cm(getattr(scene, "hair_twist_bevel_depth", 0.02))))
     return cm_to_m(scene.hair_curve_bevel_depth_cm)
 
 
@@ -1485,8 +1486,6 @@ def _create_card_mesh_from_curve(context, curve_obj):
     scene = context.scene
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return None
-    if not _curve_has_card_preview(curve_obj):
-        return None
     samples = utils.sample_curve_world_points_evaluated(curve_obj, max(scene.hair_card_samples, 2))
     if len(samples) < 2:
         return None
@@ -1548,6 +1547,7 @@ def _apply_display_mode_to_curve(context, obj):
         obj.data.taper_object = None
         _set_card_preview_visible(obj, False)
     elif mode == "SOLID":
+        obj.display_type = 'TEXTURED'
         obj.data.bevel_object = None
         obj.data.bevel_depth = _fallback_curve_bevel(scene, obj)
         if scene.hair_use_shared_taper:
@@ -1559,6 +1559,8 @@ def _apply_display_mode_to_curve(context, obj):
         _set_card_preview_visible(obj, False)
         _ensure_curve_visible_geometry(context, obj)
     elif mode == "CARD":
+        obj.hide_viewport = False
+        obj.display_type = 'WIRE'
         obj.data.bevel_depth = 0.0
         obj.data.bevel_object = None
         obj.data.taper_object = None
@@ -1813,30 +1815,30 @@ class HGD_OT_export_flat_mesh_from_selected_curves(bpy.types.Operator):
 class HGD_OT_convert_selected_card_preview_to_mesh(bpy.types.Operator):
     bl_idname = "hgd.convert_selected_card_preview_to_mesh"
     bl_label = "選択CurveのCARDプレビューを実体化"
-    bl_description = "選択中のCARDプレビュー対象Curveから、元Curveとプレビューを残したまま実体Meshを生成します"
+    bl_description = "選択中の通常Curve/ツイスト表示Curveから、元Curveを残したままCARD実体Meshを生成します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         meshes = _create_card_meshes_from_curves(context, True)
         if not meshes:
-            self.report({'WARNING'}, "実体化できるCARDプレビュー付きCurveが選択されていません。")
+            self.report({'WARNING'}, "実体化できる通常Curve/ツイスト表示Curveが選択されていません。")
             return {'CANCELLED'}
-        self.report({'INFO'}, f"選択CurveのCARDプレビューを{len(meshes)}個実体化しました。")
+        self.report({'INFO'}, f"選択CurveをCARD Meshとして{len(meshes)}個実体化しました。")
         return {'FINISHED'}
 
 
 class HGD_OT_convert_all_card_previews_to_mesh(bpy.types.Operator):
     bl_idname = "hgd.convert_all_card_previews_to_mesh"
     bl_label = "全CARDプレビューを実体化"
-    bl_description = "すべてのCARDプレビュー対象Curveから、元Curveとプレビューを残したまま実体Meshを生成します"
+    bl_description = "すべての通常Curve/ツイスト表示Curveから、元Curveを残したままCARD実体Meshを生成します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         meshes = _create_card_meshes_from_curves(context, False)
         if not meshes:
-            self.report({'WARNING'}, "実体化できるCARDプレビュー付きCurveが見つかりません。")
+            self.report({'WARNING'}, "実体化できる通常Curve/ツイスト表示Curveが見つかりません。")
             return {'CANCELLED'}
-        self.report({'INFO'}, f"CARDプレビューを{len(meshes)}個実体化しました。")
+        self.report({'INFO'}, f"CurveをCARD Meshとして{len(meshes)}個実体化しました。")
         return {'FINISHED'}
 
 
@@ -2289,11 +2291,6 @@ classes = (
     HGD_OT_apply_taper_to_all_curves,
     HGD_OT_clear_taper_from_selected_curves,
     HGD_OT_clear_taper_from_all_curves,
-    HGD_OT_create_or_update_flat_profile,
-    HGD_OT_apply_profile_to_selected_curves,
-    HGD_OT_apply_profile_to_all_curves,
-    HGD_OT_clear_profile_from_selected_curves,
-    HGD_OT_clear_profile_from_all_curves,
     HGD_OT_create_flat_mesh_from_selected_curves,
     HGD_OT_create_flat_mesh_from_all_curves,
     HGD_OT_export_flat_mesh_from_selected_curves,

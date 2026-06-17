@@ -52,7 +52,7 @@ PROPERTY_NAMES = (
     "hair_taper_mid_radius", "hair_taper_tip_radius", "hair_taper_bevel_depth",
     "hair_taper_resolution", "hair_auto_apply_taper_to_new_curves",
     "hair_strand_generation_type", "hair_twist_segments", "hair_twist_radius", "hair_twist_turns",
-    "hair_twist_phase", "hair_twist_bevel_depth", "hair_twist_resolution",
+    "hair_twist_phase", "hair_twist_bevel_depth", "hair_twist_bevel_depth_cm", "hair_twist_resolution",
     "hair_twist_taper_strength",
     "hair_show_twist_settings", "hair_show_advanced_curve_settings",
     "hair_show_guides_in_front", "hair_show_inline_help",
@@ -586,12 +586,20 @@ def register():
         description="ツイストの開始角度をラジアンで調整します。",
     )
     scene.hair_twist_bevel_depth = FloatProperty(
-        name="表示太さ",
+        name="表示太さ(m・互換用)",
         default=0.02,
         min=0.0,
         max=1.0,
         precision=4,
-        description="ツイスト表示カーブの太さ。",
+        description="互換用のツイスト表示カーブの太さ。UIではcm入力を使用します。",
+    )
+    scene.hair_twist_bevel_depth_cm = FloatProperty(
+        name="ツイスト表示太さ(cm)",
+        default=2.0,
+        min=0.0,
+        max=100.0,
+        precision=2,
+        description="ツイスト表示カーブの太さをcm単位で指定します。内部ではmへ変換します。",
     )
     scene.hair_twist_resolution = IntProperty(
         name="解像度",
