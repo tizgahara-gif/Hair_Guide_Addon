@@ -346,10 +346,12 @@ class HGD_PT_display_mode(HGD_PT_base):
         if scene.hair_show_inline_help:
             layout.label(text="Curveを維持したまま表示方式を切り替えます。", icon='OUTLINER_OB_CURVE')
             layout.label(text="CARDは元Curve線 + Preview Mesh表示の制作中プレビューです。")
+            layout.label(text="CARDプレビューは表示確認用です。編集する場合は元Curveを選択してください。")
         layout.prop(scene, 'hair_curve_display_mode')
         row = layout.row(align=True)
         row.operator('hgd.apply_display_mode_to_selected_curves', text='選択Curveへ表示モード適用')
         row.operator('hgd.apply_display_mode_to_all_curves', text='全Curveへ表示モード適用')
+        layout.operator('hgd.lock_card_previews', text='CARDプレビューを選択不可にする', icon='LOCKED')
         icon = 'TRIA_DOWN' if scene.hair_show_display_mode_settings else 'TRIA_RIGHT'
         layout.prop(scene, 'hair_show_display_mode_settings', text='表示モード詳細', icon=icon, toggle=True)
         if scene.hair_show_display_mode_settings:
@@ -366,6 +368,7 @@ class HGD_PT_display_mode(HGD_PT_base):
             box.prop(scene, 'hair_card_auto_apply_to_new_curves')
             if scene.hair_show_inline_help:
                 box.label(text='元Curveは削除されず、CardPreviewsに一時Meshを作ります。')
+                box.label(text='通常は生成時に自動で選択不可になります。既存データ修復時だけロックボタンを使ってください。')
 
 
 class HGD_PT_curve_variation(HGD_PT_base):

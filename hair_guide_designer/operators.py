@@ -41,7 +41,7 @@ def _apply_work_mode_lock_to_object(context, obj):
         return
     _save_prev_hide_select(obj)
     obj.hide_select = not _is_work_mode_lock_editable(obj)
-    if obj.get("hair_guide_type") == "twist_strand":
+    if obj.get("hair_guide_type") in {"twist_strand", "card_preview"}:
         obj.hide_select = True
 
 
@@ -1708,7 +1708,10 @@ def _create_or_update_card_preview(context, curve_obj):
     collections[utils.CARD_PREVIEWS].objects.link(preview)
     utils.set_common_props(preview, "card_preview", curve_obj.get("hair_region", ""), scene)
     preview.color = curve_obj.color
+    preview.hide_select = True
     preview["hair_source_curve"] = curve_obj.name
+    preview["hair_locked_preview"] = True
+    preview["hair_editable"] = False
     preview["hair_card_width_root"] = cm_to_m(scene.hair_card_width_root_cm)
     preview["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
     preview["hair_card_width_mid"] = cm_to_m(scene.hair_card_width_mid_cm)
@@ -1824,7 +1827,10 @@ def _apply_display_mode_to_curve(context, obj):
         obj.data.bevel_depth = 0.0
         obj.data.bevel_object = None
         obj.data.taper_object = None
-        _create_or_update_card_preview(context, obj)
+        preview = _create_or_update_card_preview(context, obj)
+        if preview:
+            preview.hide_select = True
+            preview["hair_locked_preview"] = True
         _set_card_preview_visible(obj, True)
     obj["hair_curve_display_mode"] = mode
     return True
@@ -2262,6 +2268,26 @@ class HGD_OT_lock_twist_visual_curves(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_lock_card_previews(bpy.types.Operator):
+    bl_idname = "hgd.lock_card_previews"
+    bl_label = "CARDプレビューを選択不可にする"
+    bl_description = "既存のCARDプレビューを表示確認用として選択不可にし、元Curveを編集対象にします"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        locked = 0
+        for obj in utils.generated_objects("card_preview"):
+            obj.hide_select = True
+            obj["hair_locked_preview"] = True
+            obj["hair_editable"] = False
+            locked += 1
+        if locked == 0:
+            self.report({'WARNING'}, "CARDプレビューが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"CARDプレビュー {locked} 個を選択不可にしました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_update_selected_twists(bpy.types.Operator):
     bl_idname = "hgd.update_selected_twists"
     bl_label = "選択ツイストを更新"
@@ -2664,6 +2690,7 @@ classes = (
     HGD_OT_clear_shape_from_selected_curves,
     HGD_OT_clear_shape_from_all_curves,
     HGD_OT_lock_twist_visual_curves,
+    HGD_OT_lock_card_previews,
     HGD_OT_update_selected_twists,
     HGD_OT_update_all_twists,
     HGD_OT_apply_curve_batch_settings,
