@@ -42,7 +42,7 @@ PROPERTY_NAMES = (
     "hair_curve_length_variation", "hair_curve_display_mode", "hair_card_width_root", "hair_card_width_root_cm",
     "hair_card_width_mid", "hair_card_width_mid_cm", "hair_card_width_tip", "hair_card_width_tip_cm",
     "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
-    "hair_card_auto_apply_to_new_curves", "hair_show_display_mode_settings",
+    "hair_card_auto_apply_to_new_curves", "hair_card_auto_update_preview", "hair_show_display_mode_settings",
     "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_width_cm", "hair_flat_mesh_thickness", "hair_flat_mesh_thickness_cm",
     "hair_flat_mesh_samples", "hair_flat_mesh_ring_segments", "hair_flat_mesh_solidify_thickness",
@@ -401,6 +401,11 @@ def register():
         name="新規Curveへ自動適用",
         default=True,
         description="新規作成した通常Curveとツイスト表示Curveへ現在の表示モードを自動適用します。",
+    )
+    scene.hair_card_auto_update_preview = BoolProperty(
+        name="Curve編集時にCARD自動更新",
+        default=True,
+        description="元Curveの形状変更を検出し、CARDプレビューを自動再生成します。",
     )
     scene.hair_show_display_mode_settings = BoolProperty(
         name="表示モード詳細を表示",
