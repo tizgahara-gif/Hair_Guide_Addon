@@ -587,12 +587,12 @@ class HGD_PT_display_cleanup(HGD_PT_base):
         if scene.hair_show_inline_help:
             layout.label(text="HairGuideSystem内の生成物のみ削除します。", icon='INFO')
         layout.operator('hgd.clear_warnings', icon='TRASH')
+        layout.operator('hgd.clear_card_previews', text='CARDプレビューを削除', icon='TRASH')
         layout.operator('hgd.clear_placement_points', icon='TRASH')
         layout.operator('hgd.delete_hair_guides', text='ガイド削除', icon='TRASH')
-        layout.operator('hgd.clear_legacy_braid_objects', text='旧三つ編み生成物を削除', icon='TRASH')
         if scene.hair_show_inline_help:
             layout.label(text="すべて削除はガイド、配置点、")
-            layout.label(text="カーブ、警告、テーパーを削除します。")
+            layout.label(text="カーブ、警告、テーパー、CARDを削除します。")
             layout.label(text="頭部メッシュは削除されません。")
         layout.operator('hgd.clear_all_generated', icon='TRASH')
 
