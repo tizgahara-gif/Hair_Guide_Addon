@@ -960,10 +960,31 @@ class HGD_OT_clear_warnings(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_clear_card_previews(bpy.types.Operator):
+    bl_idname = "hgd.clear_card_previews"
+    bl_label = "CARDプレビューを削除"
+    bl_description = "CARDプレビューだけを削除します。元Curve、CARD Mesh、Flat Meshは削除しません"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        if not bpy.data.collections.get(utils.ROOT):
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
+            return {'CANCELLED'}
+        count = utils.clear_collection_objects(utils.CARD_PREVIEWS, "card_preview")
+        for obj in utils.generated_objects():
+            if obj.get("hair_card_preview_object"):
+                obj["hair_card_preview_object"] = ""
+        if count == 0:
+            self.report({'WARNING'}, "削除するCARDプレビューがありません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"CARDプレビューを{count}個削除しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_clear_all_generated(bpy.types.Operator):
     bl_idname = "hgd.clear_all_generated"
     bl_label = "生成物をすべて削除"
-    bl_description = "HairGuideSystem内のガイド、領域線、配置点、カーブ、警告、テーパーを削除します"
+    bl_description = "HairGuideSystem内のガイド、領域線、配置点、カーブ、警告、テーパー、CARD、Flat Meshを削除します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -971,7 +992,7 @@ class HGD_OT_clear_all_generated(bpy.types.Operator):
             self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
         total = 0
-        for collection_name in (utils.GUIDES, utils.REGIONS, utils.PLACEMENT_POINTS, utils.CURVES, utils.WARNINGS, utils.TAPER_OBJECTS, utils.PROFILE_OBJECTS, utils.FLAT_MESHES):
+        for collection_name in (utils.GUIDES, utils.REGIONS, utils.PLACEMENT_POINTS, utils.CURVES, utils.WARNINGS, utils.TAPER_OBJECTS, utils.PROFILE_OBJECTS, utils.CARD_PREVIEWS, utils.CARD_MESHES, utils.FLAT_MESHES):
             total += utils.clear_collection_objects(collection_name)
         context.scene.hair_warning_count = 0
         _apply_work_mode_lock_to_all_objects(context)
@@ -2415,6 +2436,7 @@ class HGD_OT_update_curve_roots_from_points(bpy.types.Operator):
 
 
 class HGD_OT_clear_legacy_braid_objects(bpy.types.Operator):
+    # 旧データ掃除用・通常UI非表示。classesには含めず通常運用では未登録にする。
     bl_idname = "hgd.clear_legacy_braid_objects"
     bl_label = "旧三つ編み生成物を削除"
     bl_description = "旧バージョンで生成された三つ編み制御カーブと表示用カーブだけを削除します"
@@ -2694,6 +2716,7 @@ classes = (
     HGD_OT_create_curve_from_points,
     HGD_OT_check_root_clustering,
     HGD_OT_clear_warnings,
+    HGD_OT_clear_card_previews,
     HGD_OT_clear_all_generated,
     HGD_OT_toggle_in_front_generated_helpers,
     HGD_OT_organize_curves_by_region,
@@ -2722,7 +2745,6 @@ classes = (
     HGD_OT_update_all_twists,
     HGD_OT_apply_curve_batch_settings,
     HGD_OT_update_curve_roots_from_points,
-    HGD_OT_clear_legacy_braid_objects,
     HGD_OT_mirror_side_guide_l_to_r,
     HGD_OT_mirror_side_guide_r_to_l,
     HGD_OT_mirror_side,
