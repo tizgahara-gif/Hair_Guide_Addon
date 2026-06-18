@@ -150,6 +150,8 @@ Nape: 5
 Total: 37
 ```
 
+Back_Middleは後頭部の大毛束配置ガイドとして、初期生成時に左右ペアを優先します。標準の6点では `POINT_Back_Middle_01_L` / `POINT_Back_Middle_01_R` のように3組の左右ペアを作り、各ペアはhead centerを基準にX座標だけを反転し、Y/Z座標と推奨長さを共有します。BackVolumeガイドを参照する場合も片側のサンプル位置からX反転で反対側を作るため、Seed Randomizeや配置点の揺らぎを使っても左右ペア関係は維持されます。
+
 配置点数は `Edit > Preferences > Add-ons > Hair Guide Designer` から領域別に変更できます。Topは0〜5、その他の領域は0〜64の範囲で指定できます。0にした領域は配置点を生成しません。
 
 Top / 頭頂部は、髪全体の流れの起点です。前髪・側頭部・後頭部へ毛流れを分けるために使います。
