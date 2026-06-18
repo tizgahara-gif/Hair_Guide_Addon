@@ -104,7 +104,7 @@ class HGD_PT_quick_start(HGD_PT_base):
             box.label(text="1. 頭部登録")
             box.label(text="2. 基本ガイドを生成")
             box.label(text="3. 配置点生成")
-            box.label(text="4. カーブ形状設定で長さ・太さ・テーパー設定")
+            box.label(text="4. カーブ形状で長さ・太さ・テーパー・個体差設定")
             box.label(text="5. 配置点から通常Curve/ツイストCurve生成")
             box.label(text="6. 表示モードでCurve/Solid/CARD切替")
             box.label(text="7. 必要ならCARD実体化または扁平メッシュ出力")
@@ -225,7 +225,7 @@ class HGD_PT_curve_strand(HGD_PT_base):
         scene = context.scene
         if scene.hair_show_inline_help:
             layout.label(text="配置点から新しいCurveを作成します。", icon='OUTLINER_OB_CURVE')
-            layout.label(text="形状や太さは「カーブ形状設定」で管理します。")
+            layout.label(text="形状や太さは「カーブ形状」で管理します。")
         if _count_generated("placement_point") == 0:
             layout.label(text="配置点がありません。", icon='ERROR')
         if _count_generated("curve") == 0:
@@ -270,47 +270,58 @@ class HGD_PT_display_mode(HGD_PT_base):
 
 
 class HGD_PT_curve_variation(HGD_PT_base):
-    bl_label = 'カーブ形状設定'
+    bl_label = 'カーブ形状'
     bl_order = 7
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
         if scene.hair_show_inline_help:
-            layout.label(text="Curveの太さ・先細り・個体差をまとめて設定します。", icon='OUTLINER_OB_CURVE')
-        layout.label(text="基本", icon='CHECKMARK')
-        layout.prop(scene, 'hair_curve_length_cm')
-        layout.prop(scene, 'hair_use_placement_recommended_length')
+            layout.label(text="このPanelで、Curve生成時の長さ、太さ、先細り、個体差をまとめて管理します。", icon='OUTLINER_OB_CURVE')
+            layout.label(text="個体差は新規生成時にだけ反映されます。")
+            layout.label(text="既存Curveの太さやテーパー変更は形状適用ボタンを使ってください。")
+
+        box = layout.box()
+        box.label(text="カーブ基本", icon='CHECKMARK')
+        box.prop(scene, 'hair_curve_length_cm')
+        box.prop(scene, 'hair_use_placement_recommended_length')
+        box.prop(scene, 'hair_curve_bevel_depth_cm')
+        box.prop(scene, 'hair_curve_resolution')
+        box.prop(scene, 'hair_curve_segment_count')
+
+        box = layout.box()
+        box.label(text="テーパー", icon='OUTLINER_OB_CURVE')
+        box.prop(scene, 'hair_use_shared_taper')
+        box.prop(scene, 'hair_auto_apply_taper_to_new_curves')
+        box.prop(scene, 'hair_taper_preset')
+        box.operator('hgd.apply_taper_preset', icon='CHECKMARK')
+        box.prop(scene, 'hair_taper_root_radius', text='Root')
+        box.prop(scene, 'hair_taper_mid_radius', text='Mid')
+        box.prop(scene, 'hair_taper_tip_radius', text='Tip')
+
+        box = layout.box()
+        box.label(text="個体差", icon='INFO')
         if scene.hair_show_inline_help:
-            layout.label(text="OFFの場合、現在の毛束長さ(cm)で生成します。")
-            layout.label(text="ONの場合、配置点保存の推奨長さを使います。")
-        layout.prop(scene, 'hair_curve_bevel_depth_cm')
-        layout.prop(scene, 'hair_curve_resolution')
-        layout.prop(scene, 'hair_curve_segment_count')
-        layout.label(text="先細り", icon='OUTLINER_OB_CURVE')
-        if scene.hair_show_inline_help:
-            layout.label(text="毛先の太さを0にすると先端が尖ります。")
-        layout.prop(scene, 'hair_use_shared_taper')
-        layout.prop(scene, 'hair_auto_apply_taper_to_new_curves')
-        layout.prop(scene, 'hair_taper_preset')
-        layout.operator('hgd.apply_taper_preset', icon='CHECKMARK')
-        layout.prop(scene, 'hair_taper_root_radius')
-        layout.prop(scene, 'hair_taper_mid_radius')
-        layout.prop(scene, 'hair_taper_tip_radius')
-        layout.label(text="個体差", icon='INFO')
-        if scene.hair_show_inline_help:
-            layout.label(text="配置点は動かさず、生成されるCurveだけにブレを加えます。")
-            layout.label(text="同じ配置点から複数生成した場合も、Curve名を含めてブレを変えます。")
-        layout.prop(scene, 'hair_curve_variation_enabled')
-        layout.prop(scene, 'hair_curve_variation_seed')
-        layout.prop(scene, 'hair_curve_variation_randomize_seed_per_generation')
-        if scene.hair_show_inline_help:
-            layout.label(text="ONにすると、同じ配置点から複数生成してもブレが変わります。")
-            layout.label(text="再現性が必要な場合はOFFにしてください。")
-        layout.prop(scene, 'hair_curve_root_jitter_cm')
-        layout.prop(scene, 'hair_curve_mid_jitter_cm')
-        layout.prop(scene, 'hair_curve_tip_jitter_cm')
-        layout.prop(scene, 'hair_curve_length_variation')
+            box.label(text="個体差は新規生成時のブレ設定です。")
+            box.label(text="既存Curveへの形状適用では再ランダム化しません。")
+        box.prop(scene, 'hair_curve_variation_enabled')
+        box.prop(scene, 'hair_curve_variation_seed')
+        box.prop(scene, 'hair_curve_variation_randomize_seed_per_generation')
+        box.prop(scene, 'hair_curve_root_jitter_cm')
+        box.prop(scene, 'hair_curve_mid_jitter_cm')
+        box.prop(scene, 'hair_curve_tip_jitter_cm')
+        box.prop(scene, 'hair_curve_length_variation')
+
+        box = layout.box()
+        box.label(text="適用", icon='CHECKMARK')
+        row = box.row(align=True)
+        row.operator('hgd.apply_shape_to_selected_curves', text='選択Curveへ形状を適用')
+        row.operator('hgd.apply_shape_to_all_curves', text='全Curveへ形状を適用')
+        box.operator('hgd.load_selected_curve_settings', text='選択カーブ設定を読み込み', icon='CHECKMARK')
+        row = box.row(align=True)
+        row.operator('hgd.clear_shape_from_selected_curves', text='選択カーブの形状を解除')
+        row.operator('hgd.clear_shape_from_all_curves', text='全カーブの形状を解除')
+
         twist_box = layout.box()
         twist_icon = 'TRIA_DOWN' if scene.hair_show_twist_settings else 'TRIA_RIGHT'
         twist_box.prop(scene, 'hair_show_twist_settings', text='ツイスト設定', icon=twist_icon, toggle=True)
@@ -351,23 +362,15 @@ class HGD_PT_flat_mesh(HGD_PT_base):
 
 
 class HGD_PT_curve_apply_update(HGD_PT_base):
-    bl_label = 'カーブ適用・更新'
+    bl_label = 'カーブ更新'
     bl_order = 9
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
         if scene.hair_show_inline_help:
-            layout.label(text="現在の設定を既存Curveへ反映し、", icon='OUTLINER_OB_CURVE')
-            layout.label(text="制御Curve由来の表示Curveを更新します。")
-        layout.operator('hgd.load_selected_curve_settings', text='選択カーブ設定を読み込み', icon='CHECKMARK')
-        row = layout.row(align=True)
-        row.operator('hgd.apply_shape_to_selected_curves', text='選択カーブへ形状を適用')
-        row.operator('hgd.apply_shape_to_all_curves', text='全カーブへ形状を適用')
-        row = layout.row(align=True)
-        row.operator('hgd.clear_shape_from_selected_curves', text='選択カーブの形状を解除')
-        row.operator('hgd.clear_shape_from_all_curves', text='全カーブの形状を解除')
-        layout.separator()
+            layout.label(text="配置点や制御Curveを編集した後に、既存Curveを更新します。", icon='OUTLINER_OB_CURVE')
+            layout.label(text="ツイスト表示Curveは表示専用です。編集するのは制御Curveだけです。")
         if scene.hair_show_inline_help:
             layout.label(text="配置点を動かした後は根元更新を使います。", icon='INFO')
             layout.label(text="毛先位置を維持しない場合、形が崩れることがあります。")
@@ -536,6 +539,7 @@ class HGD_PT_help(HGD_PT_base):
         box.label(text="配置点は動かさず、生成カーブだけに")
         box.label(text="位置ブレと長さブレを加えます。")
         box.label(text="同じSeedなら再現しやすくなります。")
+        box.label(text="既存Curveへの形状適用では再ランダム化しません。")
         box = layout.box()
         box.label(text="配置点について", icon='MESH_UVSPHERE')
         box.label(text="現在の基本ガイド位置を参照します。")
