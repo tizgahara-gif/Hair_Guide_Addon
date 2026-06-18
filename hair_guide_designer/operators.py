@@ -767,6 +767,9 @@ def _variation_jitter_amount(scene, t):
 
 
 def _apply_curve_variation(obj, scene, source_name):
+    if not scene.hair_curve_variation_enabled:
+        return 1.0
+
     obj["hair_curve_variation_enabled"] = scene.hair_curve_variation_enabled
     obj["hair_curve_variation_seed"] = scene.hair_curve_variation_seed
     obj["hair_curve_root_jitter"] = cm_to_m(scene.hair_curve_root_jitter_cm)
@@ -778,7 +781,7 @@ def _apply_curve_variation(obj, scene, source_name):
     obj["hair_curve_length_variation"] = scene.hair_curve_length_variation
     obj["hair_curve_variation_randomized"] = scene.hair_curve_variation_randomize_seed_per_generation
     length_scale = 1.0
-    if not scene.hair_curve_variation_enabled or obj.get("hair_guide_type") not in {"curve", "twist_control"}:
+    if obj.get("hair_guide_type") not in {"curve", "twist_control"}:
         obj["hair_curve_variation_runtime_seed"] = 0
         obj["hair_curve_length_scale"] = length_scale
         return length_scale
@@ -790,8 +793,17 @@ def _apply_curve_variation(obj, scene, source_name):
     rng, runtime_seed = _stable_curve_variation_rng_for_obj(scene, obj, source_name)
     obj["hair_curve_variation_runtime_seed"] = runtime_seed
     side_multiplier = 1.35 if obj.get("hair_region", "") in {"Side_L", "Side_R"} else 1.0
-    length_var = max(scene.hair_curve_length_variation * side_multiplier, 0.0)
-    length_scale = rng.uniform(max(1.0 - length_var, 0.01), 1.0 + length_var)
+    length_variation = max(scene.hair_curve_length_variation, 0.0)
+    if length_variation <= 0.0:
+        length_scale = 1.0
+    else:
+        length_scale = rng.uniform(max(1.0 - length_variation, 0.01), 1.0 + length_variation)
+    base_length = float(obj.get("hair_curve_length", cm_to_m(scene.hair_curve_length_cm)))
+    final_length = base_length * length_scale
+    obj["hair_curve_base_length"] = base_length
+    obj["hair_curve_base_length_cm"] = m_to_cm(base_length)
+    obj["hair_curve_length"] = final_length
+    obj["hair_curve_length_cm"] = m_to_cm(final_length)
     root = spline.bezier_points[0].co.copy()
     for point in spline.bezier_points:
         point.co = root + (point.co - root) * length_scale

@@ -392,13 +392,15 @@ class HGD_PT_curve_variation(HGD_PT_base):
         if scene.hair_show_inline_help:
             box.label(text="個体差は新規生成時のブレ設定です。")
             box.label(text="既存Curveへの形状適用では再ランダム化しません。")
+            box.label(text="長さのブレ率が0なら毛束長さ(cm)がそのまま使われます。")
+            box.label(text="0.15なら約85%〜115%に変化します。")
         box.prop(scene, 'hair_curve_variation_enabled')
         box.prop(scene, 'hair_curve_variation_seed')
         box.prop(scene, 'hair_curve_variation_randomize_seed_per_generation')
         box.prop(scene, 'hair_curve_root_jitter_cm')
         box.prop(scene, 'hair_curve_mid_jitter_cm')
         box.prop(scene, 'hair_curve_tip_jitter_cm')
-        box.prop(scene, 'hair_curve_length_variation')
+        box.prop(scene, 'hair_curve_length_variation', text='長さのブレ率')
 
         box = layout.box()
         box.label(text="適用", icon='CHECKMARK')
