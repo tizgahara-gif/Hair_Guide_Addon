@@ -344,10 +344,18 @@ class HGD_PT_display_mode(HGD_PT_base):
             layout.label(text="CARDは元Curve線 + Preview Mesh表示の制作中プレビューです。")
             layout.label(text="CARDプレビューは表示確認用です。編集する場合は元Curveを選択してください。")
         layout.prop(scene, 'hair_curve_display_mode')
+        active = context.active_object
+        if active and active.get("hair_guide_type") == "card_preview":
+            box = layout.box()
+            box.label(text='CARDプレビューが選択されています。', icon='INFO')
+            box.label(text='編集する場合は元Curveを選択してください。')
+            box.operator('hgd.select_source_curve_from_card_preview', text='選択CARDの元Curveを選択', icon='RESTRICT_SELECT_OFF')
         row = layout.row(align=True)
         row.operator('hgd.apply_display_mode_to_selected_curves', text='選択Curveへ表示モード適用')
         row.operator('hgd.apply_display_mode_to_all_curves', text='全Curveへ表示モード適用')
-        layout.operator('hgd.lock_card_previews', text='CARDプレビューを選択不可にする', icon='LOCKED')
+        layout.operator('hgd.select_source_curve_from_card_preview', text='選択CARDの元Curveを選択', icon='RESTRICT_SELECT_OFF')
+        layout.operator('hgd.update_card_previews_from_curves', text='CARDプレビューを更新', icon='FILE_REFRESH')
+        layout.operator('hgd.lock_card_previews', text='CARDプレビューを選択可能にする', icon='RESTRICT_SELECT_OFF')
         icon = 'TRIA_DOWN' if scene.hair_show_display_mode_settings else 'TRIA_RIGHT'
         layout.prop(scene, 'hair_show_display_mode_settings', text='表示モード詳細', icon=icon, toggle=True)
         if scene.hair_show_display_mode_settings:
@@ -362,9 +370,13 @@ class HGD_PT_display_mode(HGD_PT_base):
                 box.prop(scene, 'hair_card_width_tip_cm')
             box.prop(scene, 'hair_card_samples')
             box.prop(scene, 'hair_card_auto_apply_to_new_curves')
+            box.prop(scene, 'hair_card_auto_update_preview')
+            box.operator('hgd.update_card_previews_from_curves', text='CARDプレビューを更新', icon='FILE_REFRESH')
+            box.operator('hgd.select_source_curve_from_card_preview', text='選択CARDの元Curveを選択', icon='RESTRICT_SELECT_OFF')
             if scene.hair_show_inline_help:
                 box.label(text='元Curveは削除されず、CardPreviewsに一時Meshを作ります。')
-                box.label(text='通常は生成時に自動で選択不可になります。既存データ修復時だけロックボタンを使ってください。')
+                box.label(text='CARDプレビューは選択できますが、編集対象は元Curveです。')
+                box.label(text='CARDを選んだ後、元Curveを選択すると編集対象へ移動できます。')
 
 
 class HGD_PT_curve_variation(HGD_PT_base):
