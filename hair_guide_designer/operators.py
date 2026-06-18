@@ -811,26 +811,15 @@ def _stable_curve_variation_rng_for_obj(scene, obj, source_name):
     return random.Random(runtime_seed), runtime_seed
 
 
-def _variation_jitter_amount(scene, t):
-    if t < 0.34:
-        return cm_to_m(scene.hair_curve_root_jitter_cm)
-    if t < 0.67:
-        return cm_to_m(scene.hair_curve_mid_jitter_cm)
-    return cm_to_m(scene.hair_curve_tip_jitter_cm)
-
-
 def _apply_curve_variation(obj, scene, source_name):
     if not scene.hair_curve_variation_enabled:
         return 1.0
 
     obj["hair_curve_variation_enabled"] = scene.hair_curve_variation_enabled
     obj["hair_curve_variation_seed"] = scene.hair_curve_variation_seed
-    obj["hair_curve_root_jitter"] = cm_to_m(scene.hair_curve_root_jitter_cm)
-    obj["hair_curve_mid_jitter"] = cm_to_m(scene.hair_curve_mid_jitter_cm)
-    obj["hair_curve_tip_jitter"] = cm_to_m(scene.hair_curve_tip_jitter_cm)
-    obj["hair_curve_root_jitter_cm"] = scene.hair_curve_root_jitter_cm
-    obj["hair_curve_mid_jitter_cm"] = scene.hair_curve_mid_jitter_cm
-    obj["hair_curve_tip_jitter_cm"] = scene.hair_curve_tip_jitter_cm
+    obj["hair_curve_root_jitter_ratio"] = scene.hair_curve_root_jitter_ratio
+    obj["hair_curve_mid_jitter_ratio"] = scene.hair_curve_mid_jitter_ratio
+    obj["hair_curve_tip_jitter_ratio"] = scene.hair_curve_tip_jitter_ratio
     obj["hair_curve_length_variation"] = scene.hair_curve_length_variation
     obj["hair_curve_variation_randomized"] = scene.hair_curve_variation_randomize_seed_per_generation
     length_scale = 1.0
@@ -862,14 +851,21 @@ def _apply_curve_variation(obj, scene, source_name):
         point.co = root + (point.co - root) * length_scale
         point.handle_left = root + (point.handle_left - root) * length_scale
         point.handle_right = root + (point.handle_right - root) * length_scale
+    root_jitter = base_length * scene.hair_curve_root_jitter_ratio
+    mid_jitter = base_length * scene.hair_curve_mid_jitter_ratio
+    tip_jitter = base_length * scene.hair_curve_tip_jitter_ratio
     point_count = len(spline.bezier_points)
     for index, point in enumerate(spline.bezier_points):
-        if index == 0:
-            continue
         t = index / max(point_count - 1, 1)
-        amount = _variation_jitter_amount(scene, t) * side_multiplier
-        if t < 0.34:
-            amount = min(amount, 0.04)
+        if t <= 0.5:
+            local_t = t / 0.5 if t > 0.0 else 0.0
+            amount = root_jitter + (mid_jitter - root_jitter) * local_t
+        else:
+            local_t = (t - 0.5) / 0.5
+            amount = mid_jitter + (tip_jitter - mid_jitter) * local_t
+        if index == 0:
+            amount = 0.0
+        amount *= side_multiplier
         offset = mathutils.Vector((
             rng.uniform(-amount, amount),
             rng.uniform(-amount, amount),
@@ -2205,9 +2201,9 @@ class HGD_OT_load_selected_curve_settings(bpy.types.Operator):
         scene.hair_curve_bevel_depth_cm = m_to_cm(float(obj.get("hair_curve_bevel_depth", obj.data.bevel_depth)))
         scene.hair_curve_bevel_depth = float(obj.get("hair_curve_bevel_depth", obj.data.bevel_depth))
         scene.hair_curve_resolution = int(obj.get("hair_curve_resolution", obj.data.resolution_u))
-        scene.hair_curve_root_jitter_cm = m_to_cm(obj.get("hair_curve_root_jitter", cm_to_m(scene.hair_curve_root_jitter_cm)))
-        scene.hair_curve_mid_jitter_cm = m_to_cm(obj.get("hair_curve_mid_jitter", cm_to_m(scene.hair_curve_mid_jitter_cm)))
-        scene.hair_curve_tip_jitter_cm = m_to_cm(obj.get("hair_curve_tip_jitter", cm_to_m(scene.hair_curve_tip_jitter_cm)))
+        scene.hair_curve_root_jitter_ratio = float(obj.get("hair_curve_root_jitter_ratio", scene.hair_curve_root_jitter_ratio))
+        scene.hair_curve_mid_jitter_ratio = float(obj.get("hair_curve_mid_jitter_ratio", scene.hair_curve_mid_jitter_ratio))
+        scene.hair_curve_tip_jitter_ratio = float(obj.get("hair_curve_tip_jitter_ratio", scene.hair_curve_tip_jitter_ratio))
         scene.hair_curve_profile_type = "ROUND"
         scene.hair_use_shared_taper = bool(obj.get("hair_use_taper", scene.hair_use_shared_taper))
         scene.hair_taper_root_radius = float(obj.get("hair_taper_root_radius", scene.hair_taper_root_radius))
