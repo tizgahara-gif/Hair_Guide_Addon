@@ -38,6 +38,7 @@ PROPERTY_NAMES = (
     "hair_curve_variation_randomize_seed_per_generation",
     "hair_curve_root_jitter", "hair_curve_mid_jitter", "hair_curve_tip_jitter",
     "hair_curve_root_jitter_cm", "hair_curve_mid_jitter_cm", "hair_curve_tip_jitter_cm",
+    "hair_curve_root_jitter_ratio", "hair_curve_mid_jitter_ratio", "hair_curve_tip_jitter_ratio",
     "hair_curve_length_variation", "hair_curve_display_mode", "hair_card_width_root", "hair_card_width_root_cm",
     "hair_card_width_mid", "hair_card_width_mid_cm", "hair_card_width_tip", "hair_card_width_tip_cm",
     "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
@@ -308,6 +309,30 @@ def register():
         min=0.0,
         max=100.0,
         description="毛先付近の位置ブレ量をcm単位で指定します。内部ではmへ変換します。",
+    )
+    scene.hair_curve_root_jitter_ratio = FloatProperty(
+        name="根元の位置ブレ率",
+        default=0.0,
+        min=0.0,
+        max=1.0,
+        subtype='FACTOR',
+        description="生成Curveの全体長に対する位置ブレ率です。",
+    )
+    scene.hair_curve_mid_jitter_ratio = FloatProperty(
+        name="中間の位置ブレ率",
+        default=0.035,
+        min=0.0,
+        max=1.0,
+        subtype='FACTOR',
+        description="生成Curveの全体長に対する位置ブレ率です。",
+    )
+    scene.hair_curve_tip_jitter_ratio = FloatProperty(
+        name="毛先の位置ブレ率",
+        default=0.08,
+        min=0.0,
+        max=1.0,
+        subtype='FACTOR',
+        description="生成Curveの全体長に対する位置ブレ率です。",
     )
     scene.hair_curve_tip_jitter = FloatProperty(
         name="毛先の位置ブレ",
