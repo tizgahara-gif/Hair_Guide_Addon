@@ -56,7 +56,7 @@ PROPERTY_NAMES = (
     "hair_twist_phase", "hair_twist_bevel_depth", "hair_twist_bevel_depth_cm", "hair_twist_resolution",
     "hair_twist_taper_strength",
     "hair_show_twist_settings", "hair_show_advanced_curve_settings",
-    "hair_show_guides_in_front", "hair_show_inline_help",
+    "hair_show_guides_in_front", "hair_show_inline_help", "hair_work_mode_lock_enabled",
 )
 
 
@@ -90,6 +90,11 @@ def register():
         name="ヘルプを表示",
         default=True,
         description="サイドパネル内の説明文と補足ヘルプを表示します。",
+    )
+    scene.hair_work_mode_lock_enabled = BoolProperty(
+        name="作業中は他オブジェクトを選択不可",
+        default=False,
+        description="ONにすると、ガイド・配置点・Curve以外のオブジェクトを一時的に選択不可にします。",
     )
 
     scene.hair_seed = IntProperty(

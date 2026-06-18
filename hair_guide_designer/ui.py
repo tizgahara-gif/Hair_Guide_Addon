@@ -155,6 +155,17 @@ class HGD_PT_quick_actions(HGD_PT_base):
 
         _draw_quick_status(layout, counts)
 
+        lock_box = layout.box()
+        if scene.hair_work_mode_lock_enabled:
+            lock_box.label(text="作業ロック: ON", icon='LOCKED')
+            lock_box.operator('hgd.toggle_work_mode_lock', text='作業ロックを解除', icon='UNLOCKED')
+        else:
+            lock_box.label(text="作業ロック: OFF", icon='UNLOCKED')
+            lock_box.operator('hgd.toggle_work_mode_lock', text='作業ロックを有効化', icon='LOCKED')
+        if scene.hair_show_inline_help:
+            lock_box.label(text="ONにすると、ガイド・配置点・通常Curve・ツイスト制御Curve以外を選択不可にします。", icon='INFO')
+            lock_box.label(text="頭部や背景を誤って選択しにくくなります。")
+
         if scene.hair_show_inline_help:
             box = layout.box()
             box.label(text="この順に押すと、最小手順で髪ガイドからCurve生成まで進めます。", icon='INFO')
