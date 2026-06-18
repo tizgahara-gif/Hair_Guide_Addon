@@ -1240,16 +1240,23 @@ def _delete_generated_if_exists(name):
 
 TAPER_OBJECT_NAME = "HGD_Default_Taper"
 TAPER_PRESET_VALUES = {
-    "ANIME": (1.0, 0.65, 0.0, 0.035),
-    "SHARP_ANIME": (1.1, 0.45, 0.0, 0.03),
-    "SOFT": (1.0, 0.8, 0.15, 0.035),
-    "REALISTIC": (0.8, 0.55, 0.2, 0.02),
+    "ANIME": (1.0, 0.65, 0.15),
+    "SHARP": (1.0, 0.45, 0.05),
+    "LONG": (1.0, 0.85, 0.20),
+    "STRAIGHT": (1.0, 1.0, 1.0),
+    # Legacy enum values are mapped for compatibility with files saved by older versions.
+    "SHARP_ANIME": (1.0, 0.45, 0.05),
+    "SOFT": (1.0, 0.85, 0.20),
+    "REALISTIC": (1.0, 0.65, 0.15),
 }
 TAPER_PRESET_LABELS = {
     "ANIME": "アニメ標準",
-    "SHARP_ANIME": "鋭いアニメ髪",
-    "SOFT": "柔らかめ",
-    "REALISTIC": "自然寄り",
+    "SHARP": "鋭い",
+    "LONG": "ロング向け",
+    "STRAIGHT": "均一",
+    "SHARP_ANIME": "鋭い",
+    "SOFT": "ロング向け",
+    "REALISTIC": "アニメ標準",
     "CUSTOM": "カスタム",
 }
 
@@ -1754,22 +1761,37 @@ def _apply_shape_to_curves(context, selected_only):
     scene = context.scene
     taper_obj = _create_or_update_default_taper(context)[0] if scene.hair_use_shared_taper else None
     for obj in curves:
-        obj.data.resolution_u = scene.hair_curve_resolution
-        obj.data.bevel_depth = cm_to_m(scene.hair_curve_bevel_depth_cm)
+        guide_type = obj.get("hair_guide_type")
+        resolution = scene.hair_twist_resolution if guide_type == "twist_strand" else scene.hair_curve_resolution
+        bevel_depth = _fallback_curve_bevel(scene, obj)
+        obj.data.resolution_u = resolution
+        obj.data.bevel_depth = bevel_depth
         obj.data.bevel_object = None
         obj["hair_curve_profile_type"] = "ROUND"
-        obj["hair_curve_bevel_depth"] = cm_to_m(scene.hair_curve_bevel_depth_cm)
-        obj["hair_curve_resolution"] = scene.hair_curve_resolution
+        if guide_type == "twist_strand":
+            obj["hair_twist_bevel_depth"] = bevel_depth
+            obj["hair_twist_bevel_depth_cm"] = scene.hair_twist_bevel_depth_cm
+            obj["hair_twist_resolution"] = resolution
+        else:
+            obj["hair_curve_bevel_depth"] = bevel_depth
+            obj["hair_curve_bevel_depth_cm"] = scene.hair_curve_bevel_depth_cm
+            obj["hair_curve_resolution"] = resolution
         if scene.hair_use_shared_taper:
             _apply_taper_to_curve_obj(context, obj, taper_obj)
         else:
             obj.data.taper_object = None
             obj["hair_use_taper"] = False
             obj["hair_taper_object"] = ""
-        obj.data.resolution_u = scene.hair_curve_resolution
-        obj.data.bevel_depth = cm_to_m(scene.hair_curve_bevel_depth_cm)
-        obj["hair_curve_bevel_depth"] = cm_to_m(scene.hair_curve_bevel_depth_cm)
-        obj["hair_curve_resolution"] = scene.hair_curve_resolution
+        obj.data.resolution_u = resolution
+        obj.data.bevel_depth = bevel_depth
+        if guide_type == "twist_strand":
+            obj["hair_twist_bevel_depth"] = bevel_depth
+            obj["hair_twist_bevel_depth_cm"] = scene.hair_twist_bevel_depth_cm
+            obj["hair_twist_resolution"] = resolution
+        else:
+            obj["hair_curve_bevel_depth"] = bevel_depth
+            obj["hair_curve_bevel_depth_cm"] = scene.hair_curve_bevel_depth_cm
+            obj["hair_curve_resolution"] = resolution
     return curves
 
 
@@ -1788,7 +1810,7 @@ def _clear_shape_from_curves(context, selected_only):
 class HGD_OT_apply_taper_preset(bpy.types.Operator):
     bl_idname = "hgd.apply_taper_preset"
     bl_label = "プリセットを反映"
-    bl_description = "選択中のテーパープリセット値をカーブ形状設定へ反映します"
+    bl_description = "選択中のテーパープリセット値をカーブ形状へ反映します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -1797,11 +1819,10 @@ class HGD_OT_apply_taper_preset(bpy.types.Operator):
         if preset == "CUSTOM":
             self.report({'INFO'}, "カスタム設定を使用します。現在値は変更しません。")
             return {'FINISHED'}
-        root, mid, tip, bevel = TAPER_PRESET_VALUES[preset]
+        root, mid, tip = TAPER_PRESET_VALUES.get(preset, TAPER_PRESET_VALUES["ANIME"])
         scene.hair_taper_root_radius = root
         scene.hair_taper_mid_radius = mid
         scene.hair_taper_tip_radius = tip
-        scene.hair_taper_bevel_depth = bevel
         self.report({'INFO'}, f"プリセット「{TAPER_PRESET_LABELS[preset]}」を反映しました。")
         return {'FINISHED'}
 
