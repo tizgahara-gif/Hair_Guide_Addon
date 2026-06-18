@@ -32,6 +32,39 @@ def _draw_status(layout, scene):
     box.label(text=f"警告: {scene.hair_warning_count or warning_count}", icon='ERROR' if (scene.hair_warning_count or warning_count) else 'CHECKMARK')
 
 
+def _quick_status_counts(scene, context):
+    head = scene.hair_target_head_object
+    guide_objects = [obj for obj in utils.generated_objects() if obj.get("hair_guide_type") in {"guide", "region"}]
+    selected_points = [
+        obj for obj in context.selected_objects
+        if obj.get("hair_guide_type") == "placement_point"
+    ]
+    return {
+        "has_head": bool(head and head.type == 'MESH'),
+        "basic_guides": len([obj for obj in guide_objects if obj.get("hair_guide_level") == "basic"]),
+        "placement_points": _count_generated("placement_point"),
+        "selected_points": len(selected_points),
+        "display_curves": _count_generated("curve") + _count_generated("twist_strand"),
+        "card_previews": _count_generated("card_preview"),
+        "output_meshes": _count_generated("card_mesh") + _count_generated("flat_mesh"),
+    }
+
+
+def _draw_quick_status(layout, counts):
+    box = layout.box()
+    box.label(text="簡易状態:", icon='INFO')
+    row = box.row(align=True)
+    row.label(text=f"頭部: {'OK' if counts['has_head'] else '未設定'}", icon='CHECKMARK' if counts['has_head'] else 'ERROR')
+    row.label(text=f"ガイド: {counts['basic_guides']}", icon='OUTLINER_OB_CURVE')
+    row = box.row(align=True)
+    row.label(text=f"配置点: {counts['placement_points']}", icon='MESH_UVSPHERE')
+    row.label(text=f"選択配置点: {counts['selected_points']}", icon='RESTRICT_SELECT_OFF')
+    row = box.row(align=True)
+    row.label(text=f"Curve: {counts['display_curves']}", icon='OUTLINER_OB_CURVE')
+    row.label(text=f"CARD: {counts['card_previews']}", icon='MESH_PLANE')
+    box.label(text=f"Mesh: {counts['output_meshes']}", icon='MESH_DATA')
+
+
 REGION_STATE_LABELS = {
     "VISIBLE": ("表示中", 'CHECKMARK'),
     "HIDDEN": ("非表示中", 'HIDE_ON'),
@@ -93,7 +126,7 @@ class HGD_PT_inline_help_toggle(HGD_PT_base):
 
 class HGD_PT_quick_start(HGD_PT_base):
     bl_label = 'クイックスタート'
-    bl_order = 0
+    bl_order = 1
 
     def draw(self, context):
         layout = self.layout
@@ -111,9 +144,64 @@ class HGD_PT_quick_start(HGD_PT_base):
         _draw_status(layout, scene)
 
 
+class HGD_PT_quick_actions(HGD_PT_base):
+    bl_label = "クイック操作"
+    bl_order = 0
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        counts = _quick_status_counts(scene, context)
+
+        _draw_quick_status(layout, counts)
+
+        if scene.hair_show_inline_help:
+            box = layout.box()
+            box.label(text="この順に押すと、最小手順で髪ガイドからCurve生成まで進めます。", icon='INFO')
+            box.label(text="詳細調整は下の各Panelで行います。")
+            box.label(text="カーブ生成前に配置点を選択してください。")
+
+        layout.separator()
+
+        row = layout.row()
+        row.operator('hgd.set_target_head', text='1. 頭部登録', icon='CHECKMARK')
+
+        row = layout.row()
+        row.enabled = counts["has_head"]
+        row.operator('hgd.create_hair_guides', text='2. 基本ガイド生成', icon='OUTLINER_OB_CURVE')
+
+        row = layout.row()
+        row.enabled = counts["has_head"]
+        row.operator('hgd.generate_placement_points', text='3. 配置点生成', icon='MESH_UVSPHERE')
+
+        if counts["placement_points"] > 0 and counts["selected_points"] == 0:
+            layout.label(text="カーブ生成前に配置点を選択してください。", icon='ERROR')
+        row = layout.row()
+        row.enabled = counts["placement_points"] > 0
+        row.operator('hgd.create_curve_from_points', text='4. カーブ生成', icon='OUTLINER_OB_CURVE')
+
+        row = layout.row(align=True)
+        row.enabled = counts["display_curves"] > 0
+        row.operator('hgd.apply_display_mode_to_selected_curves', text='5. 選択Curveへ表示モード適用', icon='RESTRICT_VIEW_OFF')
+        row.operator('hgd.apply_display_mode_to_all_curves', text='全Curve')
+
+        row = layout.row()
+        row.enabled = counts["display_curves"] > 0
+        row.operator('hgd.export_flat_mesh_from_selected_curves', text='6A. 扁平メッシュ出力', icon='MESH_DATA')
+        row = layout.row(align=True)
+        row.enabled = counts["display_curves"] > 0
+        row.operator('hgd.convert_selected_card_preview_to_mesh', text='6B. CARD実体化', icon='MESH_PLANE')
+        row.operator('hgd.convert_all_card_previews_to_mesh', text='全CARD実体化')
+
+        if scene.hair_show_inline_help:
+            box = layout.box()
+            box.label(text="扁平メッシュ出力とCARD実体化は元Curveを残します。", icon='INFO')
+            box.label(text="最終調整用Meshは専用Collectionに作成されます。")
+
+
 class HGD_PT_setup(HGD_PT_base):
     bl_label = 'セットアップ'
-    bl_order = 1
+    bl_order = 2
 
     def draw(self, context):
         layout = self.layout
@@ -134,7 +222,7 @@ class HGD_PT_setup(HGD_PT_base):
 
 class HGD_PT_guide_lines(HGD_PT_base):
     bl_label = 'ガイドライン'
-    bl_order = 2
+    bl_order = 3
 
     def draw(self, context):
         layout = self.layout
@@ -162,7 +250,7 @@ class HGD_PT_guide_lines(HGD_PT_base):
 
 class HGD_PT_regions(HGD_PT_base):
     bl_label = '領域表示'
-    bl_order = 3
+    bl_order = 4
 
     def draw(self, context):
         layout = self.layout
@@ -183,7 +271,7 @@ class HGD_PT_regions(HGD_PT_base):
 
 class HGD_PT_placement(HGD_PT_base):
     bl_label = '配置点'
-    bl_order = 4
+    bl_order = 5
 
     def draw(self, context):
         layout = self.layout
@@ -218,7 +306,7 @@ class HGD_PT_placement(HGD_PT_base):
 
 class HGD_PT_curve_strand(HGD_PT_base):
     bl_label = 'カーブ生成'
-    bl_order = 5
+    bl_order = 6
 
     def draw(self, context):
         layout = self.layout
@@ -239,7 +327,7 @@ class HGD_PT_curve_strand(HGD_PT_base):
 
 class HGD_PT_display_mode(HGD_PT_base):
     bl_label = '表示モード'
-    bl_order = 6
+    bl_order = 7
 
     def draw(self, context):
         layout = self.layout
@@ -271,7 +359,7 @@ class HGD_PT_display_mode(HGD_PT_base):
 
 class HGD_PT_curve_variation(HGD_PT_base):
     bl_label = 'カーブ形状設定'
-    bl_order = 7
+    bl_order = 8
 
     def draw(self, context):
         layout = self.layout
@@ -331,7 +419,7 @@ class HGD_PT_curve_variation(HGD_PT_base):
 
 class HGD_PT_flat_mesh(HGD_PT_base):
     bl_label = 'メッシュ出力'
-    bl_order = 8
+    bl_order = 9
 
     def draw(self, context):
         layout = self.layout
@@ -352,7 +440,7 @@ class HGD_PT_flat_mesh(HGD_PT_base):
 
 class HGD_PT_curve_apply_update(HGD_PT_base):
     bl_label = 'カーブ適用・更新'
-    bl_order = 9
+    bl_order = 10
 
     def draw(self, context):
         layout = self.layout
@@ -546,6 +634,7 @@ class HGD_PT_help(HGD_PT_base):
 
 classes = (
     HGD_PT_inline_help_toggle,
+    HGD_PT_quick_actions,
     HGD_PT_quick_start,
     HGD_PT_setup,
     HGD_PT_guide_lines,
