@@ -22,6 +22,62 @@ def require_head(context, operator):
     return head
 
 
+WORK_MODE_LOCK_EDITABLE_TYPES = {"guide", "region", "placement_point", "warning", "curve", "twist_control"}
+WORK_MODE_LOCK_PREV_KEY = "hgd_prev_hide_select"
+
+
+def _is_work_mode_lock_editable(obj):
+    return obj.get("hair_guide_type") in WORK_MODE_LOCK_EDITABLE_TYPES
+
+
+def _save_prev_hide_select(obj):
+    if WORK_MODE_LOCK_PREV_KEY not in obj:
+        obj[WORK_MODE_LOCK_PREV_KEY] = bool(obj.hide_select)
+
+
+def _apply_work_mode_lock_to_object(context, obj):
+    scene = context.scene
+    if not scene.hair_work_mode_lock_enabled or not obj:
+        return
+    _save_prev_hide_select(obj)
+    obj.hide_select = not _is_work_mode_lock_editable(obj)
+    if obj.get("hair_guide_type") == "twist_strand":
+        obj.hide_select = True
+
+
+def _apply_work_mode_lock_to_all_objects(context):
+    if not context.scene.hair_work_mode_lock_enabled:
+        return
+    for obj in context.scene.objects:
+        _apply_work_mode_lock_to_object(context, obj)
+
+
+def _restore_work_mode_lock(context):
+    for obj in context.scene.objects:
+        if WORK_MODE_LOCK_PREV_KEY in obj:
+            obj.hide_select = bool(obj[WORK_MODE_LOCK_PREV_KEY])
+            del obj[WORK_MODE_LOCK_PREV_KEY]
+
+
+class HGD_OT_toggle_work_mode_lock(bpy.types.Operator):
+    bl_idname = "hgd.toggle_work_mode_lock"
+    bl_label = "作業ロックを切り替え"
+    bl_description = "Hair Guide編集対象以外を一時的に選択不可にします"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        if scene.hair_work_mode_lock_enabled:
+            scene.hair_work_mode_lock_enabled = False
+            _restore_work_mode_lock(context)
+            self.report({'INFO'}, "Hair Guide作業ロックを解除し、選択状態を復元しました。")
+        else:
+            scene.hair_work_mode_lock_enabled = True
+            _apply_work_mode_lock_to_all_objects(context)
+            self.report({'INFO'}, "Hair Guide作業ロックを有効化しました。他オブジェクトは選択不可です。")
+        return {'FINISHED'}
+
+
 class HGD_OT_set_target_head(bpy.types.Operator):
     bl_idname = "hgd.set_target_head"
     bl_label = "選択メッシュを頭部として登録"
@@ -138,6 +194,7 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
             for name, points, region in guide_specs:
                 obj = utils.make_curve(name, points, guides, region, "guide", scene, bevel=0.004)
                 obj["hair_guide_level"] = "basic"
+            _apply_work_mode_lock_to_all_objects(context)
             self.report({'INFO'}, f"基本ガイドを{len(guide_specs)}個生成しました（古い基本ガイド{removed}個を削除）。")
             return {'FINISHED'}
         except Exception as exc:
@@ -448,6 +505,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                 self.report({'WARNING'}, "基本ガイドが見つからないため、頭部Bounding Boxから配置点を生成しました。")
             elif used_fallback or guide_count < 6:
                 self.report({'WARNING'}, "一部の基本ガイドが見つからないため、頭部Bounding Box基準で補完しました。")
+            _apply_work_mode_lock_to_all_objects(context)
             if removed_points or removed_warnings:
                 self.report({'INFO'}, f"既存の配置点 {removed_points} 個、警告 {removed_warnings} 件を削除しました。配置点 {count_total} 個を再生成しました。")
             else:
@@ -677,6 +735,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 for point in points:
                     _make_twist_from_point(context, point)
                     made += 1
+                _apply_work_mode_lock_to_all_objects(context)
                 self.report({'INFO'}, f"ツイスト制御カーブ{made}本と表示用カーブを生成しました。制御カーブを編集してから更新してください。")
                 return {'FINISHED'}
             utils.ensure_system()
@@ -692,16 +751,18 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                     length = float(point.get("recommended_length", cm_to_m(scene.hair_curve_length_cm)))
                 else:
                     length = cm_to_m(scene.hair_curve_length_cm)
-                root = point.location.copy()
+                root_world = point.matrix_world.translation.copy()
                 segment_count = max(scene.hair_curve_segment_count, 2)
-                curve_points = []
+                world_points = []
                 for i in range(segment_count):
                     t = i / max(segment_count - 1, 1)
                     sag = mathutils.Vector((0, 0, -0.12 * length * t * t))
-                    curve_points.append(root + direction * length * t + sag)
+                    world_points.append(root_world + direction * length * t + sag)
+                curve_points = [p - root_world for p in world_points]
                 prefix = self._prefix(region)
                 curves = utils.get_curve_collection(region, "curve")
                 obj = utils.make_curve(utils.unique_numbered(prefix), curve_points, curves, region, "curve", scene, bevel=cm_to_m(scene.hair_curve_bevel_depth_cm))
+                obj.location = root_world
                 obj["hair_root_id"] = point.name
                 obj["hair_source_point"] = point.name
                 obj["hair_curve_length"] = length
@@ -725,6 +786,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 if scene.hair_card_auto_apply_to_new_curves:
                     _apply_display_mode_to_curve(context, obj)
                 made += 1
+            _apply_work_mode_lock_to_all_objects(context)
             self.report({'INFO'}, f"カーブ毛束を{made}本生成しました。")
             return {'FINISHED'}
         except Exception as exc:
@@ -811,6 +873,8 @@ def _apply_curve_variation(obj, scene, source_name):
         point.handle_right = root + (point.handle_right - root) * length_scale
     point_count = len(spline.bezier_points)
     for index, point in enumerate(spline.bezier_points):
+        if index == 0:
+            continue
         t = index / max(point_count - 1, 1)
         amount = _variation_jitter_amount(scene, t) * side_multiplier
         if t < 0.34:
@@ -919,6 +983,7 @@ class HGD_OT_clear_all_generated(bpy.types.Operator):
         for collection_name in (utils.GUIDES, utils.REGIONS, utils.PLACEMENT_POINTS, utils.CURVES, utils.WARNINGS, utils.TAPER_OBJECTS, utils.PROFILE_OBJECTS, utils.FLAT_MESHES):
             total += utils.clear_collection_objects(collection_name)
         context.scene.hair_warning_count = 0
+        _apply_work_mode_lock_to_all_objects(context)
         if total == 0:
             self.report({'WARNING'}, "削除する生成物がありません。")
             return {'CANCELLED'}
@@ -1170,6 +1235,7 @@ def _create_or_replace_twist_strand(context, control_obj):
     _ensure_curve_visible_geometry(context, obj)
     if scene.hair_card_auto_apply_to_new_curves:
         _apply_display_mode_to_curve(context, obj)
+    _apply_work_mode_lock_to_object(context, obj)
     return obj
 
 
@@ -1184,13 +1250,15 @@ def _make_twist_from_point(context, point):
         length = float(point.get("recommended_length", cm_to_m(scene.hair_curve_length_cm)))
     else:
         length = cm_to_m(scene.hair_curve_length_cm)
-    root = point.location.copy()
-    control_points = []
+    root_world = point.matrix_world.translation.copy()
+    world_points = []
     for i in range(max(scene.hair_curve_segment_count, 2)):
         t = i / max(scene.hair_curve_segment_count - 1, 1)
         sag = mathutils.Vector((0.0, 0.0, -0.12 * length * t * t))
-        control_points.append(root + direction * length * t + sag)
+        world_points.append(root_world + direction * length * t + sag)
+    control_points = [p - root_world for p in world_points]
     control = utils.make_curve(f"HGD_TWIST_CTRL_{twist_id}", control_points, curves, region, "twist_control", scene, bevel=0.0)
+    control.location = root_world
     control["hair_source_point"] = point.name
     control["hair_root_id"] = point.name
     control["hair_twist_id"] = twist_id
@@ -1564,6 +1632,7 @@ def _create_flat_mesh_from_curve(context, curve_obj):
         sub = obj.modifiers.new("HGD_Subdivision_Surface", "SUBSURF")
         sub.levels = 1
         sub.render_levels = 1
+    _apply_work_mode_lock_to_object(context, obj)
     return obj
 
 
@@ -1651,6 +1720,7 @@ def _create_or_update_card_preview(context, curve_obj):
     preview["hair_card_samples"] = len(samples)
     preview.show_in_front = curve_obj.show_in_front
     curve_obj["hair_card_preview_object"] = preview.name
+    _apply_work_mode_lock_to_object(context, preview)
     return preview
 
 
@@ -1714,6 +1784,7 @@ def _create_card_mesh_from_curve(context, curve_obj):
     obj["hair_card_sync_widths"] = scene.hair_card_sync_widths
     obj["hair_card_synced_width_cm"] = scene.hair_card_synced_width_cm
     obj["hair_card_samples"] = len(samples)
+    _apply_work_mode_lock_to_object(context, obj)
     return obj
 
 
@@ -2288,17 +2359,11 @@ class HGD_OT_update_curve_roots_from_points(bpy.types.Operator):
             if not spline:
                 skipped += 1
                 continue
-            new_root_local = obj.matrix_world.inverted() @ source.matrix_world.translation
-            root_point = spline.bezier_points[0]
-            old_root_local = root_point.co.copy()
-            delta = new_root_local - old_root_local
-            if context.scene.hair_follow_keep_tip_offset:
-                for point in spline.bezier_points:
-                    point.co += delta
-                    point.handle_left += delta
-                    point.handle_right += delta
-            else:
-                root_point.co = new_root_local
+            obj.location = source.matrix_world.translation
+            if not context.scene.hair_follow_keep_tip_offset:
+                root_point = spline.bezier_points[0]
+                delta = -root_point.co
+                root_point.co = mathutils.Vector((0.0, 0.0, 0.0))
                 root_point.handle_left += delta
                 root_point.handle_right += delta
             updated += 1
@@ -2564,6 +2629,7 @@ class HGD_OT_mirror_side_r_to_l(bpy.types.Operator):
 
 
 classes = (
+    HGD_OT_toggle_work_mode_lock,
     HGD_OT_set_target_head,
     HGD_OT_create_hair_guides,
     HGD_OT_symmetrize_front_back_guides,
