@@ -9,10 +9,10 @@ STRAND_TYPES = (
 )
 
 TAPER_PRESETS = (
-    ("ANIME", "アニメ標準", "根元を太く、毛先を尖らせる標準的なアニメ髪設定"),
-    ("SHARP_ANIME", "鋭いアニメ髪", "中間から毛先へ強く細くなるシャープな設定"),
-    ("SOFT", "柔らかめ", "毛先を少し残して柔らかく見せる設定"),
-    ("REALISTIC", "自然寄り", "全体を控えめにして自然寄りに見せる設定"),
+    ("ANIME", "アニメ標準", "根元を太く、中間を少し細く、毛先を細くする標準設定"),
+    ("SHARP", "鋭い", "中間から毛先へ強く細くなるシャープな設定"),
+    ("LONG", "ロング向け", "長い毛束で中間の太さを残し、毛先だけ細くする設定"),
+    ("STRAIGHT", "均一", "Root/Mid/Tipを同じ太さにする設定"),
     ("CUSTOM", "カスタム", "現在の手動設定を使用します"),
 )
 
@@ -254,7 +254,7 @@ def register():
     scene.hair_curve_variation_enabled = BoolProperty(
         name="カーブの個体差を有効化",
         default=True,
-        description="生成時にCurveへ小さな位置差と長さ差を加え、完全な重なりを防ぎます。",
+        description="新規生成時にだけCurveへ小さな位置差と長さ差を加え、完全な重なりを防ぎます。既存Curveへの形状適用では再ランダム化しません。",
     )
     scene.hair_curve_variation_seed = IntProperty(
         name="個体差シード",
@@ -535,10 +535,10 @@ def register():
     )
     scene.hair_taper_tip_radius = FloatProperty(
         name="毛先の太さ",
-        default=0.0,
+        default=0.15,
         min=0.0,
         max=5.0,
-        description="共有テーパーの毛先側の太さ。0にすると先端が尖ります。",
+        description="共有テーパーの毛先側の太さ。小さいほど先端が尖ります。",
     )
     scene.hair_taper_bevel_depth = FloatProperty(
         name="全体の太さ",
