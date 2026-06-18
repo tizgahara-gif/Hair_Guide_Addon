@@ -249,10 +249,6 @@ class HGD_PT_guide_lines(HGD_PT_base):
         layout.operator('hgd.create_hair_guides', text='基本ガイドを生成', icon='OUTLINER_OB_CURVE')
         if scene.hair_show_inline_help:
             layout.label(text="基本ガイドのみ生成します。")
-        layout.operator('hgd.symmetrize_front_back_guides', text='前後ガイドを左右対称化', icon='MOD_MIRROR')
-        if scene.hair_show_inline_help:
-            layout.label(text="Front/Back/Napeガイドの左右差を整えます。")
-            layout.label(text="手動調整後に使ってください。")
         layout.operator('hgd.delete_hair_guides', text='ガイド削除', icon='TRASH')
         if scene.hair_show_inline_help:
             layout.label(text="生成されたガイドのみ削除します。")
@@ -383,7 +379,6 @@ class HGD_PT_curve_variation(HGD_PT_base):
         box = layout.box()
         box.label(text="カーブ基本", icon='CHECKMARK')
         box.prop(scene, 'hair_curve_length_cm')
-        box.prop(scene, 'hair_use_placement_recommended_length')
         box.prop(scene, 'hair_curve_bevel_depth_cm')
         box.prop(scene, 'hair_curve_resolution')
         box.prop(scene, 'hair_curve_segment_count')
@@ -509,6 +504,12 @@ class HGD_PT_side_mirror(HGD_PT_base):
         row = layout.row(align=True)
         row.operator('hgd.mirror_side_guide_l_to_r', text='左側頭ガイド → 右へミラー')
         row.operator('hgd.mirror_side_guide_r_to_l', text='右側頭ガイド → 左へミラー')
+        layout.separator()
+        layout.label(text="前後ガイド")
+        layout.operator('hgd.symmetrize_front_back_guides', text='前後ガイドを左右対称化', icon='MOD_MIRROR')
+        if scene.hair_show_inline_help:
+            layout.label(text="Front/Back/Napeガイドの左右差を整えます。")
+            layout.label(text="手動調整後に使ってください。")
         layout.separator()
         layout.label(text="生成済み配置点 / Curve / ツイスト")
         row = layout.row(align=True)

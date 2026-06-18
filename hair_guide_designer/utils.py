@@ -323,18 +323,29 @@ def head_bounds(obj):
     return min_v, max_v, center, size
 
 
-def make_curve(name, points, collection, region, guide_type, scene, bevel=None, handle_type="AUTO"):
+def make_curve(name, points, collection, region, guide_type, scene, bevel=None, origin_mode="WORLD", handle_type="AUTO"):
     curve = bpy.data.curves.new(unique_name(name), "CURVE")
     curve.dimensions = "3D"
     curve.resolution_u = getattr(scene, "hair_curve_resolution", 12)
     curve.bevel_depth = getattr(scene, "hair_curve_bevel_depth_cm", 1.2) * 0.01 if bevel is None else bevel
+    if origin_mode == "CENTER" and points:
+        origin = mathutils.Vector((0.0, 0.0, 0.0))
+        for co in points:
+            origin += co
+        origin /= len(points)
+        curve_points = [co - origin for co in points]
+    else:
+        origin = mathutils.Vector((0.0, 0.0, 0.0))
+        curve_points = points
+
     spl = curve.splines.new("BEZIER")
-    spl.bezier_points.add(len(points) - 1)
-    for point, co in zip(spl.bezier_points, points):
+    spl.bezier_points.add(len(curve_points) - 1)
+    for point, co in zip(spl.bezier_points, curve_points):
         point.co = co
         point.handle_left_type = handle_type
         point.handle_right_type = handle_type
     obj = bpy.data.objects.new(curve.name, curve)
+    obj.location = origin
     collection.objects.link(obj)
     set_common_props(obj, guide_type, region, scene)
     return obj

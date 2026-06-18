@@ -32,7 +32,7 @@ PROPERTY_NAMES = (
     "hair_height_variation_cm", "hair_width_variation_cm", "hair_depth_variation_cm",
     "hair_size_variation", "hair_length_variation", "hair_strand_type",
     "hair_curve_length", "hair_curve_bevel_depth", "hair_curve_bevel_depth_cm", "hair_curve_resolution",
-    "hair_curve_length_cm", "hair_use_placement_recommended_length",
+    "hair_curve_length_cm",
     "hair_curve_root_radius", "hair_curve_tip_radius", "hair_curve_taper_strength",
     "hair_curve_segment_count", "hair_curve_variation_enabled", "hair_curve_variation_seed",
     "hair_curve_variation_randomize_seed_per_generation",

@@ -192,7 +192,7 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
                 ("HAIR_GUIDE_Center", [mathutils.Vector((center.x, center.y, top)), mathutils.Vector((center.x, center.y, nape_z))], "Back_Middle"),
             ]
             for name, points, region in guide_specs:
-                obj = utils.make_curve(name, points, guides, region, "guide", scene, bevel=0.004)
+                obj = utils.make_curve(name, points, guides, region, "guide", scene, bevel=0.004, origin_mode="CENTER")
                 obj["hair_guide_level"] = "basic"
             _apply_work_mode_lock_to_all_objects(context)
             self.report({'INFO'}, f"基本ガイドを{len(guide_specs)}個生成しました（古い基本ガイド{removed}個を削除）。")
@@ -492,12 +492,10 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                     obj = utils.make_marker(point_name, loc, max(radius, 0.004), collection, region, "placement_point", scene)
                     position_type = self._position_type(region, i, loc, center, size)
                     direction = self._recommended_direction(region, position_type, loc.x - center.x)
-                    length = cm_to_m(scene.hair_curve_length_cm) * (1.0 + rng.uniform(-scene.hair_length_variation, scene.hair_length_variation))
                     size_rec = max(scene.hair_curve_root_radius * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation)), 0.001)
                     obj["hair_root_id"] = obj.name
                     obj["recommended_size"] = size_rec
                     obj["recommended_direction"] = utils.vector_to_string(direction)
-                    obj["recommended_length"] = max(length, 0.01)
                     obj["flow_side"] = "L" if loc.x < center.x - size.x*0.05 else ("R" if loc.x > center.x + size.x*0.05 else "Center")
                     obj["position_type"] = position_type
                     count_total += 1
@@ -640,9 +638,8 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                 continue
             dx, dy, dz = self._jitter_values("Back_Middle", rng, scene)
             radius = max(size.length * 0.008, 0.01) * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation))
-            length = cm_to_m(scene.hair_curve_length_cm) * (1.0 + rng.uniform(-scene.hair_length_variation, scene.hair_length_variation))
             size_rec = max(scene.hair_curve_root_radius * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation)), 0.001)
-            shared = {"recommended_length": max(length, 0.01), "recommended_size": size_rec}
+            shared = {"recommended_size": size_rec}
             mirror_names = [self._point_name("Back_Middle", pair_start), self._point_name("Back_Middle", pair_start + 1)]
             for index, base in enumerate(pair):
                 side_sign = -1.0 if index == 0 else 1.0
@@ -656,12 +653,10 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
     def _apply_point_recommendations(self, obj, region, index, loc, center, size, rng, scene, shared=None):
         position_type = self._position_type(region, index, loc, center, size)
         direction = self._recommended_direction(region, position_type, loc.x - center.x)
-        length = shared["recommended_length"] if shared else max(cm_to_m(scene.hair_curve_length_cm) * (1.0 + rng.uniform(-scene.hair_length_variation, scene.hair_length_variation)), 0.01)
         size_rec = shared["recommended_size"] if shared else max(scene.hair_curve_root_radius * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation)), 0.001)
         obj["hair_root_id"] = obj.name
         obj["recommended_size"] = size_rec
         obj["recommended_direction"] = utils.vector_to_string(direction)
-        obj["recommended_length"] = length
         obj["flow_side"] = "L" if loc.x < center.x - size.x*0.05 else ("R" if loc.x > center.x + size.x*0.05 else "Center")
         obj["position_type"] = position_type
 
@@ -747,10 +742,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
             for point in points:
                 region = point.get("hair_region", "Front")
                 direction = utils.string_to_vector(point.get("recommended_direction"), utils.direction_for_region(region))
-                if scene.hair_use_placement_recommended_length:
-                    length = float(point.get("recommended_length", cm_to_m(scene.hair_curve_length_cm)))
-                else:
-                    length = cm_to_m(scene.hair_curve_length_cm)
+                length = cm_to_m(scene.hair_curve_length_cm)
                 root_world = point.matrix_world.translation.copy()
                 segment_count = max(scene.hair_curve_segment_count, 2)
                 world_points = []
@@ -766,8 +758,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 obj["hair_root_id"] = point.name
                 obj["hair_source_point"] = point.name
                 obj["hair_curve_length"] = length
-                obj["hair_curve_length_cm"] = m_to_cm(length)
-                obj["hair_use_placement_recommended_length"] = scene.hair_use_placement_recommended_length
+                obj["hair_curve_length_cm"] = scene.hair_curve_length_cm
                 obj["hair_curve_bevel_depth"] = cm_to_m(scene.hair_curve_bevel_depth_cm)
                 obj["hair_curve_resolution"] = scene.hair_curve_resolution
                 obj["hair_mirror_pair"] = ""
@@ -1246,10 +1237,7 @@ def _make_twist_from_point(context, point):
     twist_id = _next_twist_id()
     region = point.get("hair_region", "Front")
     direction = utils.string_to_vector(point.get("recommended_direction"), utils.direction_for_region(region))
-    if scene.hair_use_placement_recommended_length:
-        length = float(point.get("recommended_length", cm_to_m(scene.hair_curve_length_cm)))
-    else:
-        length = cm_to_m(scene.hair_curve_length_cm)
+    length = cm_to_m(scene.hair_curve_length_cm)
     root_world = point.matrix_world.translation.copy()
     world_points = []
     for i in range(max(scene.hair_curve_segment_count, 2)):
@@ -1263,8 +1251,7 @@ def _make_twist_from_point(context, point):
     control["hair_root_id"] = point.name
     control["hair_twist_id"] = twist_id
     control["hair_curve_length"] = length
-    control["hair_curve_length_cm"] = m_to_cm(length)
-    control["hair_use_placement_recommended_length"] = scene.hair_use_placement_recommended_length
+    control["hair_curve_length_cm"] = scene.hair_curve_length_cm
     control.data.resolution_u = scene.hair_twist_resolution
     _set_twist_control_display(control)
     _apply_curve_variation(control, scene, point.name)
@@ -1296,11 +1283,38 @@ def _swap_side(value, src_side, dst_side):
     text = str(value)
     if src_side in text:
         return text.replace(src_side, dst_side)
+    if text.endswith("_L"):
+        return text[:-2] + "_R"
+    if text.endswith("_R"):
+        return text[:-2] + "_L"
     src_short = "_L" if src_side == "Side_L" else "_R"
     dst_short = "_R" if dst_side == "Side_R" else "_L"
     if src_short in text:
         return text.replace(src_short, dst_short)
     return f"{text}_{dst_short[-1]}"
+
+
+def _is_mirror_source(obj, src_side):
+    if obj.get("hair_guide_type") not in {"placement_point", "curve", "twist_control"}:
+        return False
+    region = obj.get("hair_region", "")
+    flow_side = obj.get("flow_side", "")
+    if src_side == "Side_L":
+        return region == "Side_L" or flow_side == "L" or obj.name.endswith("_L")
+    if src_side == "Side_R":
+        return region == "Side_R" or flow_side == "R" or obj.name.endswith("_R")
+    return False
+
+
+def _mirrored_region(obj, dst_side):
+    region = obj.get("hair_region", "")
+    if region in {"Side_L", "Side_R"}:
+        return dst_side
+    return region
+
+
+def _mirrored_flow_side(dst_side):
+    return "R" if dst_side == "Side_R" else "L"
 
 
 def _copy_custom_properties(source, target):
@@ -2475,7 +2489,7 @@ class HGD_OT_mirror_side(bpy.types.Operator):
 
     def execute(self, context):
         src_side, dst_side = ("Side_L", "Side_R") if self.direction == "L2R" else ("Side_R", "Side_L")
-        selected = [obj for obj in context.selected_objects if obj.get("hair_region") == src_side and obj.get("hair_guide_type") in {"placement_point", "curve", "twist_control"}]
+        selected = [obj for obj in context.selected_objects if _is_mirror_source(obj, src_side)]
         if not selected:
             self.report({'WARNING'}, f"{src_side}のオブジェクトが選択されていません。")
             return {'CANCELLED'}
@@ -2503,10 +2517,19 @@ class HGD_OT_mirror_side(bpy.types.Operator):
             else:
                 for key in list(new_obj.keys()):
                     del new_obj[key]
-            new_obj.location.x *= -1
+            world_loc = obj.matrix_world.translation.copy()
+            world_loc.x *= -1
+            if new_obj.parent:
+                new_obj.location = new_obj.parent.matrix_world.inverted() @ world_loc
+            else:
+                new_obj.location = world_loc
             new_obj["hair_guide_type"] = "placement_point"
-            new_obj["hair_region"] = dst_side
-            new_obj["flow_side"] = "R" if dst_side == "Side_R" else "L"
+            new_obj["hair_region"] = _mirrored_region(obj, dst_side)
+            new_obj["flow_side"] = _mirrored_flow_side(dst_side)
+            direction = utils.string_to_vector(obj.get("recommended_direction"), None)
+            if direction:
+                direction.x *= -1
+                new_obj["recommended_direction"] = utils.vector_to_string(direction)
             new_obj["hair_root_id"] = new_obj.name
             new_obj["hair_mirror_source"] = obj.name
             new_obj["hair_mirror_pair"] = obj.name
@@ -2526,7 +2549,8 @@ class HGD_OT_mirror_side(bpy.types.Operator):
             new_obj.data = obj.data.copy()
             new_obj.name = new_name
             new_obj.data.name = new_name + "Curve"
-            utils.get_curve_collection(dst_side, "curve").objects.link(new_obj)
+            new_region = _mirrored_region(obj, dst_side)
+            utils.get_curve_collection(new_region, "curve").objects.link(new_obj)
             if context.scene.hair_mirror_copy_custom_properties:
                 _copy_custom_properties(obj, new_obj)
             else:
@@ -2541,7 +2565,8 @@ class HGD_OT_mirror_side(bpy.types.Operator):
                     point.handle_left.x *= -1
                     point.handle_right.x *= -1
             new_obj["hair_guide_type"] = "curve"
-            new_obj["hair_region"] = dst_side
+            new_obj["hair_region"] = new_region
+            new_obj["flow_side"] = _mirrored_flow_side(dst_side)
             utils.apply_curve_region_color(new_obj)
             new_obj["hair_mirror_source"] = obj.name
             new_obj["hair_mirror_pair"] = obj.name
@@ -2573,7 +2598,8 @@ class HGD_OT_mirror_side(bpy.types.Operator):
             new_obj.data = obj.data.copy()
             new_obj.name = new_name
             new_obj.data.name = new_name + "Curve"
-            utils.get_curve_collection(dst_side, "twist_control").objects.link(new_obj)
+            new_region = _mirrored_region(obj, dst_side)
+            utils.get_curve_collection(new_region, "twist_control").objects.link(new_obj)
             if context.scene.hair_mirror_copy_custom_properties:
                 _copy_custom_properties(obj, new_obj)
             else:
@@ -2587,7 +2613,8 @@ class HGD_OT_mirror_side(bpy.types.Operator):
                     point.handle_left.x *= -1
                     point.handle_right.x *= -1
             new_obj["hair_guide_type"] = "twist_control"
-            new_obj["hair_region"] = dst_side
+            new_obj["hair_region"] = new_region
+            new_obj["flow_side"] = _mirrored_flow_side(dst_side)
             utils.apply_curve_region_color(new_obj)
             new_obj["hair_twist_id"] = twist_id
             _set_twist_control_display(new_obj)
