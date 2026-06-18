@@ -425,6 +425,9 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                 if positions is None:
                     positions = self._base_positions(region, count, min_v, max_v, center, size, scene.hair_guide_offset)
                     used_fallback = True
+                if region == "Back_Middle":
+                    count_total += self._create_back_middle_points(positions, rng, scene, collection, center, size)
+                    continue
                 for i, base in enumerate(positions):
                     loc = self._jittered(region, base, rng, scene)
                     radius = max(size.length * 0.008, 0.01) * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation))
@@ -477,16 +480,23 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             points = utils.sample_curve_world_points(guides["back"], count)
             return [point + mathutils.Vector((0.0, 0.0, size.z * 0.12)) for point in points]
         if region == "Back_Middle" and guides["back"] and guides["nape"]:
-            back_points = utils.sample_curve_world_points(guides["back"], count)
-            nape_points = utils.sample_curve_world_points(guides["nape"], count)
+            if count == 1:
+                return [mathutils.Vector((center.x, max_v.y + offset * 1.5, min_v.z + size.z * 0.5))]
+            pair_count = count // 2
+            back_points = utils.sample_curve_world_points(guides["back"], pair_count)
+            nape_points = utils.sample_curve_world_points(guides["nape"], pair_count)
             positions = []
             for i, (back_point, nape_point) in enumerate(zip(back_points, nape_points)):
-                t = i / max(count - 1, 1)
+                t = i / max(pair_count - 1, 1)
                 blend = 0.35 + 0.3 * t
-                point = back_point.lerp(nape_point, blend)
-                side = -1.0 if i % 3 == 0 else (1.0 if i % 3 == 2 else 0.0)
-                point.x += side * size.x * 0.12
-                positions.append(point)
+                point_l = back_point.lerp(nape_point, blend)
+                offset_x = max(abs(point_l.x - center.x), size.x * (0.12 + 0.08 * i))
+                point_l.x = center.x - offset_x
+                point_r = point_l.copy()
+                point_r.x = center.x + offset_x
+                positions.extend((point_l, point_r))
+            if count % 2:
+                positions.append(mathutils.Vector((center.x, max_v.y + offset * 1.5, min_v.z + size.z * 0.5)))
             return positions
         if region == "Nape" and guides["nape"]:
             return utils.sample_curve_world_points(guides["nape"], count)
@@ -514,13 +524,16 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                 y = max_v.y + offset
                 z = min_v.z + size.z * (0.78 - 0.12 * abs(t - 0.5))
             elif region == "Back_Middle":
-                # Avoid a uniform center column by spreading rows and lowering center density.
-                row = i // 3
-                col = i % 3
-                x_options = (-0.38, 0.0, 0.38) if row % 2 == 0 else (-0.5, -0.12, 0.5)
-                x = center.x + x_options[col] * size.x
-                y = max_v.y + offset * (1.0 + 0.5 * row)
-                z = min_v.z + size.z * (0.58 - row * 0.08 - 0.02 * col)
+                pair_index = i // 2
+                is_left = i % 2 == 0
+                pair_count = max(count // 2, 1)
+                pair_t = pair_index / max(pair_count - 1, 1)
+                offset_x = size.x * (0.12 + 0.16 * pair_index)
+                x = center.x + (-offset_x if is_left else offset_x)
+                y = max_v.y + offset * (1.0 + 0.5 * pair_index)
+                z = min_v.z + size.z * (0.58 - pair_t * 0.16)
+                if count % 2 and i == count - 1:
+                    x = center.x
             else:
                 x = center.x + (t - 0.5) * size.x * 0.45
                 y = max_v.y + offset * 1.3
@@ -550,7 +563,49 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
     def _point_name(self, region, index):
         if region == "Top":
             return ("POINT_Top_Center", "POINT_Top_Front", "POINT_Top_Back", "POINT_Top_Left", "POINT_Top_Right")[index]
+        if region == "Back_Middle":
+            pair_no = index // 2 + 1
+            side = "L" if index % 2 == 0 else "R"
+            return f"POINT_Back_Middle_{pair_no:02d}_{side}"
         return f"POINT_{region}_{index+1:03d}"
+
+    def _create_back_middle_points(self, positions, rng, scene, collection, center, size):
+        count = 0
+        for pair_start in range(0, len(positions), 2):
+            pair = positions[pair_start:pair_start + 2]
+            if len(pair) < 2:
+                loc = self._jittered("Back_Middle", pair[0], rng, scene)
+                radius = max(size.length * 0.008, 0.01) * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation))
+                obj = utils.make_marker(f"POINT_Back_Middle_{pair_start // 2 + 1:02d}_C", loc, max(radius, 0.004), collection, "Back_Middle", "placement_point", scene)
+                self._apply_point_recommendations(obj, "Back_Middle", pair_start, loc, center, size, rng, scene)
+                count += 1
+                continue
+            dx, dy, dz = self._jitter_values("Back_Middle", rng, scene)
+            radius = max(size.length * 0.008, 0.01) * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation))
+            length = cm_to_m(scene.hair_curve_length_cm) * (1.0 + rng.uniform(-scene.hair_length_variation, scene.hair_length_variation))
+            size_rec = max(scene.hair_curve_root_radius * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation)), 0.001)
+            shared = {"recommended_length": max(length, 0.01), "recommended_size": size_rec}
+            mirror_names = [self._point_name("Back_Middle", pair_start), self._point_name("Back_Middle", pair_start + 1)]
+            for index, base in enumerate(pair):
+                side_sign = -1.0 if index == 0 else 1.0
+                loc = base + mathutils.Vector((side_sign * dx, dy, dz))
+                obj = utils.make_marker(mirror_names[index], loc, max(radius, 0.004), collection, "Back_Middle", "placement_point", scene)
+                self._apply_point_recommendations(obj, "Back_Middle", pair_start + index, loc, center, size, rng, scene, shared)
+                obj["mirror_pair"] = mirror_names[1 - index]
+                count += 1
+        return count
+
+    def _apply_point_recommendations(self, obj, region, index, loc, center, size, rng, scene, shared=None):
+        position_type = self._position_type(region, index, loc, center, size)
+        direction = self._recommended_direction(region, position_type, loc.x - center.x)
+        length = shared["recommended_length"] if shared else max(cm_to_m(scene.hair_curve_length_cm) * (1.0 + rng.uniform(-scene.hair_length_variation, scene.hair_length_variation)), 0.01)
+        size_rec = shared["recommended_size"] if shared else max(scene.hair_curve_root_radius * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation)), 0.001)
+        obj["hair_root_id"] = obj.name
+        obj["recommended_size"] = size_rec
+        obj["recommended_direction"] = utils.vector_to_string(direction)
+        obj["recommended_length"] = length
+        obj["flow_side"] = "L" if loc.x < center.x - size.x*0.05 else ("R" if loc.x > center.x + size.x*0.05 else "Center")
+        obj["position_type"] = position_type
 
     def _position_type(self, region, index, loc, center, size):
         if region == "Top":
@@ -571,7 +626,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
         vec.normalize()
         return vec
 
-    def _jittered(self, region, base, rng, scene):
+    def _jitter_values(self, region, rng, scene):
         variation = 0.5 if region == "Top" else 1.0
         width_var = cm_to_m(scene.hair_width_variation_cm)
         height_var = cm_to_m(scene.hair_height_variation_cm)
@@ -581,7 +636,10 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             x_jit *= 1.0 - scene.hair_symmetry_bias * 0.65
         elif region == "Side_L":
             x_jit *= 1.0 - scene.hair_symmetry_bias * 0.35
-        return base + mathutils.Vector((x_jit, rng.uniform(-depth_var, depth_var) * variation, rng.uniform(-height_var, height_var) * variation))
+        return (x_jit, rng.uniform(-depth_var, depth_var) * variation, rng.uniform(-height_var, height_var) * variation)
+
+    def _jittered(self, region, base, rng, scene):
+        return base + mathutils.Vector(self._jitter_values(region, rng, scene))
 
 
 class HGD_OT_clear_placement_points(bpy.types.Operator):
