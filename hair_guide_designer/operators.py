@@ -2163,7 +2163,7 @@ class HGD_OT_mirror_side_guide_l_to_r(HGD_OT_mirror_side_guide_base):
     bl_description = "HAIR_GUIDE_SideBoundary_Lの編集済みCurveをWorld X=0基準でHAIR_GUIDE_SideBoundary_Rへ反映します"
     source_name = "HAIR_GUIDE_SideBoundary_L"
     target_name = "HAIR_GUIDE_SideBoundary_R"
-    target_region = "Side_R"
+    target_region = "Side"
 
 
 class HGD_OT_mirror_side_guide_r_to_l(HGD_OT_mirror_side_guide_base):
@@ -2172,7 +2172,7 @@ class HGD_OT_mirror_side_guide_r_to_l(HGD_OT_mirror_side_guide_base):
     bl_description = "HAIR_GUIDE_SideBoundary_Rの編集済みCurveをWorld X=0基準でHAIR_GUIDE_SideBoundary_Lへ反映します"
     source_name = "HAIR_GUIDE_SideBoundary_R"
     target_name = "HAIR_GUIDE_SideBoundary_L"
-    target_region = "Side_L"
+    target_region = "Side"
 
 
 class HGD_OT_mirror_side(bpy.types.Operator):
