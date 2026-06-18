@@ -313,11 +313,11 @@ def register():
         description="生成時にCurveへ小さな位置差と長さ差を加え、完全な重なりを防ぎます。毛先付近の位置ブレ量です。",
     )
     scene.hair_curve_length_variation = FloatProperty(
-        name="長さのブレ",
-        default=0.15,
+        name="長さのブレ率",
+        default=0.0,
         min=0.0,
         max=1.0,
-        description="生成時にCurveへ小さな位置差と長さ差を加え、完全な重なりを防ぎます。0.15なら約85%〜115%の長さ差です。",
+        description="0なら毛束長さ(cm)がそのまま使われます。0.15なら約85%〜115%に変化します。",
     )
     scene.hair_curve_display_mode = EnumProperty(
         name="表示モード",
