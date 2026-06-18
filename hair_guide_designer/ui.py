@@ -256,9 +256,13 @@ class HGD_PT_display_mode(HGD_PT_base):
         if scene.hair_show_display_mode_settings:
             box = layout.box()
             box.label(text='CARDプレビュー', icon='MESH_PLANE')
-            box.prop(scene, 'hair_card_width_root_cm')
-            box.prop(scene, 'hair_card_width_mid_cm')
-            box.prop(scene, 'hair_card_width_tip_cm')
+            box.prop(scene, 'hair_card_sync_widths')
+            if scene.hair_card_sync_widths:
+                box.prop(scene, 'hair_card_synced_width_cm')
+            else:
+                box.prop(scene, 'hair_card_width_root_cm')
+                box.prop(scene, 'hair_card_width_mid_cm')
+                box.prop(scene, 'hair_card_width_tip_cm')
             box.prop(scene, 'hair_card_samples')
             box.prop(scene, 'hair_card_auto_apply_to_new_curves')
             if scene.hair_show_inline_help:
@@ -378,6 +382,7 @@ class HGD_PT_curve_apply_update(HGD_PT_base):
         row = layout.row(align=True)
         row.operator('hgd.update_selected_twists', text='選択ツイストを更新')
         row.operator('hgd.update_all_twists', text='全ツイストを更新')
+        layout.operator('hgd.lock_twist_visual_curves', text='ツイスト表示Curveを選択不可にする', icon='LOCKED')
 
 
 class HGD_PT_side_mirror(HGD_PT_base):

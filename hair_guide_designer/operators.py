@@ -1074,7 +1074,9 @@ def _set_twist_control_display(control_obj):
     control_obj.data.taper_object = None
     control_obj.display_type = "WIRE"
     control_obj.show_in_front = True
+    control_obj.hide_select = False
     control_obj["hair_guide_type"] = "twist_control"
+    control_obj["hair_editable_control"] = True
     control_obj["hair_use_taper"] = False
     control_obj["hair_taper_object"] = ""
     control_obj["hair_curve_profile_type"] = "NONE"
@@ -1132,6 +1134,8 @@ def _create_or_replace_twist_strand(context, control_obj):
         bevel=cm_to_m(scene.hair_twist_bevel_depth_cm),
     )
     obj.data.resolution_u = scene.hair_twist_resolution
+    obj.hide_select = True
+    obj["hair_locked_visual"] = True
     obj["hair_source_point"] = control_obj.get("hair_source_point", "")
     obj["hair_twist_id"] = twist_id
     obj["hair_twist_control"] = control_obj.name
@@ -1574,6 +1578,8 @@ def _set_card_preview_visible(curve_obj, visible):
 
 
 def _card_width(scene, t):
+    if scene.hair_card_sync_widths:
+        return cm_to_m(scene.hair_card_synced_width_cm)
     if t <= 0.5:
         return cm_to_m(scene.hair_card_width_root_cm + (scene.hair_card_width_mid_cm - scene.hair_card_width_root_cm) * (t / 0.5))
     return cm_to_m(scene.hair_card_width_mid_cm + (scene.hair_card_width_tip_cm - scene.hair_card_width_mid_cm) * ((t - 0.5) / 0.5))
@@ -1621,6 +1627,8 @@ def _create_or_update_card_preview(context, curve_obj):
     preview["hair_card_width_mid_cm"] = scene.hair_card_width_mid_cm
     preview["hair_card_width_tip"] = cm_to_m(scene.hair_card_width_tip_cm)
     preview["hair_card_width_tip_cm"] = scene.hair_card_width_tip_cm
+    preview["hair_card_sync_widths"] = scene.hair_card_sync_widths
+    preview["hair_card_synced_width_cm"] = scene.hair_card_synced_width_cm
     preview["hair_card_samples"] = len(samples)
     preview.show_in_front = curve_obj.show_in_front
     curve_obj["hair_card_preview_object"] = preview.name
@@ -1684,6 +1692,8 @@ def _create_card_mesh_from_curve(context, curve_obj):
     obj["hair_card_width_mid_cm"] = scene.hair_card_width_mid_cm
     obj["hair_card_width_tip"] = cm_to_m(scene.hair_card_width_tip_cm)
     obj["hair_card_width_tip_cm"] = scene.hair_card_width_tip_cm
+    obj["hair_card_sync_widths"] = scene.hair_card_sync_widths
+    obj["hair_card_synced_width_cm"] = scene.hair_card_synced_width_cm
     obj["hair_card_samples"] = len(samples)
     return obj
 
@@ -2123,6 +2133,31 @@ class HGD_OT_clear_shape_from_all_curves(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_lock_twist_visual_curves(bpy.types.Operator):
+    bl_idname = "hgd.lock_twist_visual_curves"
+    bl_label = "ツイスト表示Curveを選択不可にする"
+    bl_description = "既存のツイスト表示Curveを選択不可にし、ツイスト制御Curveを編集可能な状態へ戻します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        locked = 0
+        controls = 0
+        for obj in utils.generated_objects("twist_strand"):
+            obj.hide_select = True
+            obj["hair_locked_visual"] = True
+            locked += 1
+        for obj in utils.generated_objects("twist_control"):
+            obj.hide_select = False
+            obj.show_in_front = True
+            obj["hair_editable_control"] = True
+            controls += 1
+        if locked == 0 and controls == 0:
+            self.report({'WARNING'}, "ツイストCurveが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"ツイスト表示Curve {locked} 本を選択不可にし、制御Curve {controls} 本を編集可能にしました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_update_selected_twists(bpy.types.Operator):
     bl_idname = "hgd.update_selected_twists"
     bl_label = "選択ツイストを更新"
@@ -2529,6 +2564,7 @@ classes = (
     HGD_OT_apply_shape_to_all_curves,
     HGD_OT_clear_shape_from_selected_curves,
     HGD_OT_clear_shape_from_all_curves,
+    HGD_OT_lock_twist_visual_curves,
     HGD_OT_update_selected_twists,
     HGD_OT_update_all_twists,
     HGD_OT_apply_curve_batch_settings,

@@ -39,7 +39,8 @@ PROPERTY_NAMES = (
     "hair_curve_root_jitter", "hair_curve_mid_jitter", "hair_curve_tip_jitter",
     "hair_curve_root_jitter_cm", "hair_curve_mid_jitter_cm", "hair_curve_tip_jitter_cm",
     "hair_curve_length_variation", "hair_curve_display_mode", "hair_card_width_root", "hair_card_width_root_cm",
-    "hair_card_width_mid", "hair_card_width_mid_cm", "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_samples",
+    "hair_card_width_mid", "hair_card_width_mid_cm", "hair_card_width_tip", "hair_card_width_tip_cm",
+    "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
     "hair_card_auto_apply_to_new_curves", "hair_show_display_mode_settings",
     "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_width_cm", "hair_flat_mesh_thickness", "hair_flat_mesh_thickness_cm",
@@ -346,6 +347,19 @@ def register():
         description="互換用のm単位CARD幅です。通常UIではcm単位を使用します。",
     )
     scene.hair_card_width_tip_cm = FloatProperty(name="CARD Tip幅(cm)", default=0.5, min=0.0, max=200.0, precision=2, description="CARDプレビュー毛先側の幅をcm単位で指定します。内部ではmへ変換します。")
+    scene.hair_card_sync_widths = BoolProperty(
+        name="CARD幅を同期",
+        default=False,
+        description="ONにするとRoot/Mid/Tip幅を同じ値で扱います。Root/Mid/Tipの保存値は上書きしません。",
+    )
+    scene.hair_card_synced_width_cm = FloatProperty(
+        name="CARD同期幅(cm)",
+        default=8.0,
+        min=0.0,
+        max=200.0,
+        precision=2,
+        description="CARD幅同期ON時にRoot/Mid/Tipへ共通して使う幅をcm単位で指定します。",
+    )
     scene.hair_card_samples = IntProperty(
         name="CARDサンプル数",
         default=24,
