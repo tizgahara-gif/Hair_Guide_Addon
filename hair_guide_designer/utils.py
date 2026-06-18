@@ -323,7 +323,7 @@ def head_bounds(obj):
     return min_v, max_v, center, size
 
 
-def make_curve(name, points, collection, region, guide_type, scene, bevel=None):
+def make_curve(name, points, collection, region, guide_type, scene, bevel=None, handle_type="AUTO"):
     curve = bpy.data.curves.new(unique_name(name), "CURVE")
     curve.dimensions = "3D"
     curve.resolution_u = getattr(scene, "hair_curve_resolution", 12)
@@ -332,8 +332,8 @@ def make_curve(name, points, collection, region, guide_type, scene, bevel=None):
     spl.bezier_points.add(len(points) - 1)
     for point, co in zip(spl.bezier_points, points):
         point.co = co
-        point.handle_left_type = "AUTO"
-        point.handle_right_type = "AUTO"
+        point.handle_left_type = handle_type
+        point.handle_right_type = handle_type
     obj = bpy.data.objects.new(curve.name, curve)
     collection.objects.link(obj)
     set_common_props(obj, guide_type, region, scene)
