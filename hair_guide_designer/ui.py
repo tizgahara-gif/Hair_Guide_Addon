@@ -150,6 +150,10 @@ class HGD_PT_guide_lines(HGD_PT_base):
         layout.operator('hgd.create_hair_guides', text='基本ガイドを生成', icon='OUTLINER_OB_CURVE')
         if scene.hair_show_inline_help:
             layout.label(text="基本ガイドのみ生成します。")
+        layout.operator('hgd.symmetrize_front_back_guides', text='前後ガイドを左右対称化', icon='MOD_MIRROR')
+        if scene.hair_show_inline_help:
+            layout.label(text="Front/Back/Napeガイドの左右差を整えます。")
+            layout.label(text="手動調整後に使ってください。")
         layout.operator('hgd.delete_hair_guides', text='ガイド削除', icon='TRASH')
         if scene.hair_show_inline_help:
             layout.label(text="生成されたガイドのみ削除します。")

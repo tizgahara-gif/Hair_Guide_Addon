@@ -102,22 +102,37 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
             hairline_z = min_v.z + size.z * 0.66
             back_volume_z = min_v.z + size.z * 0.58
             nape_z = min_v.z + size.z * 0.18
-            front_out = min_v.y - max(scene.hair_guide_offset, size.y * 0.08)
-            back_out = max_v.y + max(scene.hair_guide_offset, size.y * 0.08)
+            front_surface = min_v.y
+            front_out = front_surface - max(scene.hair_guide_offset, size.y * 0.04)
+            back_surface = max_v.y
+            back_out = back_surface + max(scene.hair_guide_offset, size.y * 0.05)
 
-            hairline_points = utils.make_arc_points(center, rx * 0.72, ry * 0.55, hairline_z, 3.6, 5.8, 5)
-            for point in hairline_points:
-                point.y = min(point.y, front_out)
-            back_points = utils.make_arc_points(center, rx * 0.78, ry * 0.72, back_volume_z, 0.15, 3.0, 5)
-            for point in back_points:
-                point.y = max(point.y, back_out)
+            hairline_points = [
+                mathutils.Vector((center.x - rx * 0.58, front_surface - size.y * 0.015, hairline_z - size.z * 0.015)),
+                mathutils.Vector((center.x - rx * 0.28, front_out, hairline_z + size.z * 0.025)),
+                mathutils.Vector((center.x, front_out - size.y * 0.015, hairline_z + size.z * 0.04)),
+                mathutils.Vector((center.x + rx * 0.28, front_out, hairline_z + size.z * 0.025)),
+                mathutils.Vector((center.x + rx * 0.58, front_surface - size.y * 0.015, hairline_z - size.z * 0.015)),
+            ]
+            back_points = [
+                mathutils.Vector((center.x - rx * 0.62, back_surface + size.y * 0.02, back_volume_z - size.z * 0.02)),
+                mathutils.Vector((center.x - rx * 0.32, back_out, back_volume_z + size.z * 0.035)),
+                mathutils.Vector((center.x, back_out + size.y * 0.025, back_volume_z + size.z * 0.055)),
+                mathutils.Vector((center.x + rx * 0.32, back_out, back_volume_z + size.z * 0.035)),
+                mathutils.Vector((center.x + rx * 0.62, back_surface + size.y * 0.02, back_volume_z - size.z * 0.02)),
+            ]
+            nape_points = [
+                mathutils.Vector((center.x - rx * 0.35, back_surface + size.y * 0.015, nape_z)),
+                mathutils.Vector((center.x, back_out, nape_z - size.z * 0.03)),
+                mathutils.Vector((center.x + rx * 0.35, back_surface + size.y * 0.015, nape_z)),
+            ]
 
             guide_specs = [
                 ("HAIR_GUIDE_Hairline", hairline_points, "Front"),
                 ("HAIR_GUIDE_SideBoundary_L", [mathutils.Vector((center.x - rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x - rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x - rx * 0.82, back_out - size.y * 0.16, back_volume_z + size.z * 0.02))], "Side"),
                 ("HAIR_GUIDE_SideBoundary_R", [mathutils.Vector((center.x + rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x + rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x + rx * 0.82, back_out - size.y * 0.16, back_volume_z + size.z * 0.02))], "Side"),
                 ("HAIR_GUIDE_BackVolume", back_points, "Back_Middle"),
-                ("HAIR_GUIDE_Nape", [mathutils.Vector((center.x - rx * 0.35, back_out, nape_z)), mathutils.Vector((center.x, back_out + size.y * 0.02, nape_z - size.z * 0.03)), mathutils.Vector((center.x + rx * 0.35, back_out, nape_z))], "Nape"),
+                ("HAIR_GUIDE_Nape", nape_points, "Nape"),
                 ("HAIR_GUIDE_Center", [mathutils.Vector((center.x, center.y, top)), mathutils.Vector((center.x, center.y, nape_z))], "Back_Middle"),
             ]
             for name, points, region in guide_specs:
@@ -210,6 +225,86 @@ class HGD_OT_create_detailed_guides(bpy.types.Operator):
         for obj in created:
             obj["hair_guide_level"] = "detailed"
         return created
+
+
+
+
+FRONT_BACK_SYMMETRY_GUIDES = (
+    "HAIR_GUIDE_Hairline",
+    "HAIR_GUIDE_BackVolume",
+    "HAIR_GUIDE_Nape",
+)
+
+
+def _front_back_symmetry_center_x(context, guide_objects):
+    head = getattr(context.scene, "hair_target_head_object", None)
+    if head and head.type == "MESH":
+        _, _, center, _ = utils.head_bounds(head)
+        return center.x
+    world_points = []
+    for obj in guide_objects:
+        if not obj or obj.type != "CURVE":
+            continue
+        for spline in obj.data.splines:
+            if spline.type == "BEZIER":
+                world_points.extend(obj.matrix_world @ point.co for point in spline.bezier_points)
+    if world_points:
+        return sum(point.x for point in world_points) / len(world_points)
+    return 0.0
+
+
+class HGD_OT_symmetrize_front_back_guides(bpy.types.Operator):
+    bl_idname = "hgd.symmetrize_front_back_guides"
+    bl_label = "前後ガイドを左右対称化"
+    bl_description = "Front/Back/Napeガイドの左右差を頭部中心X基準で整えます。手動調整後に使ってください"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        guide_objects = [utils.get_guide_object(name) for name in FRONT_BACK_SYMMETRY_GUIDES]
+        guide_objects = [obj for obj in guide_objects if obj and obj.type == "CURVE"]
+        if not guide_objects:
+            self.report({'WARNING'}, "左右対称化できる前後ガイドが見つかりません。先に基本ガイドを生成してください。")
+            return {'CANCELLED'}
+
+        center_x = _front_back_symmetry_center_x(context, guide_objects)
+        updated_guides = 0
+        updated_points = 0
+        for obj in guide_objects:
+            obj_inv = obj.matrix_world.inverted()
+            guide_updated = False
+            for spline in obj.data.splines:
+                if spline.type != "BEZIER" or not spline.bezier_points:
+                    continue
+                points = sorted(spline.bezier_points, key=lambda point: (obj.matrix_world @ point.co).x)
+                pair_count = len(points) // 2
+                for index in range(pair_count):
+                    left = points[index]
+                    right = points[-index - 1]
+                    left_world = obj.matrix_world @ left.co
+                    right_world = obj.matrix_world @ right.co
+                    avg_abs = (abs(left_world.x - center_x) + abs(right_world.x - center_x)) * 0.5
+                    avg_y = (left_world.y + right_world.y) * 0.5
+                    avg_z = (left_world.z + right_world.z) * 0.5
+                    left.co = obj_inv @ mathutils.Vector((center_x - avg_abs, avg_y, avg_z))
+                    right.co = obj_inv @ mathutils.Vector((center_x + avg_abs, avg_y, avg_z))
+                    updated_points += 2
+                    guide_updated = True
+                if len(points) % 2 == 1:
+                    mid = points[pair_count]
+                    mid_world = obj.matrix_world @ mid.co
+                    mid.co = obj_inv @ mathutils.Vector((center_x, mid_world.y, mid_world.z))
+                    updated_points += 1
+                    guide_updated = True
+                for point in spline.bezier_points:
+                    point.handle_left_type = "AUTO"
+                    point.handle_right_type = "AUTO"
+            if guide_updated:
+                updated_guides += 1
+        if updated_guides == 0:
+            self.report({'WARNING'}, "Bezier点を持つ前後ガイドが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"前後ガイド{updated_guides}本・制御点{updated_points}点を左右対称化しました。")
+        return {'FINISHED'}
 
 
 class HGD_OT_delete_hair_guides(bpy.types.Operator):
@@ -2345,6 +2440,7 @@ class HGD_OT_mirror_side_r_to_l(bpy.types.Operator):
 classes = (
     HGD_OT_set_target_head,
     HGD_OT_create_hair_guides,
+    HGD_OT_symmetrize_front_back_guides,
     HGD_OT_delete_hair_guides,
     HGD_OT_show_hide_guides,
     HGD_OT_region_visibility,
