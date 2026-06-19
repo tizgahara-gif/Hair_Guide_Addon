@@ -2,6 +2,22 @@ import bpy
 from . import utils
 
 
+def _has_selected_card_or_output_mesh(context):
+    return any(
+        obj.get("hair_guide_type") in {"card_preview", "card_mesh", "flat_mesh"}
+        for obj in context.selected_objects
+    )
+
+
+def _draw_card_edit_redirect(layout, context):
+    if not _has_selected_card_or_output_mesh(context):
+        return
+    box = layout.box()
+    box.label(text="CARD/出力Meshが選択されています。編集は元Curveで行います。", icon='INFO')
+    box.label(text="ツイストCARDの場合は表示用twist_strandではなくtwist_controlを選択します。")
+    box.operator('hgd.select_edit_curve_from_preview', text='選択CARDの編集Curveを選択', icon='CURVE_BEZCURVE')
+
+
 def _count_generated(guide_type=None):
     return len(utils.generated_objects(guide_type))
 
@@ -204,6 +220,8 @@ class HGD_PT_quick_actions(HGD_PT_base):
         row.operator('hgd.convert_selected_card_preview_to_mesh', text='6B. CARD実体化', icon='MESH_PLANE')
         row.operator('hgd.convert_all_card_previews_to_mesh', text='全CARD実体化')
 
+        _draw_card_edit_redirect(layout, context)
+
         if scene.hair_show_inline_help:
             box = layout.box()
             box.label(text="扁平メッシュ出力とCARD実体化は元Curveを残します。", icon='INFO')
@@ -344,16 +362,11 @@ class HGD_PT_display_mode(HGD_PT_base):
             layout.label(text="CARDは元Curve線 + Preview Mesh表示の制作中プレビューです。")
             layout.label(text="CARDプレビューは表示確認用です。編集する場合は元Curveを選択してください。")
         layout.prop(scene, 'hair_curve_display_mode')
-        active = context.active_object
-        if active and active.get("hair_guide_type") == "card_preview":
-            box = layout.box()
-            box.label(text='CARDプレビューが選択されています。', icon='INFO')
-            box.label(text='編集する場合は元Curveを選択してください。')
-            box.operator('hgd.select_source_curve_from_card_preview', text='選択CARDの元Curveを選択', icon='RESTRICT_SELECT_OFF')
+        _draw_card_edit_redirect(layout, context)
         row = layout.row(align=True)
         row.operator('hgd.apply_display_mode_to_selected_curves', text='選択Curveへ表示モード適用')
         row.operator('hgd.apply_display_mode_to_all_curves', text='全Curveへ表示モード適用')
-        layout.operator('hgd.select_source_curve_from_card_preview', text='選択CARDの元Curveを選択', icon='RESTRICT_SELECT_OFF')
+        layout.operator('hgd.select_edit_curve_from_preview', text='選択CARDの編集Curveを選択', icon='CURVE_BEZCURVE')
         layout.operator('hgd.update_card_previews_from_curves', text='CARDプレビューを更新', icon='FILE_REFRESH')
         layout.operator('hgd.lock_card_previews', text='CARDプレビューを選択可能にする', icon='RESTRICT_SELECT_OFF')
         icon = 'TRIA_DOWN' if scene.hair_show_display_mode_settings else 'TRIA_RIGHT'
@@ -373,8 +386,9 @@ class HGD_PT_display_mode(HGD_PT_base):
             box.prop(scene, 'hair_card_samples')
             box.prop(scene, 'hair_card_auto_apply_to_new_curves')
             box.prop(scene, 'hair_card_auto_update_preview')
+            box.prop(scene, 'hair_card_auto_select_edit_curve')
             box.operator('hgd.update_card_previews_from_curves', text='CARDプレビューを更新', icon='FILE_REFRESH')
-            box.operator('hgd.select_source_curve_from_card_preview', text='選択CARDの元Curveを選択', icon='RESTRICT_SELECT_OFF')
+            box.operator('hgd.select_edit_curve_from_preview', text='選択CARDの編集Curveを選択', icon='CURVE_BEZCURVE')
             if scene.hair_show_inline_help:
                 box.label(text='CARD幅同期ON中は同期幅が表示に使われます。')
                 box.label(text='プリセット値を見た目へ反映したい場合はCARD幅同期をOFFにしてください。')
