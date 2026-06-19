@@ -196,6 +196,18 @@ class HGD_PT_card_display(HGD_PT_base):
         else:
             for p in ['hair_card_width_root_cm','hair_card_width_mid_cm','hair_card_width_tip_cm']: box.prop(scene,p)
         box.operator('hgd.update_card_previews_from_curves', text='CARDプレビュー更新', icon='FILE_REFRESH')
+        twist_box = box.box()
+        twist_box.label(text='ねじれ修正', icon='MOD_SMOOTH')
+        twist_box.prop(scene, 'hair_card_use_parallel_transport')
+        twist_box.prop(scene, 'hair_card_default_roll_angle')
+        twist_box.prop(scene, 'hair_card_roll_apply_scope')
+        twist_box.operator('hgd.apply_card_roll_to_selected', text='CARD Rollを適用', icon='DRIVER_ROTATIONAL_DIFFERENCE')
+        twist_box.prop(scene, 'hair_card_twist_fix_scope')
+        twist_box.operator('hgd.fix_card_twist', text='CARDねじれ修正', icon='FILE_REFRESH')
+        if scene.hair_show_inline_help:
+            twist_box.label(text='途中反転する場合は「CARDねじれ修正」を押してください。', icon='HELP')
+            twist_box.label(text='面方向はCARD標準ロール角を調整後、「CARD Rollを適用」。')
+            twist_box.label(text='Preview / CARD Mesh / Flat Mesh選択時も参照元Curveへ適用します。')
         box.operator('hgd.edit_source_curve', text='編集Curveを開く', icon='CURVE_BEZCURVE')
         row=box.row(align=True); row.operator('hgd.apply_display_mode_to_selected_curves', text='選択対象へ表示モード適用'); row.operator('hgd.apply_display_mode_to_all_curves', text='全Curveへ適用')
         _draw_card_edit_redirect(layout, context)
