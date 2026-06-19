@@ -15,6 +15,24 @@ from . import properties, operators, ui
 
 modules = (properties, operators, ui)
 
+addon_keymaps = []
+
+
+def _register_keymaps():
+    wm = bpy.context.window_manager
+    kc = wm.keyconfigs.addon
+    if not kc:
+        return
+    km = kc.keymaps.new(name="Object Mode", space_type="EMPTY")
+    kmi = km.keymap_items.new("hgd.edit_source_curve", type="TAB", value="PRESS")
+    addon_keymaps.append((km, kmi))
+
+
+def _unregister_keymaps():
+    for km, kmi in addon_keymaps:
+        km.keymap_items.remove(kmi)
+    addon_keymaps.clear()
+
 
 class HGD_AddonPreferences(bpy.types.AddonPreferences):
     bl_idname = __package__ or "hair_guide_designer"
@@ -42,8 +60,10 @@ def register():
     bpy.utils.register_class(HGD_AddonPreferences)
     for module in modules:
         module.register()
+    _register_keymaps()
 
 def unregister():
+    _unregister_keymaps()
     for module in reversed(modules):
         module.unregister()
     bpy.utils.unregister_class(HGD_AddonPreferences)

@@ -15,7 +15,7 @@ def _draw_card_edit_redirect(layout, context):
     box = layout.box()
     box.label(text="CARD/出力Meshが選択されています。編集は元Curveで行います。", icon='INFO')
     box.label(text="ツイストCARDの場合は表示用twist_strandではなくtwist_controlを選択します。")
-    box.operator('hgd.select_edit_curve_from_preview', text='選択CARDの編集Curveを選択', icon='CURVE_BEZCURVE')
+    box.operator('hgd.edit_source_curve', text='編集Curveを開く', icon='CURVE_BEZCURVE')
 
 
 def _count_generated(guide_type=None):
@@ -366,7 +366,7 @@ class HGD_PT_display_mode(HGD_PT_base):
         row = layout.row(align=True)
         row.operator('hgd.apply_display_mode_to_selected_curves', text='選択Curveへ表示モード適用')
         row.operator('hgd.apply_display_mode_to_all_curves', text='全Curveへ表示モード適用')
-        layout.operator('hgd.select_edit_curve_from_preview', text='選択CARDの編集Curveを選択', icon='CURVE_BEZCURVE')
+        layout.operator('hgd.edit_source_curve', text='編集Curveを開く', icon='CURVE_BEZCURVE')
         layout.operator('hgd.update_card_previews_from_curves', text='CARDプレビューを更新', icon='FILE_REFRESH')
         layout.operator('hgd.lock_card_previews', text='CARDプレビューを選択可能にする', icon='RESTRICT_SELECT_OFF')
         icon = 'TRIA_DOWN' if scene.hair_show_display_mode_settings else 'TRIA_RIGHT'
@@ -387,7 +387,7 @@ class HGD_PT_display_mode(HGD_PT_base):
             box.prop(scene, 'hair_card_auto_apply_to_new_curves')
             box.operator('hgd.update_card_previews_from_curves', text='CARDプレビューを更新', icon='FILE_REFRESH')
             box.label(text='Curve編集後、このボタンでCARDプレビューへ反映します。')
-            box.operator('hgd.select_edit_curve_from_preview', text='選択CARDの編集Curveを選択', icon='CURVE_BEZCURVE')
+            box.operator('hgd.edit_source_curve', text='編集Curveを開く', icon='CURVE_BEZCURVE')
             if scene.hair_show_inline_help:
                 box.label(text='CARD幅同期ON中は同期幅が表示に使われます。')
                 box.label(text='プリセット値を見た目へ反映したい場合はCARD幅同期をOFFにしてください。')
