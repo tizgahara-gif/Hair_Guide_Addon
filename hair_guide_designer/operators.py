@@ -1089,11 +1089,20 @@ class HGD_OT_apply_curve_region_colors(bpy.types.Operator):
 
 
 def _generated_curves_from_context(context, selected_only):
-    objects = context.selected_objects if selected_only else utils.generated_objects()
-    return [
-        obj for obj in objects
-        if obj.type == "CURVE" and obj.get("hair_guide_type") in {"curve", "twist_strand"}
-    ]
+    if not selected_only:
+        return [
+            obj for obj in utils.generated_objects()
+            if obj.type == "CURVE" and obj.get("hair_guide_type") in {"curve", "twist_strand"}
+        ]
+
+    result = []
+    seen = set()
+    for obj in context.selected_objects:
+        target = resolve_display_curve_from_object(context, obj)
+        if target and target.name not in seen:
+            result.append(target)
+            seen.add(target.name)
+    return result
 
 
 def _follow_targets_from_context(context, selected_only):
@@ -2237,6 +2246,41 @@ def resolve_edit_curve_from_object(obj):
     return None
 
 
+def resolve_display_curve_from_object(context, obj):
+    if not obj:
+        return None
+
+    guide_type = obj.get("hair_guide_type", "")
+
+    if guide_type == "curve":
+        return obj
+
+    if guide_type == "twist_strand":
+        return obj
+
+    if guide_type == "twist_control":
+        return _create_or_replace_twist_strand(context, obj)
+
+    if guide_type in CARD_SELECTION_REDIRECT_TYPES:
+        source_name = obj.get("hair_source_curve", "")
+        source = bpy.data.objects.get(source_name)
+        if not source:
+            return None
+
+        source_type = source.get("hair_guide_type", "")
+
+        if source_type == "curve":
+            return source
+
+        if source_type == "twist_strand":
+            return source
+
+        if source_type == "twist_control":
+            return _create_or_replace_twist_strand(context, source)
+
+    return None
+
+
 def _source_curve_from_redirect_object(obj):
     if not obj:
         return None
@@ -2254,43 +2298,29 @@ def _add_unique_object(items, obj):
         items.append(obj)
 
 
-def _add_card_update_target_from_object(obj, curves, twist_controls):
-    if not obj:
+def _add_card_update_target_from_object(context, obj, curves, twist_controls):
+    target = resolve_display_curve_from_object(context, obj)
+    if not target:
         return
 
-    guide_type = obj.get("hair_guide_type")
-
-    if guide_type == "curve" and obj.type == "CURVE":
-        _add_unique_object(curves, obj)
+    guide_type = target.get("hair_guide_type")
+    if guide_type == "curve" and target.type == "CURVE":
+        _add_unique_object(curves, target)
         return
 
-    if guide_type == "twist_control" and obj.type == "CURVE":
-        _add_unique_object(twist_controls, obj)
-        return
-
-    if guide_type == "twist_strand":
-        control = resolve_edit_curve_from_object(obj)
+    if guide_type == "twist_strand" and target.type == "CURVE":
+        control = resolve_edit_curve_from_object(target)
         if control and control.get("hair_guide_type") == "twist_control":
             _add_unique_object(twist_controls, control)
-        return
-
-    if guide_type in CARD_SELECTION_REDIRECT_TYPES:
-        source = _source_curve_from_redirect_object(obj)
-        if not source:
-            return
-        if source.get("hair_guide_type") == "twist_strand":
-            control = resolve_edit_curve_from_object(source)
-            if control and control.get("hair_guide_type") == "twist_control":
-                _add_unique_object(twist_controls, control)
-        elif source.get("hair_guide_type") == "curve":
-            _add_unique_object(curves, source)
+        else:
+            _add_unique_object(curves, target)
 
 
 def _selected_card_update_targets(context):
     curves = []
     twist_controls = []
     for obj in context.selected_objects:
-        _add_card_update_target_from_object(obj, curves, twist_controls)
+        _add_card_update_target_from_object(context, obj, curves, twist_controls)
     return curves, twist_controls
 
 
@@ -2414,13 +2444,13 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
 class HGD_OT_apply_display_mode_to_selected_curves(bpy.types.Operator):
     bl_idname = "hgd.apply_display_mode_to_selected_curves"
     bl_label = "選択Curveへ表示モードを適用"
-    bl_description = "選択中の通常Curveまたはツイスト表示Curveへ現在の表示モードを適用します"
+    bl_description = "選択中のCurve、またはCARD Preview/出力Meshの参照元Curveへ現在の表示モードを適用します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         curves = _apply_display_mode_to_curves(context, True)
         if not curves:
-            self.report({'WARNING'}, "表示モードを適用できるCurveが選択されていません。")
+            self.report({'WARNING'}, "表示モードを適用できるCurve、または元Curveを持つPreview/Meshが選択されていません。")
             return {'CANCELLED'}
         self.report({'INFO'}, f"選択Curve {len(curves)} 本へ表示モード「{context.scene.hair_curve_display_mode}」を適用しました。")
         return {'FINISHED'}

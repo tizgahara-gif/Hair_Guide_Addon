@@ -361,6 +361,7 @@ class HGD_PT_display_mode(HGD_PT_base):
             layout.label(text="Curveを維持したまま表示方式を切り替えます。", icon='OUTLINER_OB_CURVE')
             layout.label(text="CARDは元Curve線 + Preview Mesh表示の制作中プレビューです。")
             layout.label(text="CARDプレビューは表示確認用です。編集する場合は元Curveを選択してください。")
+            layout.label(text="CARD Previewや出力Meshを選択している場合は、参照元Curveへ適用します。")
         layout.prop(scene, 'hair_curve_display_mode')
         _draw_card_edit_redirect(layout, context)
         row = layout.row(align=True)
