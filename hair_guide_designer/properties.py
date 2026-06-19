@@ -50,6 +50,8 @@ PROPERTY_NAMES = (
     "hair_curve_length_variation", "hair_curve_display_mode",
     "hair_curve_twist_handle_angle", "hair_curve_twist_handle_strength",
     "hair_curve_twist_handle_falloff", "hair_curve_twist_preserve_end_handles",
+    "hair_curve_selected_point_twist_angle", "hair_curve_selected_point_twist_strength",
+    "hair_curve_selected_point_twist_axis",
     "hair_ui_show_handle_twist", "hair_card_width_preset",
     "hair_card_width_root", "hair_card_width_root_cm", "hair_card_width_mid", "hair_card_width_mid_cm",
     "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
@@ -402,6 +404,30 @@ def register():
         name="両端ハンドルを弱める",
         default=True,
         description="根元と毛先の破綻を避けるため、両端のハンドルねじりを弱めます。",
+    )
+    scene.hair_curve_selected_point_twist_angle = FloatProperty(
+        name="選択点ねじり角",
+        default=15.0,
+        min=-180.0,
+        max=180.0,
+        description="Curve編集モードで選択中のBezier点だけに適用するハンドルねじり角です。",
+    )
+    scene.hair_curve_selected_point_twist_strength = FloatProperty(
+        name="選択点ハンドル強度",
+        default=1.0,
+        min=0.0,
+        max=3.0,
+        description="選択Bezier点の既存ハンドル長を基準に、ねじり後のハンドル長へ倍率をかけます。",
+    )
+    scene.hair_curve_selected_point_twist_axis = EnumProperty(
+        name="ねじり軸",
+        items=(
+            ("LOCAL_TANGENT", "接線方向", "前後制御点から求めた接線方向を軸にします"),
+            ("OBJECT_Z", "Object Z", "ObjectのローカルZ軸を軸にします"),
+            ("WORLD_Z", "World Z", "World Z軸を軸にします"),
+        ),
+        default="LOCAL_TANGENT",
+        description="選択Bezier点のハンドルを回転する軸です。",
     )
 
     scene.hair_card_width_preset = EnumProperty(

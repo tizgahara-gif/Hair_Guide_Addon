@@ -183,9 +183,19 @@ class HGD_PT_curve_edit(HGD_PT_base):
             for p in ['hair_curve_twist_handle_angle','hair_curve_twist_handle_strength','hair_curve_twist_handle_falloff','hair_curve_twist_preserve_end_handles']:
                 twist_box.prop(scene, p)
             twist_box.operator('hgd.twist_selected_curve_handles', text='選択Curveのハンドルをねじる', icon='DRIVER_ROTATIONAL_DIFFERENCE')
+            twist_box.separator()
+            for p in ['hair_curve_selected_point_twist_angle','hair_curve_selected_point_twist_strength','hair_curve_selected_point_twist_axis']:
+                twist_box.prop(scene, p)
+            obj = context.object
+            is_edit_curve = obj and obj.type == 'CURVE' and context.mode == 'EDIT_CURVE'
+            row = twist_box.row()
+            row.enabled = bool(is_edit_curve)
+            row.operator('hgd.twist_selected_bezier_points', text='選択点だけハンドルをねじる', icon='DRIVER_ROTATIONAL_DIFFERENCE')
             if scene.hair_show_inline_help:
                 twist_box.label(text='制御点位置は動かさず、Bezierハンドルだけを回転してCurveの流れをねじります。', icon='HELP')
                 twist_box.label(text='CARD Preview選択時は参照元の編集Curveへ適用します。')
+                twist_box.label(text='編集モードでBezier点を選択して実行します。')
+                twist_box.label(text='選択点の座標は動かさず、左右ハンドルだけを回転します。')
                 twist_box.label(text='適用後にCARD Previewを更新してください。')
 
 class HGD_PT_card_display(HGD_PT_base):
