@@ -16,6 +16,14 @@ TAPER_PRESETS = (
     ("CUSTOM", "カスタム", "現在の手動設定を使用します"),
 )
 
+CARD_WIDTH_PRESETS = (
+    ("UNIFORM", "均一カード", "Root/Mid/Tipを同じ幅にします。仮配置やUV確認向け"),
+    ("STANDARD", "標準テーパー", "汎用毛束向けの自然な幅変化"),
+    ("SHARP_TIP", "シャープ毛先", "前髪やアニメ調の鋭い毛先向け"),
+    ("VOLUME", "ボリューム毛束", "後頭部や大きい束向け"),
+    ("CUSTOM", "カスタム", "現在の手動設定を使用します"),
+)
+
 STRAND_GENERATION_TYPES = (
     ("NORMAL_CURVE", "通常カーブ", "1本の髪束ガイドカーブを生成します"),
     ("TWIST_CURVE", "ツイストカーブ", "1本の制御カーブからドリル状・縦ロール状の表示カーブを生成します"),
@@ -39,9 +47,9 @@ PROPERTY_NAMES = (
     "hair_curve_root_jitter", "hair_curve_mid_jitter", "hair_curve_tip_jitter",
     "hair_curve_root_jitter_cm", "hair_curve_mid_jitter_cm", "hair_curve_tip_jitter_cm",
     "hair_curve_root_jitter_ratio", "hair_curve_mid_jitter_ratio", "hair_curve_tip_jitter_ratio",
-    "hair_curve_length_variation", "hair_curve_display_mode", "hair_card_width_root", "hair_card_width_root_cm",
-    "hair_card_width_mid", "hair_card_width_mid_cm", "hair_card_width_tip", "hair_card_width_tip_cm",
-    "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
+    "hair_curve_length_variation", "hair_curve_display_mode", "hair_card_width_preset",
+    "hair_card_width_root", "hair_card_width_root_cm", "hair_card_width_mid", "hair_card_width_mid_cm",
+    "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
     "hair_card_auto_apply_to_new_curves", "hair_card_auto_update_preview", "hair_show_display_mode_settings",
     "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_width_cm", "hair_flat_mesh_thickness", "hair_flat_mesh_thickness_cm",
@@ -358,6 +366,12 @@ def register():
         ),
         default="SOLID",
         description="Curveを維持したまま表示方式を切り替えます。",
+    )
+    scene.hair_card_width_preset = EnumProperty(
+        name="CARD幅プリセット",
+        items=CARD_WIDTH_PRESETS,
+        default="STANDARD",
+        description="用途別のCARD Root/Mid/Tip幅プリセットを選択します。反映ボタンで幅だけを更新します。",
     )
     scene.hair_card_width_root = FloatProperty(
         name="CARD Root幅(m・互換用)",

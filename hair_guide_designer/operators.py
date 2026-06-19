@@ -26,6 +26,20 @@ def require_head(context, operator):
 WORK_MODE_LOCK_EDITABLE_TYPES = {"guide", "region", "placement_point", "warning", "curve", "twist_control", "card_preview"}
 WORK_MODE_LOCK_PREV_KEY = "hgd_prev_hide_select"
 
+CARD_WIDTH_PRESETS = {
+    "UNIFORM": (6.0, 6.0, 6.0),
+    "STANDARD": (8.0, 6.0, 2.0),
+    "SHARP_TIP": (7.0, 4.0, 0.3),
+    "VOLUME": (12.0, 10.0, 4.0),
+}
+CARD_WIDTH_PRESET_LABELS = {
+    "UNIFORM": "均一カード",
+    "STANDARD": "標準テーパー",
+    "SHARP_TIP": "シャープ毛先",
+    "VOLUME": "ボリューム毛束",
+    "CUSTOM": "カスタム",
+}
+
 
 def _is_work_mode_lock_editable(obj):
     return obj.get("hair_guide_type") in WORK_MODE_LOCK_EDITABLE_TYPES
@@ -1960,6 +1974,26 @@ def _clear_shape_from_curves(context, selected_only):
     return curves
 
 
+class HGD_OT_apply_card_width_preset(bpy.types.Operator):
+    bl_idname = "hgd.apply_card_width_preset"
+    bl_label = "CARD幅プリセットを反映"
+    bl_description = "選択中のCARD幅プリセット値をRoot/Mid/Tip幅へ反映します。同期設定や同期幅は変更しません"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        preset = scene.hair_card_width_preset
+        if preset == "CUSTOM":
+            self.report({'INFO'}, "カスタム設定を使用します。")
+            return {'FINISHED'}
+        root, mid, tip = CARD_WIDTH_PRESETS[preset]
+        scene.hair_card_width_root_cm = root
+        scene.hair_card_width_mid_cm = mid
+        scene.hair_card_width_tip_cm = tip
+        self.report({'INFO'}, f"CARD幅プリセット「{CARD_WIDTH_PRESET_LABELS[preset]}」を反映しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_apply_taper_preset(bpy.types.Operator):
     bl_idname = "hgd.apply_taper_preset"
     bl_label = "プリセットを反映"
@@ -2855,6 +2889,7 @@ classes = (
     HGD_OT_toggle_in_front_generated_helpers,
     HGD_OT_organize_curves_by_region,
     HGD_OT_apply_curve_region_colors,
+    HGD_OT_apply_card_width_preset,
     HGD_OT_apply_taper_preset,
     HGD_OT_create_or_update_default_taper,
     HGD_OT_apply_taper_to_selected_curves,
