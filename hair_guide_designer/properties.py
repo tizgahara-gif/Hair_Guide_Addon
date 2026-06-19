@@ -65,6 +65,9 @@ PROPERTY_NAMES = (
     "hair_twist_phase", "hair_twist_bevel_depth", "hair_twist_bevel_depth_cm", "hair_twist_resolution",
     "hair_twist_taper_strength",
     "hair_show_twist_settings", "hair_show_advanced_curve_settings",
+    "hair_ui_show_curve_advanced", "hair_ui_show_card_advanced",
+    "hair_ui_show_output_advanced", "hair_ui_show_cleanup_advanced",
+    "hair_ui_show_debug",
     "hair_show_guides_in_front", "hair_show_inline_help", "hair_work_mode_lock_enabled",
 )
 
@@ -623,6 +626,32 @@ def register():
         name="詳細/互換設定を表示",
         default=False,
         description="将来互換用のカーブ詳細パラメータを表示します。",
+    )
+
+    scene.hair_ui_show_curve_advanced = BoolProperty(
+        name="詳細を表示",
+        default=False,
+        description="カーブ生成/編集の低頻度・詳細設定を表示します。",
+    )
+    scene.hair_ui_show_card_advanced = BoolProperty(
+        name="詳細を表示",
+        default=False,
+        description="CARD表示の低頻度・詳細設定を表示します。",
+    )
+    scene.hair_ui_show_output_advanced = BoolProperty(
+        name="詳細を表示",
+        default=False,
+        description="出力の低頻度・詳細設定を表示します。",
+    )
+    scene.hair_ui_show_cleanup_advanced = BoolProperty(
+        name="詳細を表示",
+        default=False,
+        description="整理・削除の低頻度・保守操作を表示します。",
+    )
+    scene.hair_ui_show_debug = BoolProperty(
+        name="詳細を表示",
+        default=False,
+        description="互換Propertyやデバッグ/保守用設定を表示します。",
     )
 
     scene.hair_twist_segments = IntProperty(
