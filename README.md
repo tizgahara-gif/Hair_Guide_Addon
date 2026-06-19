@@ -195,7 +195,7 @@ CARDプレビューはsource curveを表示したまま `HairGuideSystem/CardPre
 
 表示モードがCARDで **新規Curveへ現在の表示モードを自動適用** がONの場合、配置点から新規Curveを生成すると同時に `HairGuideSystem/CardPreviews` へCARDプレビューも作成されます。OFFの場合は、生成後に **選択Curveへ表示モード適用** または **全Curveへ表示モード適用** を押してください。
 
-CARDプレビューは表示用Meshであり、選択はできますが直接編集対象ではありません。CARDプレビューとCARD実体Mesh、扁平メッシュには `hair_source_curve` が保存されているため、形を変える場合は **選択CARDの編集Curveを選択** で編集対象へ選択を移してからCurveを編集してください。通常CARDの場合は元の通常Curveへ、ツイストCARDの場合は表示用 `twist_strand` ではなく `twist_control` へ選択を移します。**Curve編集時にCARD自動更新** がONの場合、通常Curveの形状変更はCARDプレビューへ自動反映されます。環境によって自動更新が遅れる場合は **CARDプレビューを更新** を押してください。CARD実体化したMeshは出力物です。再調整は元Curveまたはツイスト制御Curveで行うことを推奨します。ツイストの場合は制御Curveを編集後、**選択ツイストを更新** または **全ツイストを更新** を実行し、必要に応じてCARDプレビューも更新してください。
+CARDプレビューは表示用Meshであり、選択はできますが直接編集対象ではありません。CARDプレビューとCARD実体Mesh、扁平メッシュには `hair_source_curve` が保存されているため、形を変える場合は **選択CARDの編集Curveを選択** で編集対象へ選択を移してからCurveを編集してください。通常CARDの場合は元の通常Curveへ、ツイストCARDの場合は表示用 `twist_strand` ではなく `twist_control` へ選択を移します。CARDプレビューはリアルタイム追従しません。制御Curveまたは通常Curveを編集した後、**CARDプレビューを更新** を押すと現在のCurve形状からPreviewを再生成します。リアルタイム更新は重いため、明示更新方式にしています。CARD実体化したMeshは出力物です。再調整は元Curveまたはツイスト制御Curveで行うことを推奨します。
 
 ## CARD幅プリセット
 

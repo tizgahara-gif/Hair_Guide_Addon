@@ -385,9 +385,8 @@ class HGD_PT_display_mode(HGD_PT_base):
                 box.prop(scene, 'hair_card_width_tip_cm')
             box.prop(scene, 'hair_card_samples')
             box.prop(scene, 'hair_card_auto_apply_to_new_curves')
-            box.prop(scene, 'hair_card_auto_update_preview')
-            box.prop(scene, 'hair_card_auto_select_edit_curve')
             box.operator('hgd.update_card_previews_from_curves', text='CARDプレビューを更新', icon='FILE_REFRESH')
+            box.label(text='Curve編集後、このボタンでCARDプレビューへ反映します。')
             box.operator('hgd.select_edit_curve_from_preview', text='選択CARDの編集Curveを選択', icon='CURVE_BEZCURVE')
             if scene.hair_show_inline_help:
                 box.label(text='CARD幅同期ON中は同期幅が表示に使われます。')
@@ -395,6 +394,8 @@ class HGD_PT_display_mode(HGD_PT_base):
                 box.label(text='元Curveは削除されず、CardPreviewsに一時Meshを作ります。')
                 box.label(text='CARDプレビューは選択できますが、編集対象は元Curveです。')
                 box.label(text='自動適用ON + CARDでは新規Curve生成直後にCARDプレビューも作成します。')
+                box.label(text='CARDプレビューはリアルタイム追従しません。')
+                box.label(text='Curve編集後はCARDプレビューを更新してください。')
                 box.label(text='CARDを選んだ後、元Curveを選択すると編集対象へ移動できます。')
 
 
