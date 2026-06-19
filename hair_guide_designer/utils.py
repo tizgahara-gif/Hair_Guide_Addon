@@ -107,24 +107,36 @@ def get_guide_object(name):
     return None
 
 
-def _spline_control_points_world(obj):
+def _evaluated_curve_data_and_matrix(obj):
+    """Return evaluated curve data and world matrix for sampling current guide shape."""
     if not obj or obj.type != "CURVE":
+        return None, None
+    if hasattr(obj, "update_from_editmode"):
+        obj.update_from_editmode()
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    evaluated = obj.evaluated_get(depsgraph)
+    return evaluated.data, evaluated.matrix_world.copy()
+
+
+def _spline_control_points_world(obj):
+    curve_data, matrix_world = _evaluated_curve_data_and_matrix(obj)
+    if not curve_data:
         return []
     points = []
-    for spline in obj.data.splines:
+    for spline in curve_data.splines:
         if spline.type == "BEZIER":
-            points.extend(obj.matrix_world @ point.co for point in spline.bezier_points)
+            points.extend(matrix_world @ point.co for point in spline.bezier_points)
         else:
             for point in spline.points:
                 co = point.co
-                points.append(obj.matrix_world @ mathutils.Vector((co.x, co.y, co.z)))
+                points.append(matrix_world @ mathutils.Vector((co.x, co.y, co.z)))
         if points:
             break
     return points
 
 
-def sample_curve_world_points(obj, count):
-    source = _spline_control_points_world(obj)
+def _resample_polyline_world_points(source, count):
     if not source:
         return []
     if len(source) == 1:
@@ -152,6 +164,16 @@ def sample_curve_world_points(obj, count):
     return samples
 
 
+def sample_curve_world_points(obj, count):
+    """Sample the evaluated curve shape in world space.
+
+    Placement generation must depend on the current evaluated Curve result rather
+    than BezierPoint local coordinates, so object transforms, origin changes, and
+    edit-mode guide deformation are reflected consistently.
+    """
+    return sample_curve_world_points_evaluated(obj, count)
+
+
 def _cubic_bezier(p0, p1, p2, p3, t):
     inv = 1.0 - t
     return (
@@ -163,15 +185,16 @@ def _cubic_bezier(p0, p1, p2, p3, t):
 
 
 def sample_curve_world_points_evaluated(obj, count):
-    """Sample the first spline in world space, including Bezier handles for Bezier curves."""
-    if not obj or obj.type != "CURVE":
+    """Sample the first evaluated spline in world space, including Bezier handles."""
+    curve_data, matrix_world = _evaluated_curve_data_and_matrix(obj)
+    if not curve_data:
         return []
-    spline = next((item for item in obj.data.splines if item.type == "BEZIER" and item.bezier_points), None)
+    spline = next((item for item in curve_data.splines if item.type == "BEZIER" and item.bezier_points), None)
     if spline is None:
-        return sample_curve_world_points(obj, count)
+        return _resample_polyline_world_points(_spline_control_points_world(obj), count)
     bezier_points = spline.bezier_points
     if len(bezier_points) == 1:
-        point = obj.matrix_world @ bezier_points[0].co
+        point = matrix_world @ bezier_points[0].co
         return [point.copy() for _ in range(max(count, 1))]
 
     dense = []
@@ -179,38 +202,16 @@ def sample_curve_world_points_evaluated(obj, count):
     for index in range(len(bezier_points) - 1):
         current = bezier_points[index]
         next_point = bezier_points[index + 1]
-        p0 = obj.matrix_world @ current.co
-        p1 = obj.matrix_world @ current.handle_right
-        p2 = obj.matrix_world @ next_point.handle_left
-        p3 = obj.matrix_world @ next_point.co
+        p0 = matrix_world @ current.co
+        p1 = matrix_world @ current.handle_right
+        p2 = matrix_world @ next_point.handle_left
+        p3 = matrix_world @ next_point.co
         for sample_index in range(segment_samples):
             if index > 0 and sample_index == 0:
                 continue
             dense.append(_cubic_bezier(p0, p1, p2, p3, sample_index / segment_samples))
-    dense.append(obj.matrix_world @ bezier_points[-1].co)
-    if len(dense) < 2:
-        return dense
-    lengths = []
-    total = 0.0
-    for start, end in zip(dense, dense[1:]):
-        total += (end - start).length
-        lengths.append(total)
-    if total == 0.0:
-        return [dense[0].copy() for _ in range(max(count, 1))]
-    samples = []
-    for index in range(max(count, 2)):
-        target = total * (index / max(count - 1, 1))
-        segment_index = 0
-        previous = 0.0
-        for idx, end_length in enumerate(lengths):
-            if target <= end_length:
-                segment_index = idx
-                break
-            previous = end_length
-        segment_length = max(lengths[segment_index] - previous, 0.000001)
-        factor = (target - previous) / segment_length
-        samples.append(dense[segment_index].lerp(dense[segment_index + 1], factor))
-    return samples
+    dense.append(matrix_world @ bezier_points[-1].co)
+    return _resample_polyline_world_points(dense, count)
 
 
 def get_curve_world_center(obj):
