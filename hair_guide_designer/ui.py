@@ -361,6 +361,8 @@ class HGD_PT_display_mode(HGD_PT_base):
         if scene.hair_show_display_mode_settings:
             box = layout.box()
             box.label(text='CARDプレビュー', icon='MESH_PLANE')
+            box.prop(scene, 'hair_card_width_preset')
+            box.operator('hgd.apply_card_width_preset', icon='CHECKMARK')
             box.prop(scene, 'hair_card_sync_widths')
             if scene.hair_card_sync_widths:
                 box.prop(scene, 'hair_card_synced_width_cm')
@@ -374,6 +376,8 @@ class HGD_PT_display_mode(HGD_PT_base):
             box.operator('hgd.update_card_previews_from_curves', text='CARDプレビューを更新', icon='FILE_REFRESH')
             box.operator('hgd.select_source_curve_from_card_preview', text='選択CARDの元Curveを選択', icon='RESTRICT_SELECT_OFF')
             if scene.hair_show_inline_help:
+                box.label(text='CARD幅同期ON中は同期幅が表示に使われます。')
+                box.label(text='プリセット値を見た目へ反映したい場合はCARD幅同期をOFFにしてください。')
                 box.label(text='元Curveは削除されず、CardPreviewsに一時Meshを作ります。')
                 box.label(text='CARDプレビューは選択できますが、編集対象は元Curveです。')
                 box.label(text='自動適用ON + CARDでは新規Curve生成直後にCARDプレビューも作成します。')
