@@ -776,6 +776,8 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 obj["hair_curve_length_cm"] = scene.hair_curve_length_cm
                 obj["hair_curve_bevel_depth"] = cm_to_m(scene.hair_curve_bevel_depth_cm)
                 obj["hair_curve_resolution"] = scene.hair_curve_resolution
+                obj["hair_card_roll_angle"] = scene.hair_card_default_roll_angle
+                obj["hair_card_use_parallel_transport"] = scene.hair_card_use_parallel_transport
                 obj["hair_mirror_pair"] = ""
                 obj["hair_mirror_source"] = ""
                 obj["strand_type"] = scene.hair_strand_type
@@ -1168,6 +1170,88 @@ def _curve_frame(tangent, previous_normal=None):
     return side, normal
 
 
+def _safe_normalized(v, fallback):
+    if v.length < 1e-6:
+        return fallback.copy()
+    return v.normalized()
+
+
+def _initial_card_side(scene, curve_obj, sample, tangent):
+    mode = getattr(scene, "hair_card_orientation_mode", "HEAD_OUT")
+    if mode == "HEAD_OUT":
+        head = getattr(scene, "hair_target_head_object", None)
+        if head:
+            _, _, center, _ = utils.head_bounds(head)
+            base = sample - center
+        else:
+            base = mathutils.Vector((1.0, 0.0, 0.0))
+    elif mode == "WORLD_X":
+        base = mathutils.Vector((1.0, 0.0, 0.0))
+    elif mode == "WORLD_Y":
+        base = mathutils.Vector((0.0, 1.0, 0.0))
+    else:
+        base = mathutils.Vector((1.0, 0.0, 0.0))
+    side = base - tangent * base.dot(tangent)
+    if side.length < 1e-6:
+        fallback = mathutils.Vector((1.0, 0.0, 0.0))
+        if abs(fallback.dot(tangent)) > 0.95:
+            fallback = mathutils.Vector((0.0, 1.0, 0.0))
+        side = fallback - tangent * fallback.dot(tangent)
+    return _safe_normalized(side, mathutils.Vector((1.0, 0.0, 0.0)))
+
+
+def _parallel_transport_side(prev_tangent, current_tangent, prev_side):
+    axis = prev_tangent.cross(current_tangent)
+    dot = max(min(prev_tangent.dot(current_tangent), 1.0), -1.0)
+    if axis.length < 1e-6:
+        side = prev_side.copy()
+    else:
+        angle = math.acos(dot)
+        rot = mathutils.Matrix.Rotation(angle, 4, axis.normalized())
+        side = rot @ prev_side
+    side = side - current_tangent * side.dot(current_tangent)
+    if side.length < 1e-6:
+        side = prev_side.copy()
+    side.normalize()
+    if side.dot(prev_side) < 0:
+        side *= -1
+    return side
+
+
+def _apply_card_roll(side, tangent, roll_deg):
+    if abs(roll_deg) < 1e-6:
+        return side
+    rot = mathutils.Matrix.Rotation(math.radians(roll_deg), 4, tangent)
+    return (rot @ side).normalized()
+
+
+def _build_card_frames(context, curve_obj, samples):
+    scene = context.scene
+    frames = []
+    if len(samples) < 2:
+        return frames
+    roll = float(curve_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle))
+    use_ptf = bool(curve_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
+    prev_tangent = None
+    prev_side = None
+    for index, sample in enumerate(samples):
+        prev_point = samples[max(index - 1, 0)]
+        next_point = samples[min(index + 1, len(samples) - 1)]
+        tangent = next_point - prev_point
+        if tangent.length < 1e-6:
+            tangent = prev_tangent.copy() if prev_tangent else mathutils.Vector((0.0, 0.0, 1.0))
+        tangent.normalize()
+        if index == 0 or prev_side is None or not use_ptf:
+            side = _initial_card_side(scene, curve_obj, sample, tangent)
+        else:
+            side = _parallel_transport_side(prev_tangent, tangent, prev_side)
+        side = _apply_card_roll(side, tangent, roll)
+        frames.append((sample, tangent.copy(), side.copy()))
+        prev_tangent = tangent.copy()
+        prev_side = side.copy()
+    return frames
+
+
 def _next_twist_id():
     index = 1
     while True:
@@ -1256,6 +1340,8 @@ def _create_or_replace_twist_strand(context, control_obj):
     obj["hair_twist_bevel_depth_cm"] = scene.hair_twist_bevel_depth_cm
     obj["hair_twist_resolution"] = scene.hair_twist_resolution
     obj["hair_twist_taper_strength"] = scene.hair_twist_taper_strength
+    obj["hair_card_roll_angle"] = float(control_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle))
+    obj["hair_card_use_parallel_transport"] = bool(control_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
     taper_obj = None
     if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
         taper_obj, _ = _create_or_update_default_taper(context)
@@ -1293,6 +1379,8 @@ def _make_twist_from_point(context, point):
     control["hair_twist_id"] = twist_id
     control["hair_curve_length"] = length
     control["hair_curve_length_cm"] = scene.hair_curve_length_cm
+    control["hair_card_roll_angle"] = scene.hair_card_default_roll_angle
+    control["hair_card_use_parallel_transport"] = scene.hair_card_use_parallel_transport
     control.data.resolution_u = scene.hair_twist_resolution
     _set_twist_control_display(control)
     _apply_curve_variation(control, scene, point.name)
@@ -1728,29 +1816,25 @@ def _card_width(scene, t):
     return cm_to_m(scene.hair_card_width_mid_cm + (scene.hair_card_width_tip_cm - scene.hair_card_width_mid_cm) * ((t - 0.5) / 0.5))
 
 
-def _create_or_update_card_preview_for_scene(scene, curve_obj):
+def _create_or_update_card_preview_for_scene(context, curve_obj):
+    scene = context.scene
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return None
     _remove_card_preview_for_curve(curve_obj)
     samples = utils.sample_curve_world_points_evaluated(curve_obj, max(scene.hair_card_samples, 2))
     if len(samples) < 2:
         return None
+    frames = _build_card_frames(context, curve_obj, samples)
+    if not frames:
+        return None
     vertices = []
     faces = []
-    normal_hint = mathutils.Vector((0.0, 0.0, 1.0))
-    for index, sample in enumerate(samples):
-        prev_point = samples[max(index - 1, 0)]
-        next_point = samples[min(index + 1, len(samples) - 1)]
-        tangent = next_point - prev_point
-        if tangent.length < 0.0001:
-            tangent = mathutils.Vector((0.0, 0.0, 1.0))
-        tangent.normalize()
-        side, normal_hint = _curve_frame(tangent, normal_hint)
-        t = index / max(len(samples) - 1, 1)
+    for index, (sample, _tangent, side) in enumerate(frames):
+        t = index / max(len(frames) - 1, 1)
         half_width = max(_card_width(scene, t), 0.0) * 0.5
         vertices.append(tuple(sample - side * half_width))
         vertices.append(tuple(sample + side * half_width))
-    for index in range(len(samples) - 1):
+    for index in range(len(frames) - 1):
         base = index * 2
         faces.append((base, base + 1, base + 3, base + 2))
     name = _card_preview_name_for_curve(curve_obj)
@@ -1776,6 +1860,8 @@ def _create_or_update_card_preview_for_scene(scene, curve_obj):
     preview["hair_card_sync_widths"] = scene.hair_card_sync_widths
     preview["hair_card_synced_width_cm"] = scene.hair_card_synced_width_cm
     preview["hair_card_samples"] = len(samples)
+    preview["hair_card_roll_angle"] = float(curve_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle))
+    preview["hair_card_use_parallel_transport"] = bool(curve_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
     preview.show_in_front = curve_obj.show_in_front
     curve_obj["hair_card_preview_object"] = preview.name
     if scene.hair_work_mode_lock_enabled:
@@ -1784,7 +1870,7 @@ def _create_or_update_card_preview_for_scene(scene, curve_obj):
 
 
 def _create_or_update_card_preview(context, curve_obj):
-    preview = _create_or_update_card_preview_for_scene(context.scene, curve_obj)
+    preview = _create_or_update_card_preview_for_scene(context, curve_obj)
     if preview:
         _apply_work_mode_lock_to_object(context, preview)
     return preview
@@ -1811,22 +1897,17 @@ def _create_card_mesh_from_curve(context, curve_obj):
     samples = utils.sample_curve_world_points_evaluated(curve_obj, max(scene.hair_card_samples, 2))
     if len(samples) < 2:
         return None
+    frames = _build_card_frames(context, curve_obj, samples)
+    if not frames:
+        return None
     vertices = []
     faces = []
-    normal_hint = mathutils.Vector((0.0, 0.0, 1.0))
-    for index, sample in enumerate(samples):
-        prev_point = samples[max(index - 1, 0)]
-        next_point = samples[min(index + 1, len(samples) - 1)]
-        tangent = next_point - prev_point
-        if tangent.length < 0.0001:
-            tangent = mathutils.Vector((0.0, 0.0, 1.0))
-        tangent.normalize()
-        side, normal_hint = _curve_frame(tangent, normal_hint)
-        t = index / max(len(samples) - 1, 1)
+    for index, (sample, _tangent, side) in enumerate(frames):
+        t = index / max(len(frames) - 1, 1)
         half_width = max(_card_width(scene, t), 0.0) * 0.5
         vertices.append(tuple(sample - side * half_width))
         vertices.append(tuple(sample + side * half_width))
-    for index in range(len(samples) - 1):
+    for index in range(len(frames) - 1):
         base = index * 2
         faces.append((base, base + 1, base + 3, base + 2))
     _, collections = utils.ensure_system()
@@ -1849,13 +1930,19 @@ def _create_card_mesh_from_curve(context, curve_obj):
     obj["hair_card_sync_widths"] = scene.hair_card_sync_widths
     obj["hair_card_synced_width_cm"] = scene.hair_card_synced_width_cm
     obj["hair_card_samples"] = len(samples)
+    obj["hair_card_roll_angle"] = float(curve_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle))
+    obj["hair_card_use_parallel_transport"] = bool(curve_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
     _apply_work_mode_lock_to_object(context, obj)
     return obj
 
 
 def _create_card_meshes_from_curves(context, selected_only):
     created = []
-    for curve_obj in _generated_curves_from_context(context, selected_only):
+    curves = resolve_card_display_curves_from_selection(context) if selected_only else [
+        obj for obj in utils.generated_objects()
+        if obj.type == "CURVE" and obj.get("hair_guide_type") in {"curve", "twist_strand"}
+    ]
+    for curve_obj in curves:
         mesh_obj = _create_card_mesh_from_curve(context, curve_obj)
         if mesh_obj:
             created.append(mesh_obj)
@@ -2298,6 +2385,51 @@ def _add_unique_object(items, obj):
         items.append(obj)
 
 
+def resolve_card_display_curve_from_object(context, obj):
+    """Return the curve/twist_strand used to generate CARD display from common selections."""
+    if not obj:
+        return None
+    guide_type = obj.get("hair_guide_type")
+    if guide_type in {"curve", "twist_strand"}:
+        return obj
+    if guide_type == "twist_control":
+        return _create_or_replace_twist_strand(context, obj)
+    if guide_type in CARD_SELECTION_REDIRECT_TYPES:
+        source = bpy.data.objects.get(obj.get("hair_source_curve", ""))
+        if not source:
+            return None
+        source_type = source.get("hair_guide_type")
+        if source_type in {"curve", "twist_strand"}:
+            return source
+        if source_type == "twist_control":
+            return _create_or_replace_twist_strand(context, source)
+    return None
+
+
+def resolve_card_display_curves_from_selection(context):
+    curves = []
+    seen = set()
+    for obj in context.selected_objects:
+        curve = resolve_card_display_curve_from_object(context, obj)
+        if curve and curve.name not in seen and curve.get("hair_guide_type") in {"curve", "twist_strand"}:
+            curves.append(curve)
+            seen.add(curve.name)
+    return curves
+
+
+def _all_card_display_curves(context):
+    curves = []
+    seen = set()
+    for obj in utils.generated_objects():
+        if obj.type != "CURVE" or obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
+            continue
+        if obj.get("hair_curve_display_mode") == "CARD" or _curve_has_card_preview(obj):
+            if obj.name not in seen:
+                curves.append(obj)
+                seen.add(obj.name)
+    return curves
+
+
 def _add_card_update_target_from_object(context, obj, curves, twist_controls):
     target = resolve_display_curve_from_object(context, obj)
     if not target:
@@ -2394,6 +2526,53 @@ class HGD_OT_select_source_curve_from_card_preview(bpy.types.Operator):
 
     def execute(self, context):
         return bpy.ops.hgd.select_edit_curve_from_preview()
+
+
+class HGD_OT_apply_card_roll_to_selected(bpy.types.Operator):
+    bl_idname = "hgd.apply_card_roll_to_selected"
+    bl_label = "CARD Rollを適用"
+    bl_description = "CurveごとのCARD Roll角と平行移動フレーム設定を適用し、CARDプレビューを再生成します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        targets = resolve_card_display_curves_from_selection(context) if scene.hair_card_roll_apply_scope == "SELECTED" else _all_card_display_curves(context)
+        applied = 0
+        for curve in targets:
+            curve["hair_card_roll_angle"] = scene.hair_card_default_roll_angle
+            curve["hair_card_use_parallel_transport"] = scene.hair_card_use_parallel_transport
+            curve["hair_curve_display_mode"] = "CARD"
+            if _create_or_update_card_preview(context, curve):
+                applied += 1
+        if not applied:
+            self.report({'WARNING'}, "CARD Rollを適用できるCurveが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"CARD Rollを{applied}本へ適用しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_fix_card_twist(bpy.types.Operator):
+    bl_idname = "hgd.fix_card_twist"
+    bl_label = "CARDねじれ修正"
+    bl_description = "Parallel Transport Frameを有効にして、元CurveからCARDプレビューを再生成します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        targets = resolve_card_display_curves_from_selection(context) if scene.hair_card_twist_fix_scope == "SELECTED" else _all_card_display_curves(context)
+        fixed = 0
+        for curve in targets:
+            curve["hair_card_use_parallel_transport"] = True
+            if "hair_card_roll_angle" not in curve:
+                curve["hair_card_roll_angle"] = scene.hair_card_default_roll_angle
+            curve["hair_curve_display_mode"] = "CARD"
+            if _create_or_update_card_preview(context, curve):
+                fixed += 1
+        if not fixed:
+            self.report({'WARNING'}, "CARDねじれ修正を適用できるCurveが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"CARDねじれ修正を{fixed}本へ適用しました。")
+        return {'FINISHED'}
 
 
 class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
@@ -3029,6 +3208,8 @@ classes = (
     HGD_OT_select_edit_curve_from_preview,
     HGD_OT_edit_source_curve,
     HGD_OT_select_source_curve_from_card_preview,
+    HGD_OT_apply_card_roll_to_selected,
+    HGD_OT_fix_card_twist,
     HGD_OT_update_card_previews_from_curves,
     HGD_OT_apply_display_mode_to_selected_curves,
     HGD_OT_apply_display_mode_to_all_curves,

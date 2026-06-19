@@ -50,6 +50,7 @@ PROPERTY_NAMES = (
     "hair_curve_length_variation", "hair_curve_display_mode", "hair_card_width_preset",
     "hair_card_width_root", "hair_card_width_root_cm", "hair_card_width_mid", "hair_card_width_mid_cm",
     "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
+    "hair_card_use_parallel_transport", "hair_card_default_roll_angle", "hair_card_roll_apply_scope", "hair_card_twist_fix_scope",
     "hair_card_auto_apply_to_new_curves", "hair_card_auto_update_preview", "hair_card_auto_select_edit_curve", "hair_show_display_mode_settings",
     "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_width_cm", "hair_flat_mesh_thickness", "hair_flat_mesh_thickness_cm",
@@ -413,6 +414,34 @@ def register():
         min=2,
         max=512,
         description="CARDプレビューMeshを生成するためのCurve評価サンプル数です。",
+    )
+    scene.hair_card_use_parallel_transport = BoolProperty(
+        name="平行移動フレームでねじれ補正",
+        default=True,
+        description="CARD幅方向を前サンプルから連続的に輸送し、途中反転を抑制します。",
+    )
+    scene.hair_card_default_roll_angle = FloatProperty(
+        name="CARD標準ロール角",
+        default=0.0,
+        min=-180.0,
+        max=180.0,
+        description="新規Curve/CARD生成時の初期Roll角です。",
+    )
+    scene.hair_card_roll_apply_scope = EnumProperty(
+        name="Roll適用対象",
+        items=(
+            ("SELECTED", "選択対象", "選択中のCurveまたはPreview参照元へ適用"),
+            ("ALL_CARD", "全CARD", "CARD表示中の全Curveへ適用"),
+        ),
+        default="SELECTED",
+    )
+    scene.hair_card_twist_fix_scope = EnumProperty(
+        name="ねじれ修正対象",
+        items=(
+            ("SELECTED", "選択対象", "選択中のCurveまたはPreview参照元を修正"),
+            ("ALL_CARD", "全CARD", "CARD表示中の全Curveを修正"),
+        ),
+        default="SELECTED",
     )
     scene.hair_card_auto_apply_to_new_curves = BoolProperty(
         name="新規Curveへ現在の表示モードを自動適用",
