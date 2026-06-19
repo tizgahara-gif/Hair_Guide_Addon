@@ -398,9 +398,9 @@ def register():
         description="CARDプレビューMeshを生成するためのCurve評価サンプル数です。",
     )
     scene.hair_card_auto_apply_to_new_curves = BoolProperty(
-        name="新規Curveへ自動適用",
+        name="新規Curveへ現在の表示モードを自動適用",
         default=True,
-        description="新規作成した通常Curveとツイスト表示Curveへ現在の表示モードを自動適用します。",
+        description="ONの場合、表示モードがCARDなら新規Curve生成直後にCARDプレビューも作成されます。",
     )
     scene.hair_card_auto_update_preview = BoolProperty(
         name="Curve編集時にCARD自動更新",
