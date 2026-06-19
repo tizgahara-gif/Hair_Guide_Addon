@@ -80,8 +80,6 @@ def _draw_quick_status(layout, counts):
     box.label(text=f"Mesh: {counts['output_meshes']}", icon='MESH_DATA')
 
 
-REGION_STATE_LABELS = {"VISIBLE": ("表示中", 'CHECKMARK'), "HIDDEN": ("非表示中", 'HIDE_ON'), "MIXED": ("一部表示", 'ERROR'), "EMPTY": ("対象なし", 'QUESTION')}
-
 
 def _region_buttons(layout, label, region, note, show_help=True):
     state = utils.get_region_visibility_state(region)
@@ -90,8 +88,6 @@ def _region_buttons(layout, label, region, note, show_help=True):
     op = sub.operator('hgd.region_visibility', text=f"{label}を表示", icon='HIDE_OFF'); op.region = region; op.action = 'SHOW'
     sub = row.row(align=True); sub.enabled = state != "HIDDEN"
     op = sub.operator('hgd.region_visibility', text=f"{label}を非表示", icon='HIDE_ON'); op.region = region; op.action = 'HIDE'
-    state_label, state_icon = REGION_STATE_LABELS.get(state, ("不明", 'QUESTION'))
-    layout.label(text=f"状態: {state_label}", icon=state_icon)
     if show_help: layout.label(text=note, icon='INFO')
 
 
@@ -102,8 +98,6 @@ def _all_region_buttons(layout):
     op = show_col.operator('hgd.region_visibility', text='全領域表示', icon='HIDE_OFF'); op.region = 'ALL'; op.action = 'SHOW'
     hide_col = sub.row(align=True); hide_col.enabled = state != "HIDDEN"
     op = hide_col.operator('hgd.region_visibility', text='全領域非表示', icon='HIDE_ON'); op.region = 'ALL'; op.action = 'HIDE'
-    state_label, state_icon = REGION_STATE_LABELS.get(state, ("不明", 'QUESTION'))
-    layout.label(text=f"全領域の状態: {state_label}", icon=state_icon)
 
 
 class HGD_PT_base(bpy.types.Panel):
