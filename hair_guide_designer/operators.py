@@ -2319,6 +2319,43 @@ class HGD_OT_select_edit_curve_from_preview(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_edit_source_curve(bpy.types.Operator):
+    bl_idname = "hgd.edit_source_curve"
+    bl_label = "編集Curveを開く"
+    bl_description = "選択中のCARDプレビュー/CARD Mesh/扁平Meshから、参照元の編集Curveを選択してEdit Modeに入ります"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return (
+            context.mode == 'OBJECT'
+            and obj is not None
+            and obj.get("hair_guide_type") in CARD_SELECTION_REDIRECT_TYPES
+            and resolve_edit_curve_from_object(obj) is not None
+        )
+
+    def execute(self, context):
+        active = context.active_object
+        edit_curve = resolve_edit_curve_from_object(active)
+        if not edit_curve:
+            self.report({'WARNING'}, "選択中のCARDから編集対象Curveを取得できませんでした。")
+            return {'CANCELLED'}
+
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        for obj in context.selected_objects:
+            obj.select_set(False)
+        edit_curve.hide_select = False
+        edit_curve.hide_set(False)
+        edit_curve.select_set(True)
+        context.view_layer.objects.active = edit_curve
+        bpy.ops.object.mode_set(mode='EDIT')
+        self.report({'INFO'}, f"編集対象CurveをEdit Modeで開きました: {edit_curve.name}")
+        return {'FINISHED'}
+
+
 class HGD_OT_select_source_curve_from_card_preview(bpy.types.Operator):
     bl_idname = "hgd.select_source_curve_from_card_preview"
     bl_label = "選択CARDの元Curveを選択"
@@ -2960,6 +2997,7 @@ classes = (
     HGD_OT_convert_selected_card_preview_to_mesh,
     HGD_OT_convert_all_card_previews_to_mesh,
     HGD_OT_select_edit_curve_from_preview,
+    HGD_OT_edit_source_curve,
     HGD_OT_select_source_curve_from_card_preview,
     HGD_OT_update_card_previews_from_curves,
     HGD_OT_apply_display_mode_to_selected_curves,
