@@ -192,6 +192,8 @@ Curveは削除されず、編集用データとして残ります。表示方式
 
 CARDプレビューはsource curveを表示したまま `HairGuideSystem/CardPreviews` に追従用一時Meshを作る非破壊確認用プレビューです。CARDモードでは元CurveはWIRE表示・太さ0になり、Preview Meshと合わせて確認します。CARDプレビューをON/OFFしても、出力済みの扁平メッシュや実体化済みCARD Meshは変更されません。CARD幅はcm単位で入力し、内部計算ではBlender標準のmへ変換します。
 
+表示モードがCARDで **新規Curveへ現在の表示モードを自動適用** がONの場合、配置点から新規Curveを生成すると同時に `HairGuideSystem/CardPreviews` へCARDプレビューも作成されます。OFFの場合は、生成後に **選択Curveへ表示モード適用** または **全Curveへ表示モード適用** を押してください。
+
 CARDプレビューは表示用Meshであり、選択はできますが直接編集対象ではありません。CARDプレビューには `hair_source_curve` が保存されているため、形を変える場合は **選択CARDの元Curveを選択** で元の通常Curveを選び、Curveを編集してください。**Curve編集時にCARD自動更新** がONの場合、通常Curveの形状変更はCARDプレビューへ自動反映されます。環境によって自動更新が遅れる場合は **CARDプレビューを更新** を押してください。CARD実体化したMeshは出力物です。再調整は元Curveで行うことを推奨します。ツイストの場合は制御Curveを編集後、**選択ツイストを更新** または **全ツイストを更新** を実行し、必要に応じてCARDプレビューも更新してください。
 
 ## メッシュ出力

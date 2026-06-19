@@ -1889,6 +1889,9 @@ def _apply_display_mode_to_curve(context, obj):
         obj.data.taper_object = None
         preview = _create_or_update_card_preview(context, obj)
         if preview:
+            preview.hide_viewport = False
+            preview.hide_render = False
+            preview["hair_source_curve"] = obj.name
             preview.hide_select = False
             preview["hair_select_redirect"] = True
             preview["hair_locked_preview"] = True

@@ -376,6 +376,7 @@ class HGD_PT_display_mode(HGD_PT_base):
             if scene.hair_show_inline_help:
                 box.label(text='元Curveは削除されず、CardPreviewsに一時Meshを作ります。')
                 box.label(text='CARDプレビューは選択できますが、編集対象は元Curveです。')
+                box.label(text='自動適用ON + CARDでは新規Curve生成直後にCARDプレビューも作成します。')
                 box.label(text='CARDを選んだ後、元Curveを選択すると編集対象へ移動できます。')
 
 
