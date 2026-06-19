@@ -2379,6 +2379,93 @@ def _twist_bezier_spline_handles(spline, angle_rad, strength, falloff, preserve_
     return True
 
 
+def _selected_point_twist_axis(obj, spline, index, axis):
+    points = spline.bezier_points
+    count = len(points)
+    if axis == "OBJECT_Z":
+        tangent = mathutils.Vector((0.0, 0.0, 1.0))
+    elif axis == "WORLD_Z":
+        tangent = obj.matrix_world.inverted().to_3x3() @ mathutils.Vector((0.0, 0.0, 1.0))
+    else:
+        if count < 2:
+            return None
+        if index == 0:
+            tangent = points[1].co - points[0].co
+        elif index == count - 1:
+            tangent = points[count - 1].co - points[count - 2].co
+        else:
+            tangent = points[index + 1].co - points[index - 1].co
+    if tangent.length < 1e-6:
+        return None
+    tangent.normalize()
+    return tangent
+
+
+def _twist_selected_bezier_points(obj, angle_rad, strength, axis):
+    changed = 0
+    for spline in obj.data.splines:
+        if spline.type != "BEZIER":
+            continue
+        for i, point in enumerate(spline.bezier_points):
+            if not point.select_control_point:
+                continue
+            tangent = _selected_point_twist_axis(obj, spline, i, axis)
+            if tangent is None:
+                continue
+            co = point.co.copy()
+            left_vec = point.handle_left - co
+            right_vec = point.handle_right - co
+            rot = mathutils.Matrix.Rotation(angle_rad, 4, tangent)
+            point.handle_left_type = "FREE"
+            point.handle_right_type = "FREE"
+            point.handle_left = co + (rot @ left_vec) * strength
+            point.handle_right = co + (rot @ right_vec) * strength
+            changed += 1
+    return changed
+
+
+class HGD_OT_twist_selected_bezier_points(bpy.types.Operator):
+    bl_idname = "hgd.twist_selected_bezier_points"
+    bl_label = "選択点だけハンドルをねじる"
+    bl_description = "Curve編集モードで選択中のBezier点の座標を維持したまま、左右ハンドルだけをねじります"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return (
+            obj is not None
+            and obj.type == "CURVE"
+            and obj.get("hair_guide_type") in {"curve", "twist_control"}
+            and context.mode == "EDIT_CURVE"
+        )
+
+    def execute(self, context):
+        obj = context.active_object
+        if context.mode != "EDIT_CURVE":
+            self.report({'WARNING'}, "Curve編集モードで実行してください。")
+            return {'CANCELLED'}
+        if not obj or obj.type != "CURVE" or obj.get("hair_guide_type") not in {"curve", "twist_control"}:
+            self.report({'WARNING'}, "通常Curveまたはツイスト制御Curveを編集モードで選択してください。")
+            return {'CANCELLED'}
+
+        scene = context.scene
+        angle_rad = math.radians(scene.hair_curve_selected_point_twist_angle)
+        strength = scene.hair_curve_selected_point_twist_strength
+        axis = scene.hair_curve_selected_point_twist_axis
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+        changed = _twist_selected_bezier_points(obj, angle_rad, strength, axis)
+        obj.data.update_tag()
+        bpy.ops.object.mode_set(mode='EDIT')
+
+        if changed == 0:
+            self.report({'WARNING'}, "選択中のBezier点がありません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"選択Bezier点 {changed}点のハンドルをねじりました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_twist_selected_curve_handles(bpy.types.Operator):
     bl_idname = "hgd.twist_selected_curve_handles"
     bl_label = "選択Curveのハンドルをねじる"
@@ -3299,6 +3386,7 @@ classes = (
     HGD_OT_edit_source_curve,
     HGD_OT_select_source_curve_from_card_preview,
     HGD_OT_twist_selected_curve_handles,
+    HGD_OT_twist_selected_bezier_points,
     HGD_OT_apply_card_roll_to_selected,
     HGD_OT_fix_card_twist,
     HGD_OT_update_card_previews_from_curves,

@@ -308,6 +308,20 @@ CARD Preview、CARD Mesh、Flat Meshを選択して **選択Curveのハンドル
 
 この機能はCARD Rollとは別物です。CARD Rollはカード面の向きを補正しますが、ハンドルねじりはBezierハンドルを変更してCurve形状そのものを変えます。元に戻す場合はBlenderのUndoを使用してください。
 
+## 選択点ハンドルねじり
+
+Curve編集モードでBezier点を選択し、**カーブ編集 > ハンドルねじり > 選択点だけハンドルをねじる** を実行すると、選択点の座標を維持したまま左右ハンドルだけを回転できます。対象は通常Curveとツイスト制御Curveで、表示用 `twist_strand`、CARD Preview、CARD Mesh、Flat Meshは直接編集しません。非選択Bezier点の座標とハンドル、Object Location / Originも変更しません。
+
+選択点ねじり角、選択点ハンドル強度、ねじり軸を調整すると、根元・中間・毛先など任意の選択点だけを局所的にねじれ調整できます。ねじり軸は、前後制御点から求める接線方向、Object Z、World Zから選択できます。
+
+CARD Previewを選択している場合は、次の流れで反映します。
+
+1. CARD Previewを選択
+2. **編集Curveを開く** で元Curveへ移動
+3. Edit ModeでBezier点を選択
+4. **選択点だけハンドルをねじる** を実行
+5. **CARDプレビューを更新** で見た目へ反映
+
 ## cm単位入力
 
 Hair Guide Designerでは、内部計算はBlender標準のm単位で行います。ただしUIでは、毛束長さ・Curve太さ・ツイスト表示太さ・CARD幅・扁平メッシュ幅/厚み・配置点の幅/高さ/奥行き揺らぎをcm単位で入力できます。Curve個体差の根元/中間/毛先の位置ブレは毛束長さに対する比率で指定します。
