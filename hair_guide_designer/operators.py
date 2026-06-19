@@ -2333,6 +2333,96 @@ def resolve_edit_curve_from_object(obj):
     return None
 
 
+def _curve_handle_twist_weight(index, count, falloff, preserve_end_handles):
+    t = index / max(count - 1, 1)
+    if falloff == "CENTER":
+        weight = math.sin(math.pi * t)
+    elif falloff == "TIP":
+        weight = t * t
+    else:
+        weight = t
+    if preserve_end_handles:
+        weight *= math.sin(math.pi * t)
+    return weight
+
+
+def _twist_bezier_spline_handles(spline, angle_rad, strength, falloff, preserve_end_handles):
+    points = spline.bezier_points
+    count = len(points)
+    if count < 2:
+        return False
+
+    for i, point in enumerate(points):
+        if i == 0:
+            tangent = points[1].co - point.co
+        elif i == count - 1:
+            tangent = point.co - points[count - 2].co
+        else:
+            tangent = points[i + 1].co - points[i - 1].co
+        if tangent.length_squared == 0.0:
+            continue
+
+        weight = _curve_handle_twist_weight(i, count, falloff, preserve_end_handles)
+        if weight == 0.0 and strength == 1.0:
+            point.handle_left_type = "FREE"
+            point.handle_right_type = "FREE"
+            continue
+
+        co = point.co.copy()
+        left_vec = point.handle_left - co
+        right_vec = point.handle_right - co
+        rot = mathutils.Matrix.Rotation(angle_rad * weight, 4, tangent.normalized())
+        point.handle_left_type = "FREE"
+        point.handle_right_type = "FREE"
+        point.handle_left = co + (rot @ left_vec) * strength
+        point.handle_right = co + (rot @ right_vec) * strength
+    return True
+
+
+class HGD_OT_twist_selected_curve_handles(bpy.types.Operator):
+    bl_idname = "hgd.twist_selected_curve_handles"
+    bl_label = "選択Curveのハンドルをねじる"
+    bl_description = "制御点座標を維持したまま、選択CurveまたはCARD参照元CurveのBezierハンドルだけをねじります"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        targets = []
+        seen = set()
+        for obj in context.selected_objects:
+            edit_curve = resolve_edit_curve_from_object(obj)
+            if not edit_curve or edit_curve.name in seen:
+                continue
+            if edit_curve.type != "CURVE" or edit_curve.get("hair_guide_type") not in {"curve", "twist_control"}:
+                continue
+            targets.append(edit_curve)
+            seen.add(edit_curve.name)
+
+        if not targets:
+            self.report({'WARNING'}, "ハンドルねじりを適用できる選択Curveがありません。")
+            return {'CANCELLED'}
+
+        angle_rad = math.radians(scene.hair_curve_twist_handle_angle)
+        strength = scene.hair_curve_twist_handle_strength
+        falloff = scene.hair_curve_twist_handle_falloff
+        preserve = scene.hair_curve_twist_preserve_end_handles
+        changed = 0
+        for obj in targets:
+            object_changed = False
+            for spline in obj.data.splines:
+                if spline.type == "BEZIER" and _twist_bezier_spline_handles(spline, angle_rad, strength, falloff, preserve):
+                    object_changed = True
+            if object_changed:
+                obj.data.update_tag()
+                changed += 1
+
+        if changed == 0:
+            self.report({'WARNING'}, "Bezierハンドルを持つ対象Curveがありません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"選択Curve {changed}本のハンドルをねじりました。")
+        return {'FINISHED'}
+
+
 def resolve_display_curve_from_object(context, obj):
     if not obj:
         return None
@@ -3208,6 +3298,7 @@ classes = (
     HGD_OT_select_edit_curve_from_preview,
     HGD_OT_edit_source_curve,
     HGD_OT_select_source_curve_from_card_preview,
+    HGD_OT_twist_selected_curve_handles,
     HGD_OT_apply_card_roll_to_selected,
     HGD_OT_fix_card_twist,
     HGD_OT_update_card_previews_from_curves,

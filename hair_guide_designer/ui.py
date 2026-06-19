@@ -178,6 +178,15 @@ class HGD_PT_curve_edit(HGD_PT_base):
         for p in ['hair_follow_update_selected_only','hair_follow_keep_tip_offset']: box.prop(scene,p)
         box.operator('hgd.update_curve_roots_from_points', text='配置点から根元更新', icon='OUTLINER_OB_CURVE')
         row=box.row(align=True); row.operator('hgd.update_selected_twists', text='選択ツイスト更新'); row.operator('hgd.update_all_twists', text='全ツイスト更新')
+        twist_box = box.box()
+        if _foldout(twist_box, scene, 'hair_ui_show_handle_twist', 'ハンドルねじり'):
+            for p in ['hair_curve_twist_handle_angle','hair_curve_twist_handle_strength','hair_curve_twist_handle_falloff','hair_curve_twist_preserve_end_handles']:
+                twist_box.prop(scene, p)
+            twist_box.operator('hgd.twist_selected_curve_handles', text='選択Curveのハンドルをねじる', icon='DRIVER_ROTATIONAL_DIFFERENCE')
+            if scene.hair_show_inline_help:
+                twist_box.label(text='制御点位置は動かさず、Bezierハンドルだけを回転してCurveの流れをねじります。', icon='HELP')
+                twist_box.label(text='CARD Preview選択時は参照元の編集Curveへ適用します。')
+                twist_box.label(text='適用後にCARD Previewを更新してください。')
 
 class HGD_PT_card_display(HGD_PT_base):
     bl_label = 'CARD表示'
