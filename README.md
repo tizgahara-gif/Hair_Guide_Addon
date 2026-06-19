@@ -106,7 +106,7 @@ HAIR_GUIDE_Nape
 HAIR_GUIDE_Center
 ```
 
-**基本ガイドを生成** は、上記6本の基本ガイドを作成します。既存の基本ガイドがある場合は基本ガイドだけを削除して作り直し、配置点、カーブ、警告、頭部メッシュは削除しません。
+**基本ガイドを生成** は、上記6本の基本ガイドを作成します。既存の基本ガイドがある場合は、同じ固定名とその `.001` / `.002` などの派生名を先に完全削除してから作り直します。再生成後も `HAIR_GUIDE_SideBoundary_L/R` などを固定名で参照できます。配置点、カーブ、警告、頭部メッシュは削除しません。
 
 基本ガイドの初期位置は頭部Bounding Boxを基準にします。`HAIR_GUIDE_Hairline` は額前面側、`HAIR_GUIDE_BackVolume` と `HAIR_GUIDE_Nape` は後頭部・首側の外側へ余裕を持って生成します。Front/Backガイドは頭部に沿う浅い弧として生成されます。多少の頭部メッシュへの食い込みは許容し、直線よりも髪の流れを把握しやすい形を優先しています。`HAIR_GUIDE_SideBoundary_L/R` はFrontとBackを端から端まで長く横断する線ではなく、Front HairlineとBack Volumeの間をつなぐ短めの補助ガイドとして生成します。
 
@@ -135,7 +135,8 @@ HAIR_GUIDE_Center
 
 再生成時の挙動:
 
-- 既存の配置点は `HairGuideSystem/PlacementPoints` 内だけ削除して作り直します。
+- 既存の配置点は `HairGuideSystem/PlacementPoints` 内だけでなく、別Collectionへ移動済みの `hair_guide_type == "placement_point"` オブジェクトも削除して作り直します。
+- 配置点は生成前に同じ固定名とその `.001` / `.002` などの派生名を削除するため、`POINT_Back_Middle_01_L/R` などを固定名で参照できます。
 - 既存の警告は `HairGuideSystem/Warnings` 内だけ削除します。
 - 既存のカーブ毛束、頭部メッシュは削除しません。
 - 基本ガイドがない場合は頭部Bounding Box基準で補完します。

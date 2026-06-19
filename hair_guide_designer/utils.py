@@ -231,6 +231,67 @@ def get_curve_world_endpoints(obj):
     return points[0], points[-1]
 
 
+def remove_object(obj):
+    if not obj:
+        return False
+    data = obj.data
+    bpy.data.objects.remove(obj, do_unlink=True)
+    if data and data.users == 0:
+        if isinstance(data, bpy.types.Curve):
+            bpy.data.curves.remove(data)
+        elif isinstance(data, bpy.types.Mesh):
+            bpy.data.meshes.remove(data)
+    return True
+
+
+def remove_object_by_exact_name(name):
+    obj = bpy.data.objects.get(name)
+    if not obj:
+        return False
+    return remove_object(obj)
+
+
+def _remove_orphan_data_family(data_collection, base_name):
+    targets = [
+        data for data in data_collection
+        if data.users == 0 and (data.name == base_name or data.name.startswith(base_name + "."))
+    ]
+    count = 0
+    for data in targets:
+        data_collection.remove(data)
+        count += 1
+    return count
+
+
+def remove_data_family_by_base_name(base_name):
+    count = _remove_orphan_data_family(bpy.data.curves, base_name)
+    count += _remove_orphan_data_family(bpy.data.meshes, base_name)
+    count += _remove_orphan_data_family(bpy.data.meshes, base_name + "Mesh")
+    return count
+
+
+def remove_object_family_by_base_name(base_name):
+    targets = [
+        obj for obj in bpy.data.objects
+        if obj.name == base_name or obj.name.startswith(base_name + ".")
+    ]
+    count = 0
+    for obj in targets:
+        if remove_object(obj):
+            count += 1
+    remove_data_family_by_base_name(base_name)
+    return count
+
+
+def clear_generated_by_type(guide_type):
+    count = 0
+    for obj in list(bpy.data.objects):
+        if obj.get("hair_guide_type") == guide_type:
+            if remove_object(obj):
+                count += 1
+    return count
+
+
 def clear_collection_objects(collection_name, type_filter=None):
     collection = get_system_collection(collection_name, create=False)
     if not collection:
@@ -247,8 +308,8 @@ def clear_collection_objects(collection_name, type_filter=None):
             continue
         if not obj.get("hair_guide_type"):
             continue
-        bpy.data.objects.remove(obj, do_unlink=True)
-        count += 1
+        if remove_object(obj):
+            count += 1
     return count
 
 
@@ -372,10 +433,12 @@ def unique_numbered(prefix):
         index += 1
 
 
-def make_marker(name, location, radius, collection, region, guide_type, scene):
+def make_marker(name, location, radius, collection, region, guide_type, scene, use_unique_name=True):
+    if not use_unique_name:
+        remove_object_family_by_base_name(name)
     bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=6, radius=radius, location=location)
     obj = bpy.context.object
-    obj.name = unique_name(name)
+    obj.name = unique_name(name) if use_unique_name else name
     obj.data.name = obj.name + "Mesh"
     for col in list(obj.users_collection):
         if col != collection:

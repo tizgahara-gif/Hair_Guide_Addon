@@ -133,10 +133,8 @@ REGION_VISIBILITY_ITEMS = [
 
 def _remove_named_generated_guides(names):
     removed = 0
-    for obj in list(utils.generated_objects("guide")):
-        if obj.name.split(".")[0] in names or obj.name in names:
-            bpy.data.objects.remove(obj, do_unlink=True)
-            removed += 1
+    for name in names:
+        removed += utils.remove_object_family_by_base_name(name)
     return removed
 
 
@@ -480,6 +478,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             _, collections = utils.ensure_system()
             collection = collections[utils.PLACEMENT_POINTS]
             removed_points = utils.clear_collection_objects(utils.PLACEMENT_POINTS, "placement_point")
+            removed_points += utils.clear_generated_by_type("placement_point")
             removed_warnings = utils.clear_collection_objects(utils.WARNINGS, "warning")
             context.scene.hair_warning_count = 0
             scene = context.scene
@@ -504,7 +503,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                     loc = self._jittered(region, base, rng, scene)
                     radius = max(size.length * 0.008, 0.01) * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation))
                     point_name = self._point_name(region, i)
-                    obj = utils.make_marker(point_name, loc, max(radius, 0.004), collection, region, "placement_point", scene)
+                    obj = utils.make_marker(point_name, loc, max(radius, 0.004), collection, region, "placement_point", scene, use_unique_name=False)
                     position_type = self._position_type(region, i, loc, center, size)
                     direction = self._recommended_direction(region, position_type, loc.x - center.x)
                     size_rec = max(scene.hair_curve_root_radius * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation)), 0.001)
@@ -647,7 +646,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             if len(pair) < 2:
                 loc = self._jittered("Back_Middle", pair[0], rng, scene)
                 radius = max(size.length * 0.008, 0.01) * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation))
-                obj = utils.make_marker(f"POINT_Back_Middle_{pair_start // 2 + 1:02d}_C", loc, max(radius, 0.004), collection, "Back_Middle", "placement_point", scene)
+                obj = utils.make_marker(f"POINT_Back_Middle_{pair_start // 2 + 1:02d}_C", loc, max(radius, 0.004), collection, "Back_Middle", "placement_point", scene, use_unique_name=False)
                 self._apply_point_recommendations(obj, "Back_Middle", pair_start, loc, center, size, rng, scene)
                 count += 1
                 continue
@@ -659,7 +658,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             for index, base in enumerate(pair):
                 side_sign = -1.0 if index == 0 else 1.0
                 loc = base + mathutils.Vector((side_sign * dx, dy, dz))
-                obj = utils.make_marker(mirror_names[index], loc, max(radius, 0.004), collection, "Back_Middle", "placement_point", scene)
+                obj = utils.make_marker(mirror_names[index], loc, max(radius, 0.004), collection, "Back_Middle", "placement_point", scene, use_unique_name=False)
                 self._apply_point_recommendations(obj, "Back_Middle", pair_start + index, loc, center, size, rng, scene, shared)
                 obj["mirror_pair"] = mirror_names[1 - index]
                 count += 1
