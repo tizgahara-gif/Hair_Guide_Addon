@@ -243,6 +243,10 @@ class HGD_PT_output(HGD_PT_base):
         flat_box=_section_box(layout, '扁平メッシュ設定', 'MESH_DATA', '[OUTPUT]')
         flat_box.prop(scene, 'hair_flat_mesh_width_cm'); flat_box.prop(scene, 'hair_flat_mesh_thickness_cm'); flat_box.prop(scene, 'hair_flat_mesh_samples')
         flat_box.prop(scene, 'hair_flat_mesh_add_subdivision'); flat_box.prop(scene, 'hair_flat_mesh_mark_side_sharp')
+        flat_box.prop(scene, 'hair_twist_flat_mesh_force_inner_side'); flat_box.prop(scene, 'hair_twist_flat_mesh_inner_mode')
+        if scene.hair_show_inline_help:
+            flat_box.label(text='通常CurveはCARD Control Empty方向を使います。', icon='INFO')
+            flat_box.label(text='ツイストCurveのみ、頭部中心側または参照Empty方向へ面を向けられます。')
         row=flat_box.row(align=True); row.operator('hgd.export_flat_mesh_from_selected_curves', text='選択Curveを扁平Mesh出力', icon='MESH_DATA'); row.operator('hgd.create_flat_mesh_from_all_curves', text='全Curveを扁平Mesh出力', icon='MESH_GRID')
         if _foldout(layout, scene, 'hair_ui_show_output_advanced', '詳細を表示'):
             adv=_section_box(layout, '出力詳細', 'MESH_DATA', '[OUTPUT]'); adv.prop(scene,'hair_flat_mesh_ring_segments')
