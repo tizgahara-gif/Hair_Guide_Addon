@@ -22,7 +22,7 @@ def require_head(context, operator):
     return head
 
 
-WORK_MODE_LOCK_EDITABLE_TYPES = {"guide", "region", "placement_point", "warning", "curve", "twist_control", "card_preview", "card_control_empty"}
+WORK_MODE_LOCK_EDITABLE_TYPES = {"guide", "region", "placement_point", "warning", "curve", "twist_control", "card_preview", "flat_mesh_preview", "card_control_empty"}
 WORK_MODE_LOCK_PREV_KEY = "hgd_prev_hide_select"
 
 CARD_WIDTH_PRESETS = {
@@ -39,7 +39,7 @@ CARD_WIDTH_PRESET_LABELS = {
     "CUSTOM": "カスタム",
 }
 
-CARD_SELECTION_REDIRECT_TYPES = {"card_preview", "card_mesh", "flat_mesh"}
+CARD_SELECTION_REDIRECT_TYPES = {"card_preview", "flat_mesh_preview", "card_mesh", "flat_mesh"}
 
 
 def _is_work_mode_lock_editable(obj):
@@ -1001,6 +1001,27 @@ class HGD_OT_clear_card_previews(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_clear_flat_mesh_previews(bpy.types.Operator):
+    bl_idname = "hgd.clear_flat_mesh_previews"
+    bl_label = "扁平メッシュPreviewを削除"
+    bl_description = "扁平メッシュPreviewだけを削除します。元Curveと確定Flat Meshは削除しません"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        if not bpy.data.collections.get(utils.ROOT):
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
+            return {'CANCELLED'}
+        count = utils.clear_collection_objects(utils.CARD_PREVIEWS, "flat_mesh_preview")
+        for obj in utils.generated_objects():
+            if obj.get("hair_flat_mesh_preview_object"):
+                obj["hair_flat_mesh_preview_object"] = ""
+        if count == 0:
+            self.report({'WARNING'}, "削除する扁平メッシュPreviewがありません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"扁平メッシュPreviewを{count}個削除しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_clear_all_generated(bpy.types.Operator):
     bl_idname = "hgd.clear_all_generated"
     bl_label = "生成物をすべて削除"
@@ -1233,13 +1254,13 @@ def _apply_card_roll(side, tangent, roll_deg):
 
 
 
-def _card_control_empty_side_vector(curve_obj, sample, tangent):
+def _card_or_flat_side_vector(context, curve_obj, sample, tangent, previous_side=None):
     empty_name = curve_obj.get("hair_card_control_empty", "")
     empty = bpy.data.objects.get(empty_name) if empty_name else None
     if not empty or empty.type != 'EMPTY':
         return None
 
-    scene = bpy.context.scene
+    scene = context.scene
     mode = getattr(scene, "hair_card_control_empty_mode", "TARGET_POSITION")
     if mode == "AXIS":
         side = empty.matrix_world.to_3x3() @ mathutils.Vector((1.0, 0.0, 0.0))
@@ -1265,7 +1286,13 @@ def _card_control_empty_side_vector(curve_obj, sample, tangent):
     if side.length < 1e-6:
         return None
     side.normalize()
+    if previous_side is not None and side.dot(previous_side) < 0:
+        side *= -1
     return side
+
+
+def _card_control_empty_side_vector(curve_obj, sample, tangent):
+    return _card_or_flat_side_vector(bpy.context, curve_obj, sample, tangent)
 
 def _build_card_frames(context, curve_obj, samples):
     scene = context.scene
@@ -1283,10 +1310,9 @@ def _build_card_frames(context, curve_obj, samples):
         if tangent.length < 1e-6:
             tangent = prev_tangent.copy() if prev_tangent else mathutils.Vector((0.0, 0.0, 1.0))
         tangent.normalize()
-        side = _card_control_empty_side_vector(curve_obj, sample, tangent)
+        side = _card_or_flat_side_vector(context, curve_obj, sample, tangent, prev_side)
         if side is not None:
-            if prev_side is not None and side.dot(prev_side) < 0:
-                side *= -1
+            pass
         else:
             if index == 0 or prev_side is None or not use_ptf:
                 side = _initial_card_side(scene, curve_obj, sample, tangent)
@@ -1818,69 +1844,158 @@ def _flat_mesh_name_for_curve(curve_obj):
     return base
 
 
-def _create_flat_mesh_from_curve(context, curve_obj):
+FLAT_MESH_PREVIEW_PREFIX = "HGD_FLAT_MESH_PREVIEW_"
+
+
+def _flat_mesh_preview_name_for_curve(curve_obj):
+    return f"{FLAT_MESH_PREVIEW_PREFIX}{curve_obj.name.split('.')[0]}"
+
+
+def _remove_flat_mesh_preview_for_curve(curve_obj):
+    for obj in list(utils.generated_objects("flat_mesh_preview")):
+        if obj.get("hair_source_curve") == curve_obj.name or obj.name == _flat_mesh_preview_name_for_curve(curve_obj):
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+
+def _set_flat_mesh_preview_visible(curve_obj, visible):
+    for obj in utils.generated_objects("flat_mesh_preview"):
+        if obj.get("hair_source_curve") == curve_obj.name:
+            obj.hide_viewport = not visible
+            obj.hide_render = not visible
+
+
+def _flat_mesh_normal_from_side(tangent, side, previous_normal=None):
+    normal = tangent.cross(side)
+    if normal.length < 1e-6:
+        fallback = previous_normal if previous_normal and previous_normal.length > 1e-6 else mathutils.Vector((0.0, 0.0, 1.0))
+        normal = fallback - tangent * fallback.dot(tangent) - side * fallback.dot(side)
+    if normal.length < 1e-6:
+        normal = side.cross(tangent)
+    if normal.length < 1e-6:
+        normal = mathutils.Vector((0.0, 0.0, 1.0))
+    normal.normalize()
+    return normal
+
+
+def _build_flat_mesh_data(context, curve_obj):
     scene = context.scene
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
-        return None
-    sample_count = max(int(scene.hair_flat_mesh_samples), 2)
+        return [], [], set()
+    sample_count = max(int(getattr(scene, "hair_flat_mesh_sample_count", scene.hair_flat_mesh_samples)), 2)
     samples = utils.sample_curve_world_points_evaluated(curve_obj, sample_count)
     if len(samples) < 2:
-        return None
+        return [], [], set()
 
-    ring_count = max(int(scene.hair_flat_mesh_ring_segments), 4)
     half_width = cm_to_m(scene.hair_flat_mesh_width_cm) * 0.5
     half_thickness = cm_to_m(scene.hair_flat_mesh_thickness_cm) * 0.5
     vertices = []
     faces = []
-    normal_hint = mathutils.Vector((0.0, 0.0, 1.0))
+    sharp_edges = set()
+    prev_tangent = None
+    prev_side = None
+    prev_normal = None
     for index, sample in enumerate(samples):
         prev_point = samples[max(index - 1, 0)]
         next_point = samples[min(index + 1, len(samples) - 1)]
         tangent = next_point - prev_point
-        if tangent.length < 0.0001:
-            tangent = mathutils.Vector((0.0, 0.0, 1.0))
+        if tangent.length < 1e-6:
+            tangent = prev_tangent.copy() if prev_tangent else mathutils.Vector((0.0, 0.0, 1.0))
         tangent.normalize()
-        side, normal = _curve_frame(tangent, normal_hint)
-        normal_hint = normal
+        side = _card_or_flat_side_vector(context, curve_obj, sample, tangent, prev_side)
+        if side is None:
+            if prev_side is not None and bool(curve_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport)):
+                side = _parallel_transport_side(prev_tangent, tangent, prev_side)
+            else:
+                side = _initial_card_side(scene, curve_obj, sample, tangent)
+            side = _apply_card_roll(side, tangent, float(curve_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle)))
+        normal = _flat_mesh_normal_from_side(tangent, side, prev_normal)
         t = index / max(len(samples) - 1, 1)
         taper = _flat_mesh_taper_scale(scene, curve_obj, t)
-        for ring_index in range(ring_count):
-            angle = math.tau * ring_index / ring_count
-            vertex = sample + side * (math.cos(angle) * half_width * taper) + normal * (math.sin(angle) * half_thickness * taper)
-            vertices.append(tuple(vertex))
+        hw = half_width * taper
+        ht = half_thickness * taper
+        vertices.extend((
+            tuple(sample - side * hw - normal * ht),
+            tuple(sample + side * hw - normal * ht),
+            tuple(sample + side * hw + normal * ht),
+            tuple(sample - side * hw + normal * ht),
+        ))
+        prev_tangent = tangent.copy()
+        prev_side = side.copy()
+        prev_normal = normal.copy()
+
     for index in range(len(samples) - 1):
-        base = index * ring_count
-        next_base = (index + 1) * ring_count
-        for ring_index in range(ring_count):
-            faces.append((
-                base + ring_index,
-                base + (ring_index + 1) % ring_count,
-                next_base + (ring_index + 1) % ring_count,
-                next_base + ring_index,
-            ))
-    _, collections = utils.ensure_system()
-    collection = collections[utils.FLAT_MESHES]
-    mesh_name = _flat_mesh_name_for_curve(curve_obj)
-    mesh = bpy.data.meshes.new(mesh_name)
-    mesh.from_pydata(vertices, [], faces)
-    mesh.update()
-    obj = bpy.data.objects.new(mesh_name, mesh)
-    collection.objects.link(obj)
+        base = index * 4
+        next_base = (index + 1) * 4
+        faces.extend((
+            (base + 3, base + 2, next_base + 2, next_base + 3),  # top surface
+            (base + 0, next_base + 0, next_base + 1, base + 1),  # bottom surface
+            (base + 0, base + 3, next_base + 3, next_base + 0),  # left side
+            (base + 1, next_base + 1, next_base + 2, base + 2),  # right side
+        ))
+        if scene.hair_flat_mesh_mark_side_sharp:
+            for edge in ((base + 0, next_base + 0), (base + 3, next_base + 3), (base + 1, next_base + 1), (base + 2, next_base + 2)):
+                sharp_edges.add(tuple(sorted(edge)))
+    faces.append((0, 1, 2, 3))
+    last = (len(samples) - 1) * 4
+    faces.append((last + 0, last + 3, last + 2, last + 1))
+    return vertices, faces, sharp_edges
+
+
+def _apply_flat_mesh_custom_props(obj, curve_obj, scene, guide_type):
+    utils.set_common_props(obj, guide_type, curve_obj.get("hair_region", ""), scene)
     obj.color = curve_obj.color
-    utils.set_common_props(obj, "flat_mesh", curve_obj.get("hair_region", ""), scene)
     obj["hair_source_curve"] = curve_obj.name
     obj["hair_flat_mesh_width"] = cm_to_m(scene.hair_flat_mesh_width_cm)
     obj["hair_flat_mesh_width_cm"] = scene.hair_flat_mesh_width_cm
     obj["hair_flat_mesh_thickness"] = cm_to_m(scene.hair_flat_mesh_thickness_cm)
     obj["hair_flat_mesh_thickness_cm"] = scene.hair_flat_mesh_thickness_cm
-    obj["hair_flat_mesh_samples"] = len(samples)
-    obj["hair_flat_mesh_ring_segments"] = ring_count
+    obj["hair_flat_mesh_samples"] = max(int(getattr(scene, "hair_flat_mesh_sample_count", scene.hair_flat_mesh_samples)), 2)
+    obj["hair_flat_mesh_mark_side_sharp"] = scene.hair_flat_mesh_mark_side_sharp
+    obj["hair_card_control_empty"] = curve_obj.get("hair_card_control_empty", "")
+
+
+def _create_flat_mesh_object(context, curve_obj, guide_type, name, collection):
+    scene = context.scene
+    vertices, faces, sharp_edges = _build_flat_mesh_data(context, curve_obj)
+    if not vertices or not faces:
+        return None
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    for edge in mesh.edges:
+        if tuple(sorted(edge.vertices)) in sharp_edges:
+            edge.use_edge_sharp = True
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    _apply_flat_mesh_custom_props(obj, curve_obj, scene, guide_type)
     if scene.hair_flat_mesh_add_subdivision:
         sub = obj.modifiers.new("HGD_Subdivision_Surface", "SUBSURF")
         sub.levels = 1
         sub.render_levels = 1
     _apply_work_mode_lock_to_object(context, obj)
     return obj
+
+
+def _create_or_update_flat_mesh_preview(context, curve_obj):
+    _remove_flat_mesh_preview_for_curve(curve_obj)
+    _, collections = utils.ensure_system()
+    name = _flat_mesh_preview_name_for_curve(curve_obj)
+    preview = _create_flat_mesh_object(context, curve_obj, "flat_mesh_preview", name, collections[utils.CARD_PREVIEWS])
+    if preview:
+        preview.hide_select = False
+        preview["hair_select_redirect"] = True
+        preview["hair_locked_preview"] = True
+        preview["hair_editable"] = False
+        curve_obj["hair_flat_mesh_preview_object"] = preview.name
+    return preview
+
+
+def _create_flat_mesh_from_curve(context, curve_obj):
+    if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
+        return None
+    _, collections = utils.ensure_system()
+    mesh_name = _flat_mesh_name_for_curve(curve_obj)
+    return _create_flat_mesh_object(context, curve_obj, "flat_mesh", mesh_name, collections[utils.FLAT_MESHES])
 
 
 def _create_flat_meshes_from_curves(context, selected_only):
@@ -1890,7 +2005,6 @@ def _create_flat_meshes_from_curves(context, selected_only):
         if mesh_obj:
             created.append(mesh_obj)
     return created
-
 
 CARD_PREVIEW_PREFIX = "HGD_CARD_PREVIEW_"
 
@@ -2099,6 +2213,7 @@ def _apply_display_mode_to_curve(context, obj):
         obj.data.bevel_object = None
         obj.data.taper_object = None
         _set_card_preview_visible(obj, False)
+        _set_flat_mesh_preview_visible(obj, False)
     elif mode == "SOLID":
         obj.display_type = 'TEXTURED'
         obj.data.bevel_object = None
@@ -2110,6 +2225,7 @@ def _apply_display_mode_to_curve(context, obj):
             obj["hair_use_taper"] = False
             obj["hair_taper_object"] = ""
         _set_card_preview_visible(obj, False)
+        _set_flat_mesh_preview_visible(obj, False)
         _ensure_curve_visible_geometry(context, obj)
     elif mode == "CARD":
         _store_scene_card_width_shape(obj, scene)
@@ -2127,6 +2243,23 @@ def _apply_display_mode_to_curve(context, obj):
             preview["hair_select_redirect"] = True
             preview["hair_locked_preview"] = True
         _set_card_preview_visible(obj, True)
+        _set_flat_mesh_preview_visible(obj, False)
+    elif mode == "FLAT_MESH":
+        obj.hide_viewport = False
+        obj.display_type = 'WIRE'
+        obj.data.bevel_depth = 0.0
+        obj.data.bevel_object = None
+        obj.data.taper_object = None
+        _set_card_preview_visible(obj, False)
+        preview = _create_or_update_flat_mesh_preview(context, obj)
+        if preview:
+            preview.hide_viewport = False
+            preview.hide_render = False
+            preview["hair_source_curve"] = obj.name
+            preview.hide_select = False
+            preview["hair_select_redirect"] = True
+            preview["hair_locked_preview"] = True
+        _set_flat_mesh_preview_visible(obj, True)
     obj["hair_curve_display_mode"] = mode
     return True
 
@@ -3902,6 +4035,7 @@ classes = (
     HGD_OT_check_root_clustering,
     HGD_OT_clear_warnings,
     HGD_OT_clear_card_previews,
+    HGD_OT_clear_flat_mesh_previews,
     HGD_OT_clear_all_generated,
     HGD_OT_toggle_in_front_generated_helpers,
     HGD_OT_organize_curves_by_region,

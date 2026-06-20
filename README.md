@@ -560,3 +560,13 @@ Curve内部の制御点は配置点を基準としたローカル座標で保持
 Curve生成時の長さは、常に **カーブ編集 > 毛束長さ(cm)** を使用します。配置点は位置と方向の目安であり、長さは保持しません。
 
 この仕様は新規生成Curveから適用されます。旧バージョンで生成したCurveは必要に応じて再生成してください。
+
+### 扁平メッシュ表示モードとPreview
+
+表示モードに「扁平メッシュ」を追加しました。このモードは確定出力Meshを作らず、元Curveから再生成される非破壊の `flat_mesh_preview` を表示します。CARD Previewと扁平メッシュPreviewは表示モード切替時に `hide_viewport` で切り替わり、出力済みの `flat_mesh` は勝手に削除されません。
+
+扁平メッシュの確定出力は「出力」Panelの扁平メッシュ設定から行います。Preview (`flat_mesh_preview`) と確定Mesh (`flat_mesh`) は同じ生成ロジックを使うため、幅・厚み・サンプル数・Subdivision設定を共有し、見た目が一致します。
+
+CurveにCARD Control Emptyが割り当てられている場合、扁平メッシュPreviewと扁平メッシュ確定出力もCARDと同じEmptyを参照して面方向を揃えます。Control方式がEmpty位置ターゲットの場合はEmpty位置、Empty X軸の場合はEmptyローカルX軸を使います。
+
+「側面エッジをSharpにする」をONにすると、扁平メッシュの側面境界Edgeへ自動でSharpを設定し、表面と側面の境界が滑らかに丸まりにくくなります。整理・削除Panelからは「扁平メッシュPreview削除」で `flat_mesh_preview` だけを削除できます。
