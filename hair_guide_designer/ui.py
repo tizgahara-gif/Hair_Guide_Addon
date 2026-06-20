@@ -34,7 +34,7 @@ class HGD_PT_quick_flow(HGD_PT_base):
         box.operator('hgd.create_curve_from_points', text='4. Curve生成', icon='CURVE_BEZCURVE')
         box.prop(scene,'hair_curve_display_mode', text='5. 表示モード')
         box.operator('hgd.apply_display_mode_to_selected_curves', text='6. 選択対象へ表示モード適用', icon='RESTRICT_VIEW_OFF')
-        row=box.row(align=True); row.operator('hgd.update_card_previews_from_curves', text='7. CARD Preview更新', icon='FILE_REFRESH'); row.operator('hgd.create_flat_mesh_from_selected_curves', text='Flat Preview更新', icon='MESH_DATA')
+        row=box.row(align=True); row.operator('hgd.update_card_previews_from_curves', text='7. CARD Preview更新', icon='FILE_REFRESH'); row.operator('hgd.update_flat_mesh_previews_from_curves', text='Flat Preview更新', icon='MESH_DATA')
         row=box.row(align=True); row.operator('hgd.convert_selected_card_preview_to_mesh', text='8. CARD Mesh出力', icon='MESH_PLANE'); row.operator('hgd.export_flat_mesh_from_selected_curves', text='Flat Mesh出力', icon='MESH_DATA')
         box.operator('hgd.toggle_final_edit_mode', text='9. 最終編集モード OFF' if scene.hair_final_edit_mode_enabled else '9. 最終編集モード ON', icon='HIDE_OFF' if scene.hair_final_edit_mode_enabled else 'MESH_DATA')
 
@@ -79,7 +79,7 @@ class HGD_PT_card_flat_preview(HGD_PT_base):
         scene=context.scene; box=_section_box(self.layout,'CARD','MESH_PLANE','[CARD]')
         for p in ['hair_card_width_preset','hair_card_width_root_cm','hair_card_width_mid_cm','hair_card_width_tip_cm','hair_card_mid_position','hair_card_width_interpolation']: box.prop(scene,p)
         box.operator('hgd.apply_card_width_preset'); box.operator('hgd.update_card_previews_from_curves', text='CARD Preview更新')
-        flat=_section_box(self.layout,'Flat Preview','MESH_DATA','[CARD]'); flat.operator('hgd.create_flat_mesh_from_selected_curves', text='Flat Mesh Preview更新'); flat.operator('hgd.clear_flat_mesh_previews', text='Preview削除')
+        flat=_section_box(self.layout,'Flat Preview','MESH_DATA','[CARD]'); flat.operator('hgd.update_flat_mesh_previews_from_curves', text='Flat Mesh Preview更新'); flat.operator('hgd.clear_flat_mesh_previews', text='Preview削除')
         ctrl=_section_box(self.layout,'CARD方向制御','EMPTY_SINGLE_ARROW','[CARD]')
         ctrl.operator('hgd.create_card_control_empty', text='共有CARD Control Empty作成/割当')
         ctrl.prop(scene,'hair_selected_card_control_empty', text='参照Empty')
@@ -135,7 +135,7 @@ class HGD_MT_hair_guide_pie(bpy.types.Menu):
         pie.operator('hgd.toggle_final_edit_mode', text='最終編集モード', icon='MESH_DATA')
         pie.operator('hgd.create_card_control_empty', text='参照Empty作成/共有', icon='EMPTY_SINGLE_ARROW')
         pie.operator('hgd.clear_card_previews', text='Cleanup / Preview削除', icon='TRASH')
-        pie.operator('hgd.create_flat_mesh_from_selected_curves', text='Flat Mesh Preview更新', icon='MESH_DATA')
+        pie.operator('hgd.update_flat_mesh_previews_from_curves', text='Flat Mesh Preview更新', icon='MESH_DATA')
 
 class HGD_WST_hair_guide(WorkSpaceTool):
     bl_space_type='VIEW_3D'; bl_context_mode='OBJECT'; bl_idname='hgd.hair_guide_tool'; bl_label='Hair Guide'; bl_description='Hair Guide execution shortcuts'; bl_icon='ops.curve.draw'; bl_widget=None; bl_keymap=()

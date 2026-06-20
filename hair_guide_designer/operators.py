@@ -2700,11 +2700,48 @@ class HGD_OT_clear_profile_from_all_curves(bpy.types.Operator):
         return {'CANCELLED'}
 
 
+class HGD_OT_update_flat_mesh_previews_from_curves(bpy.types.Operator):
+    bl_idname = "hgd.update_flat_mesh_previews_from_curves"
+    bl_label = "Flat Mesh Preview更新"
+    bl_description = "選択中または全Flat Mesh表示Curveから、現在のCurve形状でFlat Mesh Previewを再生成します。確定Meshは作成しません"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = _generated_curves_from_context(context, True)
+        if not curves:
+            curves = [
+                obj for obj in utils.generated_objects()
+                if obj.type == "CURVE"
+                and obj.get("hair_guide_type") in {"curve", "twist_strand"}
+                and obj.get("hair_curve_display_mode") == "FLAT_MESH"
+            ]
+        updated = 0
+        for obj in curves:
+            preview = _create_or_update_flat_mesh_preview(context, obj)
+            if preview:
+                preview.hide_viewport = False
+                preview.hide_render = False
+                preview["hair_source_curve"] = obj.name
+                preview.hide_select = False
+                preview["hair_select_redirect"] = True
+                preview["hair_locked_preview"] = True
+                _set_flat_mesh_preview_visible(obj, True)
+                updated += 1
+        if updated == 0:
+            self.report({'WARNING'}, "更新できるFlat Mesh Preview対象Curveがありません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"Flat Mesh Previewを{updated}個更新しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_create_flat_mesh_from_selected_curves(bpy.types.Operator):
     bl_idname = "hgd.create_flat_mesh_from_selected_curves"
     bl_label = "選択カーブから扁平メッシュ生成"
-    bl_description = "選択中の表示用カーブをサンプリングし、元Curveを残したまま扁平な楕円断面メッシュを生成します"
+    bl_description = "選択CurveからFlat Meshを実体化します。元Curveは残りますが、Meshが新規作成されます。"
     bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
         meshes = _create_flat_meshes_from_curves(context, True)
@@ -2718,8 +2755,11 @@ class HGD_OT_create_flat_mesh_from_selected_curves(bpy.types.Operator):
 class HGD_OT_create_flat_mesh_from_all_curves(bpy.types.Operator):
     bl_idname = "hgd.create_flat_mesh_from_all_curves"
     bl_label = "全カーブから扁平メッシュ生成"
-    bl_description = "すべての表示用カーブをサンプリングし、元Curveを残したまま扁平な楕円断面メッシュを生成します"
+    bl_description = "全CurveからFlat Meshを実体化します。大量のMeshが作成される可能性があります。"
     bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
         meshes = _create_flat_meshes_from_curves(context, False)
@@ -2733,8 +2773,11 @@ class HGD_OT_create_flat_mesh_from_all_curves(bpy.types.Operator):
 class HGD_OT_export_flat_mesh_from_selected_curves(bpy.types.Operator):
     bl_idname = "hgd.export_flat_mesh_from_selected_curves"
     bl_label = "選択Curveを扁平メッシュ出力"
-    bl_description = "選択中の通常Curveまたはツイスト表示Curveから、元Curveを残したまま出力用の扁平Meshを生成します"
+    bl_description = "選択CurveからFlat Meshを実体化します。元Curveは残りますが、Meshが新規作成されます。"
     bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
         meshes = _create_flat_meshes_from_curves(context, True)
@@ -2748,8 +2791,11 @@ class HGD_OT_export_flat_mesh_from_selected_curves(bpy.types.Operator):
 class HGD_OT_convert_selected_card_preview_to_mesh(bpy.types.Operator):
     bl_idname = "hgd.convert_selected_card_preview_to_mesh"
     bl_label = "選択CurveのCARDプレビューを実体化"
-    bl_description = "選択中の通常Curve/ツイスト表示Curveから、元Curveを残したままCARD実体Meshを生成します"
+    bl_description = "選択CurveからCARD Meshを実体化します。元Curveは残りますが、Meshが新規作成されます。"
     bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
         meshes = _create_card_meshes_from_curves(context, True)
@@ -2763,8 +2809,11 @@ class HGD_OT_convert_selected_card_preview_to_mesh(bpy.types.Operator):
 class HGD_OT_convert_all_card_previews_to_mesh(bpy.types.Operator):
     bl_idname = "hgd.convert_all_card_previews_to_mesh"
     bl_label = "全CARDプレビューを実体化"
-    bl_description = "すべての通常Curve/ツイスト表示Curveから、元Curveを残したままCARD実体Meshを生成します"
+    bl_description = "全CurveからCARD Meshを実体化します。大量のMeshが作成される可能性があります。"
     bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
         meshes = _create_card_meshes_from_curves(context, False)
@@ -4291,6 +4340,7 @@ classes = (
     HGD_OT_apply_taper_to_all_curves,
     HGD_OT_clear_taper_from_selected_curves,
     HGD_OT_clear_taper_from_all_curves,
+    HGD_OT_update_flat_mesh_previews_from_curves,
     HGD_OT_create_flat_mesh_from_selected_curves,
     HGD_OT_create_flat_mesh_from_all_curves,
     HGD_OT_export_flat_mesh_from_selected_curves,
