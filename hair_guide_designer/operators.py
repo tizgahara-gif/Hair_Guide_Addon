@@ -778,6 +778,8 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 obj["hair_curve_resolution"] = scene.hair_curve_resolution
                 obj["hair_card_roll_angle"] = scene.hair_card_default_roll_angle
                 obj["hair_card_use_parallel_transport"] = scene.hair_card_use_parallel_transport
+                obj["hair_card_mid_position"] = scene.hair_card_mid_position
+                obj["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
                 obj["hair_mirror_pair"] = ""
                 obj["hair_mirror_source"] = ""
                 obj["strand_type"] = scene.hair_strand_type
@@ -1382,6 +1384,8 @@ def _create_or_replace_twist_strand(context, control_obj):
     obj["hair_twist_taper_strength"] = scene.hair_twist_taper_strength
     obj["hair_card_roll_angle"] = float(control_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle))
     obj["hair_card_use_parallel_transport"] = bool(control_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
+    obj["hair_card_mid_position"] = float(control_obj.get("hair_card_mid_position", scene.hair_card_mid_position))
+    obj["hair_card_width_interpolation"] = str(control_obj.get("hair_card_width_interpolation", scene.hair_card_width_interpolation))
     taper_obj = None
     if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
         taper_obj, _ = _create_or_update_default_taper(context)
@@ -1421,6 +1425,8 @@ def _make_twist_from_point(context, point):
     control["hair_curve_length_cm"] = scene.hair_curve_length_cm
     control["hair_card_roll_angle"] = scene.hair_card_default_roll_angle
     control["hair_card_use_parallel_transport"] = scene.hair_card_use_parallel_transport
+    control["hair_card_mid_position"] = scene.hair_card_mid_position
+    control["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
     control.data.resolution_u = scene.hair_twist_resolution
     _set_twist_control_display(control)
     _apply_curve_variation(control, scene, point.name)
@@ -1848,12 +1854,37 @@ def _set_card_preview_visible(curve_obj, visible):
             obj.hide_render = not visible
 
 
-def _card_width(scene, t):
+def _card_width(scene, t, curve_obj=None):
     if scene.hair_card_sync_widths:
         return cm_to_m(scene.hair_card_synced_width_cm)
-    if t <= 0.5:
-        return cm_to_m(scene.hair_card_width_root_cm + (scene.hair_card_width_mid_cm - scene.hair_card_width_root_cm) * (t / 0.5))
-    return cm_to_m(scene.hair_card_width_mid_cm + (scene.hair_card_width_tip_cm - scene.hair_card_width_mid_cm) * ((t - 0.5) / 0.5))
+    root = cm_to_m(scene.hair_card_width_root_cm)
+    mid = cm_to_m(scene.hair_card_width_mid_cm)
+    tip = cm_to_m(scene.hair_card_width_tip_cm)
+    mid_pos = scene.hair_card_mid_position
+    mode = scene.hair_card_width_interpolation
+    if curve_obj:
+        mid_pos = float(curve_obj.get("hair_card_mid_position", mid_pos))
+        mode = str(curve_obj.get("hair_card_width_interpolation", mode))
+    mid_pos = max(0.05, min(0.95, mid_pos))
+
+    def _ease(f):
+        f = max(0.0, min(1.0, f))
+        if mode == "LINEAR":
+            return f
+        if mode == "SHARP":
+            return f * f
+        return f * f * (3.0 - 2.0 * f)
+
+    if t <= mid_pos:
+        f = _ease(t / mid_pos)
+        return root + (mid - root) * f
+    f = _ease((t - mid_pos) / (1.0 - mid_pos))
+    return mid + (tip - mid) * f
+
+
+def _store_scene_card_width_shape(curve_obj, scene):
+    curve_obj["hair_card_mid_position"] = scene.hair_card_mid_position
+    curve_obj["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
 
 
 def _create_or_update_card_preview_for_scene(context, curve_obj):
@@ -1871,7 +1902,7 @@ def _create_or_update_card_preview_for_scene(context, curve_obj):
     faces = []
     for index, (sample, _tangent, side) in enumerate(frames):
         t = index / max(len(frames) - 1, 1)
-        half_width = max(_card_width(scene, t), 0.0) * 0.5
+        half_width = max(_card_width(scene, t, curve_obj), 0.0) * 0.5
         vertices.append(tuple(sample - side * half_width))
         vertices.append(tuple(sample + side * half_width))
     for index in range(len(frames) - 1):
@@ -1891,6 +1922,12 @@ def _create_or_update_card_preview_for_scene(context, curve_obj):
     preview["hair_source_curve"] = curve_obj.name
     preview["hair_locked_preview"] = True
     preview["hair_editable"] = False
+    mid_pos = float(curve_obj.get("hair_card_mid_position", scene.hair_card_mid_position))
+    width_interpolation = str(curve_obj.get("hair_card_width_interpolation", scene.hair_card_width_interpolation))
+    curve_obj["hair_card_mid_position"] = mid_pos
+    curve_obj["hair_card_width_interpolation"] = width_interpolation
+    preview["hair_card_mid_position"] = mid_pos
+    preview["hair_card_width_interpolation"] = width_interpolation
     preview["hair_card_width_root"] = cm_to_m(scene.hair_card_width_root_cm)
     preview["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
     preview["hair_card_width_mid"] = cm_to_m(scene.hair_card_width_mid_cm)
@@ -1944,7 +1981,7 @@ def _create_card_mesh_from_curve(context, curve_obj):
     faces = []
     for index, (sample, _tangent, side) in enumerate(frames):
         t = index / max(len(frames) - 1, 1)
-        half_width = max(_card_width(scene, t), 0.0) * 0.5
+        half_width = max(_card_width(scene, t, curve_obj), 0.0) * 0.5
         vertices.append(tuple(sample - side * half_width))
         vertices.append(tuple(sample + side * half_width))
     for index in range(len(frames) - 1):
@@ -1961,6 +1998,12 @@ def _create_card_mesh_from_curve(context, curve_obj):
     obj.color = curve_obj.color
     obj["hair_source_curve"] = curve_obj.name
     obj["hair_region"] = curve_obj.get("hair_region", "")
+    mid_pos = float(curve_obj.get("hair_card_mid_position", scene.hair_card_mid_position))
+    width_interpolation = str(curve_obj.get("hair_card_width_interpolation", scene.hair_card_width_interpolation))
+    curve_obj["hair_card_mid_position"] = mid_pos
+    curve_obj["hair_card_width_interpolation"] = width_interpolation
+    obj["hair_card_mid_position"] = mid_pos
+    obj["hair_card_width_interpolation"] = width_interpolation
     obj["hair_card_width_root"] = cm_to_m(scene.hair_card_width_root_cm)
     obj["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
     obj["hair_card_width_mid"] = cm_to_m(scene.hair_card_width_mid_cm)
@@ -2011,6 +2054,7 @@ def _apply_display_mode_to_curve(context, obj):
         _set_card_preview_visible(obj, False)
         _ensure_curve_visible_geometry(context, obj)
     elif mode == "CARD":
+        _store_scene_card_width_shape(obj, scene)
         obj.hide_viewport = False
         obj.display_type = 'WIRE'
         obj.data.bevel_depth = 0.0
@@ -2919,6 +2963,7 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
 
         updated = 0
         for control in twist_controls:
+            _store_scene_card_width_shape(control, context.scene)
             strand = _create_or_replace_twist_strand(context, control)
             if strand:
                 strand["hair_curve_display_mode"] = "CARD"
@@ -2926,6 +2971,7 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
                     updated += 1
 
         for curve_obj in curves:
+            _store_scene_card_width_shape(curve_obj, context.scene)
             if curve_obj.get("hair_guide_type") == "twist_strand":
                 curve_obj["hair_curve_display_mode"] = "CARD"
             elif curve_obj.get("hair_guide_type") == "curve":

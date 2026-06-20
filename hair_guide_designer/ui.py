@@ -194,6 +194,10 @@ class HGD_PT_card_display(HGD_PT_base):
         if scene.hair_card_sync_widths: box.prop(scene, 'hair_card_synced_width_cm')
         else:
             for p in ['hair_card_width_root_cm','hair_card_width_mid_cm','hair_card_width_tip_cm']: box.prop(scene,p)
+        box.prop(scene, 'hair_card_mid_position')
+        box.prop(scene, 'hair_card_width_interpolation')
+        if scene.hair_show_inline_help:
+            box.label(text='Mid位置をRoot側へ寄せると根元付近、Tip側へ寄せると毛先側まで幅を維持できます。', icon='INFO')
         box.operator('hgd.update_card_previews_from_curves', text='CARDプレビュー更新', icon='FILE_REFRESH')
         ctrl_box = box.box()
         ctrl_box.label(text='CARD方向制御', icon='EMPTY_SINGLE_ARROW')
