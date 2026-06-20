@@ -1117,8 +1117,11 @@ class HGD_OT_clear_flat_mesh_previews(bpy.types.Operator):
 class HGD_OT_clear_all_generated(bpy.types.Operator):
     bl_idname = "hgd.clear_all_generated"
     bl_label = "生成物をすべて削除"
-    bl_description = "HairGuideSystem内のガイド、領域線、配置点、カーブ、警告、テーパー、CARD、Flat Meshを削除します"
+    bl_description = "hair_guide内の全生成物を削除します（元に戻す前提の危険操作です）"
     bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
         if not bpy.data.collections.get(utils.ROOT):
@@ -4204,7 +4207,21 @@ def _remove_obsolete_card_auto_handlers():
             handlers.remove(handler)
 
 
+class HGD_OT_reload_keymaps(bpy.types.Operator):
+    bl_idname = "hgd.reload_keymaps"
+    bl_label = "Keymap再登録"
+    bl_description = "Addon PreferencesのPie Menu Key設定でHair Guide PieのKeyMapを再登録します"
+
+    def execute(self, context):
+        from . import keymap
+        keymap.unregister_keymaps()
+        keymap.register_keymaps()
+        self.report({'INFO'}, "Hair Guide keymapsを再登録しました。")
+        return {'FINISHED'}
+
+
 classes = (
+    HGD_OT_reload_keymaps,
     HGD_OT_toggle_work_mode_lock,
     HGD_OT_toggle_final_edit_mode,
     HGD_OT_set_target_head,
