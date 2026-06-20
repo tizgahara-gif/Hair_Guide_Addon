@@ -91,6 +91,7 @@ PROPERTY_NAMES = (
     "hair_ui_show_output_advanced", "hair_ui_show_cleanup_advanced",
     "hair_ui_show_debug",
     "hair_show_guides_in_front", "hair_show_inline_help", "hair_work_mode_lock_enabled",
+    "hair_final_edit_mode_enabled",
 )
 
 
@@ -143,6 +144,11 @@ def register():
         name="作業中は他オブジェクトを選択不可",
         default=False,
         description="ONにすると、ガイド・配置点・Curve以外のオブジェクトを一時的に選択不可にします。",
+    )
+    scene.hair_final_edit_mode_enabled = BoolProperty(
+        name="最終編集モード",
+        default=False,
+        description="ONにすると出力Meshのみ表示し、ガイドやCurveを非表示にします。",
     )
 
     scene.hair_seed = IntProperty(

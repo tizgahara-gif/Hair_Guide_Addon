@@ -135,6 +135,14 @@ class HGD_PT_quick_actions(HGD_PT_base):
         output_box.label(text='---- 出力 ----', icon='MESH_DATA')
         row = output_box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.convert_selected_card_preview_to_mesh', text='7. CARD Mesh出力', icon='MESH_PLANE')
         row = output_box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.export_flat_mesh_from_selected_curves', text='8. 扁平Mesh出力', icon='MESH_DATA')
+        output_box.operator(
+            'hgd.toggle_final_edit_mode',
+            text='7. 最終編集モード解除' if scene.hair_final_edit_mode_enabled else '7. 最終編集モード',
+            icon='HIDE_OFF' if scene.hair_final_edit_mode_enabled else 'MESH_DATA',
+        )
+        if scene.hair_show_inline_help:
+            output_box.label(text='出力Meshのみ表示し、ガイド・配置点・Curve・Preview・Emptyを非表示にします。', icon='INFO')
+            output_box.label(text='Mesh編集に集中したい時に使います。')
         _draw_card_edit_redirect(layout, context)
 
 class HGD_PT_setup(HGD_PT_base):
@@ -248,6 +256,7 @@ class HGD_PT_output(HGD_PT_base):
             flat_box.label(text='通常CurveはCARD Control Empty方向を使います。', icon='INFO')
             flat_box.label(text='ツイストCurveのみ、頭部中心側または参照Empty方向へ面を向けられます。')
         row=flat_box.row(align=True); row.operator('hgd.export_flat_mesh_from_selected_curves', text='選択Curveを扁平Mesh出力', icon='MESH_DATA'); row.operator('hgd.create_flat_mesh_from_all_curves', text='全Curveを扁平Mesh出力', icon='MESH_GRID')
+        box.operator('hgd.toggle_final_edit_mode', text='最終編集モード解除' if scene.hair_final_edit_mode_enabled else '最終編集モード', icon='HIDE_OFF' if scene.hair_final_edit_mode_enabled else 'MESH_DATA')
         if _foldout(layout, scene, 'hair_ui_show_output_advanced', '詳細を表示'):
             adv=_section_box(layout, '出力詳細', 'MESH_DATA', '[OUTPUT]'); adv.prop(scene,'hair_flat_mesh_ring_segments')
 
@@ -256,6 +265,7 @@ class HGD_PT_cleanup(HGD_PT_base):
     bl_order = 7
     def draw(self, context):
         scene=context.scene; layout=self.layout; box=_section_box(layout, '整理・削除', 'TRASH', '[CLEANUP]')
+        box.operator('hgd.toggle_final_edit_mode', text='最終編集モード解除' if scene.hair_final_edit_mode_enabled else '最終編集モード', icon='HIDE_OFF' if scene.hair_final_edit_mode_enabled else 'MESH_DATA')
         box.operator('hgd.clear_card_previews', text='CARDプレビュー削除', icon='TRASH'); box.operator('hgd.clear_flat_mesh_previews', text='扁平メッシュPreview削除', icon='TRASH'); box.operator('hgd.clear_warnings', text='警告削除', icon='TRASH'); box.operator('hgd.clear_placement_points', text='配置点削除', icon='TRASH'); box.operator('hgd.delete_hair_guides', text='ガイド削除', icon='TRASH'); box.operator('hgd.clear_all_generated', text='全生成物削除', icon='TRASH')
         box.operator('hgd.organize_curves_by_region', text='カーブ整理', icon='OUTLINER_COLLECTION'); box.operator('hgd.apply_curve_region_colors', text='部位別カラー反映', icon='MATERIAL')
         if _foldout(layout, scene, 'hair_ui_show_cleanup_advanced', '詳細を表示'):

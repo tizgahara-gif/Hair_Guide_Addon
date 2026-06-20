@@ -97,6 +97,93 @@ class HGD_OT_toggle_work_mode_lock(bpy.types.Operator):
         return {'FINISHED'}
 
 
+
+FINAL_EDIT_VISIBLE_TYPES = {"card_mesh", "flat_mesh"}
+FINAL_EDIT_HIDE_TYPES = {
+    "guide",
+    "region",
+    "placement_point",
+    "curve",
+    "twist_control",
+    "twist_strand",
+    "card_preview",
+    "flat_mesh_preview",
+    "card_control_empty",
+    "warning",
+    "taper_object",
+    "profile_object",
+}
+FINAL_EDIT_PREV_HIDE_VIEWPORT_KEY = "hgd_prev_hide_viewport_final"
+FINAL_EDIT_PREV_HIDE_SELECT_KEY = "hgd_prev_hide_select_final"
+
+
+def _generated_output_meshes():
+    return [
+        obj for obj in bpy.data.objects
+        if obj.get("hair_guide_type", "") in FINAL_EDIT_VISIBLE_TYPES
+    ]
+
+
+def _restore_final_edit_mode_visibility():
+    for obj in bpy.data.objects:
+        if FINAL_EDIT_PREV_HIDE_VIEWPORT_KEY in obj:
+            obj.hide_viewport = bool(obj[FINAL_EDIT_PREV_HIDE_VIEWPORT_KEY])
+            del obj[FINAL_EDIT_PREV_HIDE_VIEWPORT_KEY]
+        if FINAL_EDIT_PREV_HIDE_SELECT_KEY in obj:
+            obj.hide_select = bool(obj[FINAL_EDIT_PREV_HIDE_SELECT_KEY])
+            del obj[FINAL_EDIT_PREV_HIDE_SELECT_KEY]
+
+
+class HGD_OT_toggle_final_edit_mode(bpy.types.Operator):
+    bl_idname = "hgd.toggle_final_edit_mode"
+    bl_label = "最終編集モード切替"
+    bl_description = "出力Meshのみ表示し、ガイド・配置点・Curve・Preview・Emptyを非表示にします"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        if scene.hair_final_edit_mode_enabled:
+            scene.hair_final_edit_mode_enabled = False
+            _restore_final_edit_mode_visibility()
+            self.report({'INFO'}, "最終編集モードを解除しました。")
+            return {'FINISHED'}
+
+        output_meshes = _generated_output_meshes()
+        if not output_meshes:
+            scene.hair_final_edit_mode_enabled = False
+            self.report({'WARNING'}, "出力Meshがありません。先にCARD Meshまたは扁平Meshを出力してください。")
+            return {'CANCELLED'}
+
+        scene.hair_final_edit_mode_enabled = True
+        for obj in bpy.data.objects:
+            guide_type = obj.get("hair_guide_type", "")
+            if not guide_type:
+                continue
+            if FINAL_EDIT_PREV_HIDE_VIEWPORT_KEY not in obj:
+                obj[FINAL_EDIT_PREV_HIDE_VIEWPORT_KEY] = bool(obj.hide_viewport)
+            if FINAL_EDIT_PREV_HIDE_SELECT_KEY not in obj:
+                obj[FINAL_EDIT_PREV_HIDE_SELECT_KEY] = bool(obj.hide_select)
+
+            if guide_type in FINAL_EDIT_VISIBLE_TYPES:
+                obj.hide_viewport = False
+                obj.hide_select = False
+            elif guide_type in FINAL_EDIT_HIDE_TYPES:
+                obj.hide_viewport = True
+                obj.hide_select = True
+
+        for obj in context.selected_objects:
+            obj.select_set(False)
+        active_obj = None
+        for obj in output_meshes:
+            obj.select_set(True)
+            if active_obj is None:
+                active_obj = obj
+        if active_obj is not None:
+            context.view_layer.objects.active = active_obj
+
+        self.report({'INFO'}, "最終編集モードを有効化しました。出力Meshのみ表示します。")
+        return {'FINISHED'}
+
 class HGD_OT_set_target_head(bpy.types.Operator):
     bl_idname = "hgd.set_target_head"
     bl_label = "選択メッシュを頭部として登録"
@@ -4110,6 +4197,7 @@ def _remove_obsolete_card_auto_handlers():
 
 classes = (
     HGD_OT_toggle_work_mode_lock,
+    HGD_OT_toggle_final_edit_mode,
     HGD_OT_set_target_head,
     HGD_OT_create_hair_guides,
     HGD_OT_symmetrize_front_back_guides,
