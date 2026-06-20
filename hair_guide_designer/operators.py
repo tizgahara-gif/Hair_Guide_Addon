@@ -1296,6 +1296,61 @@ def _card_or_flat_side_vector(context, curve_obj, sample, tangent, previous_side
     return side
 
 
+
+def _head_center_vector(scene, sample):
+    head = getattr(scene, "hair_target_head_object", None)
+    if head:
+        _, _, center, _ = utils.head_bounds(head)
+        return center - sample
+    return mathutils.Vector((0.0, 0.0, -1.0))
+
+
+def _twist_inner_flat_side_vector(context, curve_obj, sample, tangent, previous_side=None):
+    scene = context.scene
+    inward = None
+    if getattr(scene, "hair_twist_flat_mesh_inner_mode", "HEAD_CENTER") == "TARGET_EMPTY":
+        empty_name = curve_obj.get("hair_card_control_empty", "")
+        empty = bpy.data.objects.get(empty_name) if empty_name else None
+        if empty:
+            inward = empty.matrix_world.translation - sample
+
+    if inward is None:
+        inward = _head_center_vector(scene, sample)
+
+    if inward.length < 1e-6:
+        return previous_side.copy() if previous_side else mathutils.Vector((1.0, 0.0, 0.0))
+
+    inward.normalize()
+    side = tangent.cross(inward)
+    if side.length < 1e-6:
+        side = inward.cross(tangent)
+    if side.length < 1e-6:
+        return previous_side.copy() if previous_side else mathutils.Vector((1.0, 0.0, 0.0))
+
+    side.normalize()
+    if previous_side is not None and side.dot(previous_side) < 0:
+        side *= -1
+
+    normal = tangent.cross(side)
+    if normal.length >= 1e-6 and normal.dot(inward) < 0:
+        side *= -1
+
+    side = side - tangent * side.dot(tangent)
+    if side.length < 1e-6:
+        return previous_side.copy() if previous_side else mathutils.Vector((1.0, 0.0, 0.0))
+    side.normalize()
+    return side
+
+
+def _flat_mesh_side_vector_for_curve(context, curve_obj, sample, tangent, previous_side=None):
+    scene = context.scene
+    if (
+        curve_obj.get("hair_guide_type") == "twist_strand"
+        and getattr(scene, "hair_twist_flat_mesh_force_inner_side", True)
+    ):
+        return _twist_inner_flat_side_vector(context, curve_obj, sample, tangent, previous_side)
+    return _card_or_flat_side_vector(context, curve_obj, sample, tangent, previous_side)
+
 def _card_control_empty_side_vector(curve_obj, sample, tangent):
     return _card_or_flat_side_vector(bpy.context, curve_obj, sample, tangent)
 
@@ -1422,6 +1477,7 @@ def _create_or_replace_twist_strand(context, control_obj):
     obj["hair_card_use_parallel_transport"] = bool(control_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
     obj["hair_card_mid_position"] = float(control_obj.get("hair_card_mid_position", scene.hair_card_mid_position))
     obj["hair_card_width_interpolation"] = str(control_obj.get("hair_card_width_interpolation", scene.hair_card_width_interpolation))
+    obj["hair_card_control_empty"] = control_obj.get("hair_card_control_empty", "")
     taper_obj = None
     if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
         taper_obj, _ = _create_or_update_default_taper(context)
@@ -1906,7 +1962,7 @@ def _build_flat_mesh_data(context, curve_obj):
         if tangent.length < 1e-6:
             tangent = prev_tangent.copy() if prev_tangent else mathutils.Vector((0.0, 0.0, 1.0))
         tangent.normalize()
-        side = _card_or_flat_side_vector(context, curve_obj, sample, tangent, prev_side)
+        side = _flat_mesh_side_vector_for_curve(context, curve_obj, sample, tangent, prev_side)
         if side is None:
             if prev_side is not None and bool(curve_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport)):
                 side = _parallel_transport_side(prev_tangent, tangent, prev_side)
@@ -2266,6 +2322,8 @@ def _apply_display_mode_to_curve(context, obj):
             preview["hair_locked_preview"] = True
         _set_flat_mesh_preview_visible(obj, True)
     obj["hair_curve_display_mode"] = mode
+    if obj.get("hair_guide_type") == "twist_strand":
+        obj["hair_twist_display_preview_ready"] = True
     return True
 
 

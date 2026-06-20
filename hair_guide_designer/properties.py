@@ -76,7 +76,7 @@ PROPERTY_NAMES = (
     "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_width_cm", "hair_flat_mesh_thickness", "hair_flat_mesh_thickness_cm",
     "hair_flat_mesh_samples", "hair_flat_mesh_ring_segments", "hair_flat_mesh_solidify_thickness",
-    "hair_flat_mesh_add_subdivision", "hair_flat_mesh_mark_side_sharp", "hair_warning_count", "hair_root_cluster_threshold",
+    "hair_flat_mesh_add_subdivision", "hair_flat_mesh_mark_side_sharp", "hair_twist_flat_mesh_force_inner_side", "hair_twist_flat_mesh_inner_mode", "hair_warning_count", "hair_root_cluster_threshold",
     "hair_batch_curve_length", "hair_batch_curve_bevel_depth", "hair_batch_curve_resolution",
     "hair_follow_keep_tip_offset", "hair_follow_update_selected_only",
     "hair_mirror_axis", "hair_mirror_overwrite_existing", "hair_mirror_copy_custom_properties",
@@ -580,6 +580,20 @@ def register():
         name="側面エッジをSharpにする",
         default=True,
         description="扁平メッシュの側面境界にSharpを設定します。",
+    )
+    scene.hair_twist_flat_mesh_force_inner_side = BoolProperty(
+        name="ツイスト扁平面を内側へ向ける",
+        default=True,
+        description="ツイストCurveから扁平メッシュを生成する際、各面を頭部中心側へ向けます。",
+    )
+    scene.hair_twist_flat_mesh_inner_mode = EnumProperty(
+        name="ツイスト内向き基準",
+        items=(
+            ("HEAD_CENTER", "頭部中心", "登録頭部の中心方向へ面を向けます"),
+            ("TARGET_EMPTY", "参照Empty", "CARD Control Empty方向を内向き基準にします"),
+        ),
+        default="HEAD_CENTER",
+        description="ツイストCurveの扁平メッシュ面を内側へ向ける基準を選択します。",
     )
     scene.hair_card_auto_select_edit_curve = BoolProperty(
         name="CARD選択時に編集Curveへ切替",
