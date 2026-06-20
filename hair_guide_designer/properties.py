@@ -50,7 +50,7 @@ PROPERTY_NAMES = (
     "hair_curve_length_variation", "hair_curve_display_mode",
     "hair_card_width_preset",
     "hair_card_width_root", "hair_card_width_root_cm", "hair_card_width_mid", "hair_card_width_mid_cm",
-    "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
+    "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_mid_position", "hair_card_width_interpolation", "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
     "hair_card_use_parallel_transport", "hair_card_default_roll_angle",
     "hair_card_control_empty_mode", "hair_card_flip_side",
     "hair_card_auto_apply_to_new_curves", "hair_card_auto_update_preview", "hair_card_auto_select_edit_curve", "hair_show_display_mode_settings",
@@ -397,6 +397,24 @@ def register():
         description="互換用のm単位CARD幅です。通常UIではcm単位を使用します。",
     )
     scene.hair_card_width_tip_cm = FloatProperty(name="CARD Tip幅(cm)", default=0.5, min=0.0, max=200.0, precision=2, description="CARDプレビュー毛先側の幅をcm単位で指定します。内部ではmへ変換します。")
+    scene.hair_card_mid_position = FloatProperty(
+        name="CARD Mid位置",
+        default=0.5,
+        min=0.05,
+        max=0.95,
+        subtype="FACTOR",
+        description="RootからTipまでのどの位置をMid幅として扱うかを指定します。0.25ならRoot寄り、0.75ならTip寄りです。",
+    )
+    scene.hair_card_width_interpolation = EnumProperty(
+        name="CARD幅補間",
+        items=(
+            ("LINEAR", "線形", "直線的に補間します"),
+            ("SMOOTH", "スムーズ", "滑らかに補間します"),
+            ("SHARP", "シャープ", "Root/Mid/Tipの変化を強めます"),
+        ),
+        default="SMOOTH",
+        description="Root/Mid/Tip間のCARD幅補間カーブを指定します。",
+    )
     scene.hair_card_sync_widths = BoolProperty(
         name="CARD幅を同期",
         default=False,
