@@ -76,7 +76,7 @@ PROPERTY_NAMES = (
     "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_width_cm", "hair_flat_mesh_thickness", "hair_flat_mesh_thickness_cm",
     "hair_flat_mesh_samples", "hair_flat_mesh_ring_segments", "hair_flat_mesh_solidify_thickness",
-    "hair_flat_mesh_add_subdivision", "hair_warning_count", "hair_root_cluster_threshold",
+    "hair_flat_mesh_add_subdivision", "hair_flat_mesh_mark_side_sharp", "hair_warning_count", "hair_root_cluster_threshold",
     "hair_batch_curve_length", "hair_batch_curve_bevel_depth", "hair_batch_curve_resolution",
     "hair_follow_keep_tip_offset", "hair_follow_update_selected_only",
     "hair_mirror_axis", "hair_mirror_overwrite_existing", "hair_mirror_copy_custom_properties",
@@ -393,6 +393,7 @@ def register():
             ("CURVE", "カーブ", "制御線のみ"),
             ("SOLID", "ソリッド", "Curve Bevel + Taper"),
             ("CARD", "CARDプレビュー", "板ポリ状の非破壊プレビュー"),
+            ("FLAT_MESH", "扁平メッシュ", "Curveから扁平メッシュPreviewを生成して表示します"),
         ),
         default="SOLID",
         description="Curveを維持したまま表示方式を切り替えます。",
@@ -565,6 +566,11 @@ def register():
         name="Subdivisionを追加",
         default=True,
         description="生成した扁平メッシュへSubdivision Surface Modifierを追加します。",
+    )
+    scene.hair_flat_mesh_mark_side_sharp = BoolProperty(
+        name="側面エッジをSharpにする",
+        default=True,
+        description="扁平メッシュの側面境界にSharpを設定します。",
     )
     scene.hair_card_auto_select_edit_curve = BoolProperty(
         name="CARD選択時に編集Curveへ切替",

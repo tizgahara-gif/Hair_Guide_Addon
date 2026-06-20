@@ -238,17 +238,19 @@ class HGD_PT_output(HGD_PT_base):
     def draw(self, context):
         scene=context.scene; layout=self.layout; box=_section_box(layout, '出力', 'MESH_DATA', '[OUTPUT]')
         box.operator('hgd.convert_selected_card_preview_to_mesh', text='選択CurveのCARD Mesh実体化', icon='MESH_PLANE'); box.operator('hgd.convert_all_card_previews_to_mesh', text='全CARD Mesh実体化', icon='MESH_GRID')
-        box.prop(scene, 'hair_flat_mesh_add_subdivision'); box.prop(scene, 'hair_flat_mesh_width_cm'); box.prop(scene, 'hair_flat_mesh_thickness_cm')
-        box.operator('hgd.export_flat_mesh_from_selected_curves', text='選択Curveを扁平Mesh出力', icon='MESH_DATA')
+        flat_box=_section_box(layout, '扁平メッシュ設定', 'MESH_DATA', '[OUTPUT]')
+        flat_box.prop(scene, 'hair_flat_mesh_width_cm'); flat_box.prop(scene, 'hair_flat_mesh_thickness_cm'); flat_box.prop(scene, 'hair_flat_mesh_samples')
+        flat_box.prop(scene, 'hair_flat_mesh_add_subdivision'); flat_box.prop(scene, 'hair_flat_mesh_mark_side_sharp')
+        row=flat_box.row(align=True); row.operator('hgd.export_flat_mesh_from_selected_curves', text='選択Curveを扁平Mesh出力', icon='MESH_DATA'); row.operator('hgd.create_flat_mesh_from_all_curves', text='全Curveを扁平Mesh出力', icon='MESH_GRID')
         if _foldout(layout, scene, 'hair_ui_show_output_advanced', '詳細を表示'):
-            adv=_section_box(layout, '出力詳細', 'MESH_DATA', '[OUTPUT]'); adv.prop(scene,'hair_flat_mesh_samples'); adv.prop(scene,'hair_flat_mesh_ring_segments')
+            adv=_section_box(layout, '出力詳細', 'MESH_DATA', '[OUTPUT]'); adv.prop(scene,'hair_flat_mesh_ring_segments')
 
 class HGD_PT_cleanup(HGD_PT_base):
     bl_label = '整理・削除'
     bl_order = 7
     def draw(self, context):
         scene=context.scene; layout=self.layout; box=_section_box(layout, '整理・削除', 'TRASH', '[CLEANUP]')
-        box.operator('hgd.clear_card_previews', text='CARDプレビュー削除', icon='TRASH'); box.operator('hgd.clear_warnings', text='警告削除', icon='TRASH'); box.operator('hgd.clear_placement_points', text='配置点削除', icon='TRASH'); box.operator('hgd.delete_hair_guides', text='ガイド削除', icon='TRASH'); box.operator('hgd.clear_all_generated', text='全生成物削除', icon='TRASH')
+        box.operator('hgd.clear_card_previews', text='CARDプレビュー削除', icon='TRASH'); box.operator('hgd.clear_flat_mesh_previews', text='扁平メッシュPreview削除', icon='TRASH'); box.operator('hgd.clear_warnings', text='警告削除', icon='TRASH'); box.operator('hgd.clear_placement_points', text='配置点削除', icon='TRASH'); box.operator('hgd.delete_hair_guides', text='ガイド削除', icon='TRASH'); box.operator('hgd.clear_all_generated', text='全生成物削除', icon='TRASH')
         box.operator('hgd.organize_curves_by_region', text='カーブ整理', icon='OUTLINER_COLLECTION'); box.operator('hgd.apply_curve_region_colors', text='部位別カラー反映', icon='MATERIAL')
         if _foldout(layout, scene, 'hair_ui_show_cleanup_advanced', '詳細を表示'):
             adv=_section_box(layout, '表示・保守', 'TRASH', '[CLEANUP]')
