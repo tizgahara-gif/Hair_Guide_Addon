@@ -742,9 +742,12 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 return {'CANCELLED'}
             if context.scene.hair_strand_generation_type == "TWIST_CURVE":
                 made = 0
+                curves_by_point = {}
                 for point in points:
-                    _make_twist_from_point(context, point)
+                    control, _strand = _make_twist_from_point(context, point)
+                    curves_by_point[point.name] = control
                     made += 1
+                _link_created_curve_mirror_pairs(curves_by_point)
                 _apply_work_mode_lock_to_all_objects(context)
                 self.report({'INFO'}, f"ツイスト制御カーブ{made}本と表示用カーブを生成しました。制御カーブを編集してから更新してください。")
                 return {'FINISHED'}
@@ -754,6 +757,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
             if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
                 taper_obj, _ = _create_or_update_default_taper(context)
             made = 0
+            curves_by_point = {}
             for point in points:
                 region = point.get("hair_region", "Front")
                 direction = utils.string_to_vector(point.get("recommended_direction"), utils.direction_for_region(region))
@@ -780,8 +784,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 obj["hair_card_use_parallel_transport"] = scene.hair_card_use_parallel_transport
                 obj["hair_card_mid_position"] = scene.hair_card_mid_position
                 obj["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
-                obj["hair_mirror_pair"] = ""
-                obj["hair_mirror_source"] = ""
+                _set_curve_mirror_metadata(obj, point)
                 obj["strand_type"] = scene.hair_strand_type
                 obj["root_radius"] = scene.hair_curve_root_radius
                 obj["tip_radius"] = scene.hair_curve_tip_radius
@@ -795,7 +798,9 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 _ensure_curve_visible_geometry(context, obj)
                 if scene.hair_card_auto_apply_to_new_curves:
                     _apply_display_mode_to_curve(context, obj)
+                curves_by_point[point.name] = obj
                 made += 1
+            _link_created_curve_mirror_pairs(curves_by_point)
             _apply_work_mode_lock_to_all_objects(context)
             self.report({'INFO'}, f"カーブ毛束を{made}本生成しました。")
             return {'FINISHED'}
@@ -1427,6 +1432,7 @@ def _make_twist_from_point(context, point):
     control["hair_card_use_parallel_transport"] = scene.hair_card_use_parallel_transport
     control["hair_card_mid_position"] = scene.hair_card_mid_position
     control["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
+    _set_curve_mirror_metadata(control, point)
     control.data.resolution_u = scene.hair_twist_resolution
     _set_twist_control_display(control)
     _apply_curve_variation(control, scene, point.name)
@@ -1490,6 +1496,58 @@ def _mirrored_region(obj, dst_side):
 
 def _mirrored_flow_side(dst_side):
     return "R" if dst_side == "Side_R" else "L"
+
+
+def _mirror_side_from_object(obj):
+    flow_side = obj.get("flow_side", "")
+    if flow_side in {"L", "R", "Center"}:
+        return flow_side
+    region = obj.get("hair_region", "")
+    if region == "Side_L":
+        return "L"
+    if region == "Side_R":
+        return "R"
+    return ""
+
+
+def _set_curve_mirror_metadata(curve_obj, point_obj):
+    curve_obj["hair_mirror_pair"] = ""
+    curve_obj["hair_mirror_source"] = ""
+    curve_obj["hair_mirror_side"] = _mirror_side_from_object(point_obj)
+
+
+def _link_created_curve_mirror_pairs(curves_by_point):
+    for point_name, curve_obj in curves_by_point.items():
+        point_obj = bpy.data.objects.get(point_name)
+        if not point_obj:
+            continue
+        paired_point_name = point_obj.get("hair_mirror_pair", "")
+        paired_curve = curves_by_point.get(paired_point_name)
+        if not paired_curve:
+            continue
+        curve_obj["hair_mirror_pair"] = paired_curve.name
+        paired_curve["hair_mirror_pair"] = curve_obj.name
+
+
+def _copy_mirrored_bezier_shape(source, target, mirror_x):
+    if source.type != "CURVE" or target.type != "CURVE":
+        return False
+    source_splines = [s for s in source.data.splines if s.type == "BEZIER"]
+    target_splines = [s for s in target.data.splines if s.type == "BEZIER"]
+    if len(source_splines) != len(target_splines):
+        return False
+    target_world_inv = target.matrix_world.inverted()
+    for source_spline, target_spline in zip(source_splines, target_splines):
+        if len(source_spline.bezier_points) != len(target_spline.bezier_points):
+            return False
+        for source_point, target_point in zip(source_spline.bezier_points, target_spline.bezier_points):
+            for attr in ("co", "handle_left", "handle_right"):
+                world_co = source.matrix_world @ getattr(source_point, attr)
+                world_co.x = mirror_x - (world_co.x - mirror_x)
+                setattr(target_point, attr, target_world_inv @ world_co)
+            target_point.handle_left_type = source_point.handle_left_type
+            target_point.handle_right_type = source_point.handle_right_type
+    return True
 
 
 def _copy_custom_properties(source, target):
@@ -3513,6 +3571,51 @@ class HGD_OT_mirror_side(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_mirror_selected_curves(bpy.types.Operator):
+    bl_idname = "hgd.mirror_selected_curves"
+    bl_label = "選択Curveを左右ミラー"
+    bl_description = "選択Curveの形状をhair_mirror_pairの対応Curveへ頭部中心X軸で反転コピーします"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        head = require_head(context, self)
+        if not head:
+            return {'CANCELLED'}
+        _min_v, _max_v, center, _size = utils.head_bounds(head)
+        selected = [
+            obj for obj in context.selected_objects
+            if obj.type == "CURVE" and obj.get("hair_guide_type") in {"curve", "twist_control"}
+        ]
+        if not selected:
+            self.report({'WARNING'}, "ミラー元Curveが選択されていません。")
+            return {'CANCELLED'}
+
+        mirrored = 0
+        warnings = 0
+        for source in selected:
+            pair_name = source.get("hair_mirror_pair", "")
+            target = bpy.data.objects.get(pair_name) if pair_name else None
+            if not target or target.type != "CURVE" or target.get("hair_guide_type") not in {"curve", "twist_control"}:
+                self.report({'WARNING'}, f"対応Curveが見つかりません: {source.name}")
+                warnings += 1
+                continue
+            if not _copy_mirrored_bezier_shape(source, target, center.x):
+                self.report({'WARNING'}, f"BezierPoint数が一致しません: {source.name} -> {target.name}")
+                warnings += 1
+                continue
+            target["hair_mirror_pair"] = source.name
+            source["hair_mirror_pair"] = target.name
+            if source.get("hair_mirror_side", "") and not target.get("hair_mirror_side", ""):
+                target["hair_mirror_side"] = "R" if source.get("hair_mirror_side") == "L" else "L"
+            if target.get("hair_guide_type") == "twist_control":
+                _create_or_replace_twist_strand(context, target)
+            mirrored += 1
+        if mirrored == 0:
+            return {'CANCELLED'}
+        self.report({'INFO' if warnings == 0 else 'WARNING'}, f"{mirrored}本のCurveを左右ミラーしました。警告: {warnings}")
+        return {'FINISHED'}
+
+
 class HGD_OT_mirror_side_l_to_r(bpy.types.Operator):
     bl_idname = "hgd.mirror_side_l_to_r"
     bl_label = "左側→右側へミラー"
@@ -3594,6 +3697,7 @@ classes = (
     HGD_OT_mirror_side_guide_l_to_r,
     HGD_OT_mirror_side_guide_r_to_l,
     HGD_OT_mirror_side,
+    HGD_OT_mirror_selected_curves,
     HGD_OT_mirror_side_l_to_r,
     HGD_OT_mirror_side_r_to_l,
 )

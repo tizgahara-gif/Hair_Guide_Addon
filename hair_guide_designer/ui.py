@@ -178,6 +178,7 @@ class HGD_PT_curve_edit(HGD_PT_base):
         for p,t in [('hair_taper_root_radius','Root'),('hair_taper_mid_radius','Mid'),('hair_taper_tip_radius','Tip')]: box.prop(scene,p,text=t)
         for p in ['hair_curve_variation_enabled','hair_curve_variation_seed','hair_curve_variation_randomize_seed_per_generation','hair_curve_root_jitter_ratio','hair_curve_mid_jitter_ratio','hair_curve_tip_jitter_ratio','hair_curve_length_variation']: box.prop(scene,p)
         row=box.row(align=True); row.operator('hgd.apply_shape_to_selected_curves', text='選択Curveへ形状適用'); row.operator('hgd.apply_shape_to_all_curves', text='全Curveへ形状適用')
+        box.operator('hgd.mirror_selected_curves', text='選択Curveを左右ミラー', icon='MOD_MIRROR')
         box.operator('hgd.load_selected_curve_settings', text='選択カーブ設定読み込み', icon='CHECKMARK')
         for p in ['hair_follow_update_selected_only','hair_follow_keep_tip_offset']: box.prop(scene,p)
         box.operator('hgd.update_curve_roots_from_points', text='配置点から根元更新', icon='OUTLINER_OB_CURVE')
