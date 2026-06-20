@@ -37,6 +37,14 @@ class HGD_PT_quick_flow(HGD_PT_base):
         row=box.row(align=True); row.operator('hgd.update_card_previews_from_curves', text='7. CARD Preview更新', icon='FILE_REFRESH'); row.operator('hgd.create_flat_mesh_from_selected_curves', text='Flat Preview更新', icon='MESH_DATA')
         row=box.row(align=True); row.operator('hgd.convert_selected_card_preview_to_mesh', text='8. CARD Mesh出力', icon='MESH_PLANE'); row.operator('hgd.export_flat_mesh_from_selected_curves', text='Flat Mesh出力', icon='MESH_DATA')
         box.operator('hgd.toggle_final_edit_mode', text='9. 最終編集モード OFF' if scene.hair_final_edit_mode_enabled else '9. 最終編集モード ON', icon='HIDE_OFF' if scene.hair_final_edit_mode_enabled else 'MESH_DATA')
+        mirror=_section_box(self.layout,'ミラーモード','MOD_MIRROR')
+        mirror.operator('hgd.toggle_mirror_mode', text='ミラーモード OFF' if scene.hair_mirror_mode_enabled else 'ミラーモード ON', icon='MOD_MIRROR')
+        mirror.prop(scene,'hair_mirror_source_side', text='ミラー元')
+        mirror.prop(scene,'hair_mirror_axis_mode', text='ミラー軸')
+        mirror.operator('hgd.sync_mirror_objects', text='ミラー同期', icon='FILE_REFRESH')
+        mirror.label(text='生成した配置点・Curve・Emptyは左右ペア化されます。', icon='INFO')
+        mirror.label(text='編集後はミラー同期で反対側へ反映します。')
+        mirror.label(text='解除後は左右が独立し、それぞれ編集できます。')
 
 class HGD_PT_setup(HGD_PT_base):
     bl_label='[SETUP] Setup'; bl_order=1
