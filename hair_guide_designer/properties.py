@@ -94,6 +94,14 @@ PROPERTY_NAMES = (
 )
 
 
+def poll_card_control_empty(self, obj):
+    return (
+        obj is not None
+        and obj.type == 'EMPTY'
+        and obj.get("hair_guide_type") == "card_control_empty"
+    )
+
+
 def register():
     scene = bpy.types.Scene
     scene.hair_target_head_object = PointerProperty(
@@ -104,7 +112,8 @@ def register():
     scene.hair_selected_card_control_empty = PointerProperty(
         name="参照Empty",
         type=bpy.types.Object,
-        description="選択Curveへ共有割り当てするCARD Control Empty",
+        poll=poll_card_control_empty,
+        description="Hair Guideが生成したCARD Control Emptyのみ選択できます",
     )
     scene.hair_guide_scale = FloatProperty(
         name="ガイド倍率",
