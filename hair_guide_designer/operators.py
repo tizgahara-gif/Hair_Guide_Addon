@@ -2025,6 +2025,15 @@ def _flat_mesh_normal_from_side(tangent, side, previous_normal=None):
     return normal
 
 
+def _flat_mesh_sharp_ring_indices(ring_segments):
+    cardinal_angles = (0.0, math.pi * 0.5, math.pi, math.pi * 1.5)
+    sharp_indices = set()
+    for cardinal_angle in cardinal_angles:
+        index = round(cardinal_angle / (2.0 * math.pi) * ring_segments) % ring_segments
+        sharp_indices.add(index)
+    return sharp_indices
+
+
 def _build_flat_mesh_data(context, curve_obj):
     scene = context.scene
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
@@ -2034,6 +2043,7 @@ def _build_flat_mesh_data(context, curve_obj):
     if len(samples) < 2:
         return [], [], set()
 
+    ring_segments = min(max(int(getattr(scene, "hair_flat_mesh_ring_segments", 8)), 4), 32)
     half_width = cm_to_m(scene.hair_flat_mesh_width_cm) * 0.5
     half_thickness = cm_to_m(scene.hair_flat_mesh_thickness_cm) * 0.5
     vertices = []
@@ -2061,31 +2071,29 @@ def _build_flat_mesh_data(context, curve_obj):
         taper = _flat_mesh_taper_scale(scene, curve_obj, t)
         hw = half_width * taper
         ht = half_thickness * taper
-        vertices.extend((
-            tuple(sample - side * hw - normal * ht),
-            tuple(sample + side * hw - normal * ht),
-            tuple(sample + side * hw + normal * ht),
-            tuple(sample - side * hw + normal * ht),
-        ))
+        for ring_index in range(ring_segments):
+            angle = 2.0 * math.pi * ring_index / ring_segments
+            vertex = sample + side * math.cos(angle) * hw + normal * math.sin(angle) * ht
+            vertices.append(tuple(vertex))
         prev_tangent = tangent.copy()
         prev_side = side.copy()
         prev_normal = normal.copy()
 
+    sharp_ring_indices = _flat_mesh_sharp_ring_indices(ring_segments) if scene.hair_flat_mesh_mark_side_sharp else set()
     for index in range(len(samples) - 1):
-        base = index * 4
-        next_base = (index + 1) * 4
-        faces.extend((
-            (base + 3, base + 2, next_base + 2, next_base + 3),  # top surface
-            (base + 0, next_base + 0, next_base + 1, base + 1),  # bottom surface
-            (base + 0, base + 3, next_base + 3, next_base + 0),  # left side
-            (base + 1, next_base + 1, next_base + 2, base + 2),  # right side
-        ))
-        if scene.hair_flat_mesh_mark_side_sharp:
-            for edge in ((base + 0, next_base + 0), (base + 3, next_base + 3), (base + 1, next_base + 1), (base + 2, next_base + 2)):
-                sharp_edges.add(tuple(sorted(edge)))
-    faces.append((0, 1, 2, 3))
-    last = (len(samples) - 1) * 4
-    faces.append((last + 0, last + 3, last + 2, last + 1))
+        base = index * ring_segments
+        next_base = (index + 1) * ring_segments
+        for ring_index in range(ring_segments):
+            a = base + ring_index
+            b = base + (ring_index + 1) % ring_segments
+            c = next_base + (ring_index + 1) % ring_segments
+            d = next_base + ring_index
+            faces.append((a, b, c, d))
+            if ring_index in sharp_ring_indices:
+                sharp_edges.add(tuple(sorted((a, d))))
+    faces.append(tuple(range(ring_segments)))
+    last = (len(samples) - 1) * ring_segments
+    faces.append(tuple(reversed(range(last, last + ring_segments))))
     return vertices, faces, sharp_edges
 
 
@@ -2098,6 +2106,7 @@ def _apply_flat_mesh_custom_props(obj, curve_obj, scene, guide_type):
     obj["hair_flat_mesh_thickness"] = cm_to_m(scene.hair_flat_mesh_thickness_cm)
     obj["hair_flat_mesh_thickness_cm"] = scene.hair_flat_mesh_thickness_cm
     obj["hair_flat_mesh_samples"] = max(int(getattr(scene, "hair_flat_mesh_sample_count", scene.hair_flat_mesh_samples)), 2)
+    obj["hair_flat_mesh_ring_segments"] = min(max(int(getattr(scene, "hair_flat_mesh_ring_segments", 8)), 4), 32)
     obj["hair_flat_mesh_mark_side_sharp"] = scene.hair_flat_mesh_mark_side_sharp
     obj["hair_card_control_empty"] = curve_obj.get("hair_card_control_empty", "")
 
