@@ -2729,6 +2729,33 @@ def resolve_card_display_curve_from_object(context, obj):
     return None
 
 
+
+
+def _object_is_missing_card_control_empty(curve_obj):
+    empty_name = curve_obj.get("hair_card_control_empty", "")
+    return bool(empty_name) and bpy.data.objects.get(empty_name) is None
+
+
+def _resolve_reference_card_control_empty(context):
+    """Return the selected/active CARD Control Empty used as sharing reference."""
+    selected_empty = next((obj for obj in context.selected_objects if obj.type == 'EMPTY'), None)
+    if selected_empty:
+        return selected_empty
+
+    active = context.view_layer.objects.active
+    if active and active.get("hair_guide_type") in {"curve", "twist_strand"}:
+        empty = bpy.data.objects.get(active.get("hair_card_control_empty", ""))
+        if empty and empty.type == 'EMPTY':
+            return empty
+
+    if active and active.get("hair_guide_type") == "card_preview":
+        source = bpy.data.objects.get(active.get("hair_source_curve", ""))
+        if source:
+            empty = bpy.data.objects.get(source.get("hair_card_control_empty", ""))
+            if empty and empty.type == 'EMPTY':
+                return empty
+    return None
+
 def resolve_card_display_curves_from_selection(context):
     curves = []
     seen = set()
@@ -2997,6 +3024,86 @@ class HGD_OT_clear_card_control_empty(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_share_card_control_empty_to_selected_curves(bpy.types.Operator):
+    bl_idname = "hgd.share_card_control_empty_to_selected_curves"
+    bl_label = "参照Emptyを選択Curveへ共有"
+    bl_description = "選択Emptyまたはアクティブ対象の参照Emptyを、選択Curve/CARDの参照元Curveへ共有します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        empty = _resolve_reference_card_control_empty(context)
+        if not empty:
+            self.report({'WARNING'}, "共有する参照Emptyが見つかりません。")
+            return {'CANCELLED'}
+
+        curves = resolve_card_display_curves_from_selection(context)
+        if not curves:
+            self.report({'WARNING'}, "参照Emptyを共有するCurveが見つかりません。")
+            return {'CANCELLED'}
+
+        _, collections = utils.ensure_system()
+        collection = collections[utils.CARD_CONTROLS]
+        if not any(obj.name == empty.name for obj in collection.objects):
+            try:
+                collection.objects.link(empty)
+            except RuntimeError:
+                pass
+
+        count = 0
+        for curve in curves:
+            curve["hair_card_control_empty"] = empty.name
+            count += 1
+
+        empty["hair_guide_type"] = "card_control_empty"
+        empty["hair_card_shared"] = True
+        empty["hair_shared_curve_count"] = count
+        _apply_work_mode_lock_to_object(context, empty)
+        self.report({'INFO'}, f"参照Emptyを{count}本のCurveへ共有しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_unshare_card_control_empty_from_selected_curves(bpy.types.Operator):
+    bl_idname = "hgd.unshare_card_control_empty_from_selected_curves"
+    bl_label = "選択Curveの参照Empty共有を解除"
+    bl_description = "選択Curve/CARDの参照元Curveから参照Empty情報を削除します（Emptyは削除しません）"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = resolve_card_display_curves_from_selection(context)
+        cleared = 0
+        for curve in curves:
+            if "hair_card_control_empty" in curve:
+                del curve["hair_card_control_empty"]
+                cleared += 1
+        if not cleared:
+            self.report({'WARNING'}, "解除する参照Empty共有が見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"{cleared}本のCurveから参照Emptyを解除しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_select_shared_card_control_empty(bpy.types.Operator):
+    bl_idname = "hgd.select_shared_card_control_empty"
+    bl_label = "参照Emptyを選択"
+    bl_description = "選択Curve/CARDの参照元Curveに保存されたCARD Control Emptyを選択します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curve = next((c for c in resolve_card_display_curves_from_selection(context)), None)
+        if not curve:
+            self.report({'WARNING'}, "参照Emptyを持つCurveが見つかりません。")
+            return {'CANCELLED'}
+        empty = bpy.data.objects.get(curve.get("hair_card_control_empty", ""))
+        if not empty:
+            self.report({'WARNING'}, "参照Emptyが見つかりません。")
+            return {'CANCELLED'}
+        bpy.ops.object.select_all(action='DESELECT')
+        empty.select_set(True)
+        context.view_layer.objects.active = empty
+        self.report({'INFO'}, "参照Emptyを選択しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
     bl_idname = "hgd.update_card_previews_from_curves"
     bl_label = "CARDプレビューを更新"
@@ -3040,6 +3147,9 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
         if not updated:
             self.report({'WARNING'}, "更新できるCurveが見つかりません。")
             return {'CANCELLED'}
+        missing_empty = any(_object_is_missing_card_control_empty(curve) for curve in [*curves, *twist_controls])
+        if missing_empty:
+            self.report({'WARNING'}, "参照Emptyが見つからないため自動フレームを使用しました。")
         self.report({'INFO'}, f"CARDプレビュー {updated} 個を更新しました。")
         return {'FINISHED'}
 
@@ -3680,6 +3790,9 @@ classes = (
     HGD_OT_create_card_control_empty,
     HGD_OT_assign_selected_card_control_empty,
     HGD_OT_clear_card_control_empty,
+    HGD_OT_share_card_control_empty_to_selected_curves,
+    HGD_OT_unshare_card_control_empty_from_selected_curves,
+    HGD_OT_select_shared_card_control_empty,
     HGD_OT_update_card_previews_from_curves,
     HGD_OT_apply_display_mode_to_selected_curves,
     HGD_OT_apply_display_mode_to_all_curves,
