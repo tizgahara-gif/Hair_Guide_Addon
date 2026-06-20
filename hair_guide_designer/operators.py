@@ -2884,10 +2884,16 @@ def _link_card_control_empty(empty):
     return collection
 
 
+def _mark_card_control_empty(empty):
+    empty["hair_guide_type"] = "card_control_empty"
+    empty["hair_card_control_empty"] = True
+    return empty
+
+
 def _setup_card_control_empty(context, empty):
     empty.empty_display_type = 'SINGLE_ARROW'
     empty.empty_display_size = 0.08
-    empty["hair_guide_type"] = "card_control_empty"
+    _mark_card_control_empty(empty)
     _link_card_control_empty(empty)
     _apply_work_mode_lock_to_object(context, empty)
     return empty
@@ -2926,7 +2932,7 @@ def _is_card_control_empty(obj):
 
 def _resolve_shared_card_control_empty(context, curves):
     pointer_empty = getattr(context.scene, "hair_selected_card_control_empty", None)
-    if _is_card_control_empty(pointer_empty) or (pointer_empty and pointer_empty.type == 'EMPTY'):
+    if _is_card_control_empty(pointer_empty):
         return pointer_empty
 
     selected_empty = next((obj for obj in context.selected_objects if obj.type == 'EMPTY' and (obj.get("hair_guide_type") == "card_control_empty" or obj.name.startswith("HGD_CARD_CTRL"))), None)
@@ -3224,7 +3230,7 @@ class HGD_OT_assign_selected_card_control_empty(bpy.types.Operator):
                 pass
         for curve in curves:
             curve["hair_card_control_empty"] = empty.name
-        empty["hair_guide_type"] = "card_control_empty"
+        _mark_card_control_empty(empty)
         empty["hair_source_curve"] = curves[-1].name
         _apply_work_mode_lock_to_object(context, empty)
         suffix = "（同一Emptyを複数Curveへ割り当て）" if len(curves) > 1 else ""
@@ -3282,7 +3288,7 @@ class HGD_OT_share_card_control_empty_to_selected_curves(bpy.types.Operator):
             curve["hair_card_control_empty"] = empty.name
             count += 1
 
-        empty["hair_guide_type"] = "card_control_empty"
+        _mark_card_control_empty(empty)
         empty["hair_card_shared"] = True
         empty["hair_shared_curve_count"] = count
         _apply_work_mode_lock_to_object(context, empty)
@@ -3329,6 +3335,24 @@ class HGD_OT_select_shared_card_control_empty(bpy.types.Operator):
         empty.select_set(True)
         context.view_layer.objects.active = empty
         self.report({'INFO'}, "参照Emptyを選択しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_load_card_control_empty_from_selected(bpy.types.Operator):
+    bl_idname = "hgd.load_card_control_empty_from_selected"
+    bl_label = "選択対象から参照Emptyを読み込み"
+    bl_description = "選択Curve/CARDの参照元Curveに保存されたCARD Control Emptyを参照Empty欄へ読み込みます"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curve = next((c for c in resolve_card_display_curves_from_selection(context)), None)
+        empty = bpy.data.objects.get(curve.get("hair_card_control_empty", "")) if curve else None
+        if not _is_card_control_empty(empty):
+            context.scene.hair_selected_card_control_empty = None
+            self.report({'WARNING'}, "参照Emptyが見つからないか、CARD Control Emptyではありません。")
+            return {'CANCELLED'}
+        context.scene.hair_selected_card_control_empty = empty
+        self.report({'INFO'}, "参照Emptyを読み込みました。")
         return {'FINISHED'}
 
 
@@ -4067,6 +4091,7 @@ classes = (
     HGD_OT_share_card_control_empty_to_selected_curves,
     HGD_OT_unshare_card_control_empty_from_selected_curves,
     HGD_OT_select_shared_card_control_empty,
+    HGD_OT_load_card_control_empty_from_selected,
     HGD_OT_assign_pointer_card_control_empty,
     HGD_OT_cleanup_card_control_empties,
     HGD_OT_update_card_previews_from_curves,

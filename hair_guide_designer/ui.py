@@ -213,6 +213,8 @@ class HGD_PT_card_display(HGD_PT_base):
         ctrl_box.operator('hgd.create_card_control_empty', text='共有CARD Control Empty作成/割り当て', icon='EMPTY_SINGLE_ARROW')
         if hasattr(scene, 'hair_selected_card_control_empty'):
             ctrl_box.prop(scene, 'hair_selected_card_control_empty', text='参照Empty')
+            if scene.hair_show_inline_help:
+                ctrl_box.label(text='参照Emptyには、Hair Guideが生成または割り当て済みのCARD Control Emptyのみ表示されます。', icon='INFO')
             ctrl_box.operator('hgd.assign_pointer_card_control_empty', text='選択Curveへ割り当て', icon='CONSTRAINT')
         ctrl_box.operator('hgd.share_card_control_empty_to_selected_curves', text='参照Emptyを選択Curveへ共有', icon='LINKED')
         ctrl_box.operator('hgd.select_shared_card_control_empty', text='参照Emptyを選択', icon='RESTRICT_SELECT_OFF')
