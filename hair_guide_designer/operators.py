@@ -2313,7 +2313,7 @@ class HGD_OT_convert_all_card_previews_to_mesh(bpy.types.Operator):
         return {'FINISHED'}
 
 
-def resolve_edit_curve_from_object(obj):
+def resolve_edit_curve_for_preview_redirect(obj):
     if not obj:
         return None
 
@@ -2332,7 +2332,7 @@ def resolve_edit_curve_from_object(obj):
             return control
         return None
 
-    if guide_type in CARD_SELECTION_REDIRECT_TYPES:
+    if guide_type == "card_preview":
         source_name = obj.get("hair_source_curve", "")
         source = bpy.data.objects.get(source_name)
         if not source:
@@ -2343,12 +2343,16 @@ def resolve_edit_curve_from_object(obj):
             control = bpy.data.objects.get(control_name)
             if control and control.get("hair_guide_type") == "twist_control":
                 return control
-            return source
+            return None
 
         if source.get("hair_guide_type") == "curve":
             return source
 
     return None
+
+
+def resolve_edit_curve_from_object(obj):
+    return resolve_edit_curve_for_preview_redirect(obj)
 
 
 def _curve_handle_twist_weight(index, count, falloff, preserve_end_handles):
@@ -2495,7 +2499,7 @@ class HGD_OT_twist_selected_curve_handles(bpy.types.Operator):
         targets = []
         seen = set()
         for obj in context.selected_objects:
-            edit_curve = resolve_edit_curve_from_object(obj)
+            edit_curve = resolve_edit_curve_for_preview_redirect(obj)
             if not edit_curve or edit_curve.name in seen:
                 continue
             if edit_curve.type != "CURVE" or edit_curve.get("hair_guide_type") not in {"curve", "twist_control"}:
@@ -2636,7 +2640,7 @@ def _add_card_update_target_from_object(context, obj, curves, twist_controls):
         return
 
     if guide_type == "twist_strand" and target.type == "CURVE":
-        control = resolve_edit_curve_from_object(target)
+        control = resolve_edit_curve_for_preview_redirect(target)
         if control and control.get("hair_guide_type") == "twist_control":
             _add_unique_object(twist_controls, control)
         else:
@@ -2654,14 +2658,14 @@ def _selected_card_update_targets(context):
 class HGD_OT_select_edit_curve_from_preview(bpy.types.Operator):
     bl_idname = "hgd.select_edit_curve_from_preview"
     bl_label = "選択CARDの編集Curveを選択"
-    bl_description = "選択中のCARDプレビュー/CARD Mesh/扁平Mesh/ツイスト表示Curveから、実際に編集する通常Curveまたはツイスト制御Curveへ選択を移します"
+    bl_description = "選択中のCARDプレビュー/ツイスト表示Curveから、実際に編集する通常Curveまたはツイスト制御Curveへ選択を移します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         edit_curve = None
         for obj in context.selected_objects:
-            if obj.get("hair_guide_type") in {"card_preview", "card_mesh", "flat_mesh", "twist_strand", "curve", "twist_control"}:
-                edit_curve = resolve_edit_curve_from_object(obj)
+            if obj.get("hair_guide_type") in {"card_preview", "twist_strand", "curve", "twist_control"}:
+                edit_curve = resolve_edit_curve_for_preview_redirect(obj)
                 if edit_curve:
                     break
         if not edit_curve:
@@ -2679,7 +2683,7 @@ class HGD_OT_select_edit_curve_from_preview(bpy.types.Operator):
 class HGD_OT_edit_source_curve(bpy.types.Operator):
     bl_idname = "hgd.edit_source_curve"
     bl_label = "編集Curveを開く"
-    bl_description = "選択中のCARDプレビュー/CARD Mesh/扁平Meshから、参照元の編集Curveを選択してEdit Modeに入ります"
+    bl_description = "選択中のCARDプレビューから、参照元の編集Curveを選択してEdit Modeに入ります。出力Meshは通常のMeshとして編集します"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -2688,15 +2692,19 @@ class HGD_OT_edit_source_curve(bpy.types.Operator):
         return (
             context.mode == 'OBJECT'
             and obj is not None
-            and obj.get("hair_guide_type") in CARD_SELECTION_REDIRECT_TYPES
-            and resolve_edit_curve_from_object(obj) is not None
+            and obj.get("hair_guide_type") == "card_preview"
+            and resolve_edit_curve_for_preview_redirect(obj) is not None
         )
 
     def execute(self, context):
         active = context.active_object
-        edit_curve = resolve_edit_curve_from_object(active)
+        if not active or active.get("hair_guide_type") != "card_preview":
+            self.report({'WARNING'}, "編集Curveへの遷移はCARDプレビュー選択時のみ使用します。出力Meshは通常のMeshとして編集してください。")
+            return {'CANCELLED'}
+
+        edit_curve = resolve_edit_curve_for_preview_redirect(active)
         if not edit_curve:
-            self.report({'WARNING'}, "選択中のCARDから編集対象Curveを取得できませんでした。")
+            self.report({'WARNING'}, "選択中のCARDプレビューから編集対象Curveを取得できませんでした。")
             return {'CANCELLED'}
 
         if context.mode != 'OBJECT':
@@ -2716,7 +2724,7 @@ class HGD_OT_edit_source_curve(bpy.types.Operator):
 class HGD_OT_select_source_curve_from_card_preview(bpy.types.Operator):
     bl_idname = "hgd.select_source_curve_from_card_preview"
     bl_label = "選択CARDの元Curveを選択"
-    bl_description = "互換用です。選択中のCARD/出力Meshから編集対象Curveへ選択を移します"
+    bl_description = "互換用です。選択中のCARDプレビューから編集対象Curveへ選択を移します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2876,7 +2884,7 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
                     and obj.get("hair_curve_display_mode") == "CARD"
                 ):
                     if obj.get("hair_guide_type") == "twist_strand":
-                        control = resolve_edit_curve_from_object(obj)
+                        control = resolve_edit_curve_for_preview_redirect(obj)
                         if control and control.get("hair_guide_type") == "twist_control":
                             _add_unique_object(twist_controls, control)
                     else:
