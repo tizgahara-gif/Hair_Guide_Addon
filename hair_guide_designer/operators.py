@@ -1213,6 +1213,14 @@ class HGD_OT_apply_curve_region_colors(bpy.types.Operator):
         return {'FINISHED'}
 
 
+
+def _replace_preview_mesh_data(preview_obj, new_mesh):
+    old_mesh = preview_obj.data
+    preview_obj.data = new_mesh
+    if old_mesh and old_mesh.users == 0:
+        bpy.data.meshes.remove(old_mesh)
+    return preview_obj
+
 def _generated_curves_from_context(context, selected_only):
     if not selected_only:
         return [
@@ -2114,8 +2122,7 @@ def _apply_flat_mesh_custom_props(obj, curve_obj, scene, guide_type):
     obj["hair_card_control_empty"] = curve_obj.get("hair_card_control_empty", "")
 
 
-def _create_flat_mesh_object(context, curve_obj, guide_type, name, collection):
-    scene = context.scene
+def _build_flat_mesh_mesh_data(context, curve_obj, name):
     vertices, faces, sharp_edges = _build_flat_mesh_data(context, curve_obj)
     if not vertices or not faces:
         return None
@@ -2125,6 +2132,14 @@ def _create_flat_mesh_object(context, curve_obj, guide_type, name, collection):
     for edge in mesh.edges:
         if tuple(sorted(edge.vertices)) in sharp_edges:
             edge.use_edge_sharp = True
+    return mesh
+
+
+def _create_flat_mesh_object(context, curve_obj, guide_type, name, collection):
+    scene = context.scene
+    mesh = _build_flat_mesh_mesh_data(context, curve_obj, name)
+    if not mesh:
+        return None
     obj = bpy.data.objects.new(name, mesh)
     collection.objects.link(obj)
     _apply_flat_mesh_custom_props(obj, curve_obj, scene, guide_type)
@@ -2137,16 +2152,30 @@ def _create_flat_mesh_object(context, curve_obj, guide_type, name, collection):
 
 
 def _create_or_update_flat_mesh_preview(context, curve_obj):
-    _remove_flat_mesh_preview_for_curve(curve_obj)
+    scene = context.scene
     _, collections = utils.ensure_system()
     name = _flat_mesh_preview_name_for_curve(curve_obj)
-    preview = _create_flat_mesh_object(context, curve_obj, "flat_mesh_preview", name, collections[utils.CARD_PREVIEWS])
-    if preview:
-        preview.hide_select = False
-        preview["hair_select_redirect"] = True
-        preview["hair_locked_preview"] = True
-        preview["hair_editable"] = False
-        curve_obj["hair_flat_mesh_preview_object"] = preview.name
+    new_mesh = _build_flat_mesh_mesh_data(context, curve_obj, name)
+    if not new_mesh:
+        return None
+    existing = bpy.data.objects.get(name)
+    if existing and existing.get("hair_guide_type") == "flat_mesh_preview":
+        preview = _replace_preview_mesh_data(existing, new_mesh)
+        _apply_flat_mesh_custom_props(preview, curve_obj, scene, "flat_mesh_preview")
+    else:
+        preview = bpy.data.objects.new(name, new_mesh)
+        collections[utils.CARD_PREVIEWS].objects.link(preview)
+        _apply_flat_mesh_custom_props(preview, curve_obj, scene, "flat_mesh_preview")
+        if scene.hair_flat_mesh_add_subdivision:
+            sub = preview.modifiers.new("HGD_Subdivision_Surface", "SUBSURF")
+            sub.levels = 1
+            sub.render_levels = 1
+    preview.hide_select = False
+    preview["hair_select_redirect"] = True
+    preview["hair_locked_preview"] = True
+    preview["hair_editable"] = False
+    curve_obj["hair_flat_mesh_preview_object"] = preview.name
+    _apply_work_mode_lock_to_object(context, preview)
     return preview
 
 
@@ -2219,17 +2248,14 @@ def _store_scene_card_width_shape(curve_obj, scene):
     curve_obj["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
 
 
-def _create_or_update_card_preview_for_scene(context, curve_obj):
+def _build_card_preview_mesh(context, curve_obj, name):
     scene = context.scene
-    if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
-        return None
-    _remove_card_preview_for_curve(curve_obj)
     samples = utils.sample_curve_world_points_evaluated(curve_obj, max(scene.hair_card_samples, 2))
     if len(samples) < 2:
-        return None
+        return None, []
     frames = _build_card_frames(context, curve_obj, samples)
     if not frames:
-        return None
+        return None, samples
     vertices = []
     faces = []
     for index, (sample, _tangent, side) in enumerate(frames):
@@ -2240,13 +2266,13 @@ def _create_or_update_card_preview_for_scene(context, curve_obj):
     for index in range(len(frames) - 1):
         base = index * 2
         faces.append((base, base + 1, base + 3, base + 2))
-    name = _card_preview_name_for_curve(curve_obj)
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(vertices, [], faces)
     mesh.update()
-    preview = bpy.data.objects.new(name, mesh)
-    _, collections = utils.ensure_system()
-    collections[utils.CARD_PREVIEWS].objects.link(preview)
+    return mesh, samples
+
+
+def _apply_card_preview_props(preview, curve_obj, scene, samples):
     utils.set_common_props(preview, "card_preview", curve_obj.get("hair_region", ""), scene)
     preview.color = curve_obj.color
     preview.hide_select = False
@@ -2272,11 +2298,28 @@ def _create_or_update_card_preview_for_scene(context, curve_obj):
     preview["hair_card_roll_angle"] = float(curve_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle))
     preview["hair_card_use_parallel_transport"] = bool(curve_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
     preview.show_in_front = curve_obj.show_in_front
+
+
+def _create_or_update_card_preview_for_scene(context, curve_obj):
+    scene = context.scene
+    if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
+        return None
+    name = _card_preview_name_for_curve(curve_obj)
+    mesh, samples = _build_card_preview_mesh(context, curve_obj, name)
+    if not mesh:
+        return None
+    existing = bpy.data.objects.get(name)
+    if existing and existing.get("hair_guide_type") == "card_preview":
+        preview = _replace_preview_mesh_data(existing, mesh)
+    else:
+        preview = bpy.data.objects.new(name, mesh)
+        _, collections = utils.ensure_system()
+        collections[utils.CARD_PREVIEWS].objects.link(preview)
+    _apply_card_preview_props(preview, curve_obj, scene, samples)
     curve_obj["hair_card_preview_object"] = preview.name
     if scene.hair_work_mode_lock_enabled:
         preview.hide_select = False
     return preview
-
 
 def _create_or_update_card_preview(context, curve_obj):
     preview = _create_or_update_card_preview_for_scene(context, curve_obj)

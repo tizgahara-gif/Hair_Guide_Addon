@@ -581,6 +581,10 @@ CurveにCARD Control Emptyが割り当てられている場合、扁平メッシ
 
 「側面エッジをSharpにする」をONにすると、扁平メッシュの楕円断面における左右端・上下端に相当する縦方向Edgeへ自動でSharpを設定し、Subdivision時も断面の境界感を保ちやすくなります。整理・削除Panelからは「扁平メッシュPreview削除」で `flat_mesh_preview` だけを削除できます。
 
+CARD Preview / 扁平メッシュPreviewの表示更新では、既存Preview Objectを削除せず、Objectを再利用してMesh Dataだけを差し替えます。そのため、ユーザーがPreview Objectへ追加したObject Modifier、Transform、Collection所属、Object Custom Propertyは更新後も保持されます。
+
+PreviewはCurveや設定から再生成される表示用Mesh Dataのため、Mesh Data内の手編集頂点、Shape Key、手編集UV、Vertex Groupは更新時に保持されません。これらのMesh Data編集が必要な場合は、CARD Mesh / 扁平メッシュの確定出力後に編集してください。整理・削除PanelのCARD Preview削除 / 扁平メッシュPreview削除を実行した場合はPreview Object自体を削除するため、追加Modifierも削除されます。
+
 
 ### ツイストCurveの表示モードと扁平メッシュ
 
