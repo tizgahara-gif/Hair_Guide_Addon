@@ -129,7 +129,7 @@ class HGD_MT_hair_guide_pie(bpy.types.Menu):
     def draw(self, context):
         pie=self.layout.menu_pie()
         pie.operator('hgd.edit_source_curve', text='編集Curveを開く', icon='CURVE_BEZCURVE')
-        pie.operator('hgd.update_card_previews_from_curves', text='CARD Preview更新', icon='FILE_REFRESH')
+        pie.operator('hgd.update_card_previews_from_curves', text='CARD Previewを現在設定で更新', icon='FILE_REFRESH')
         pie.operator('hgd.apply_display_mode_to_selected_curves', text='表示モード適用', icon='RESTRICT_VIEW_OFF')
         pie.operator('hgd.convert_selected_card_preview_to_mesh', text='Mesh出力', icon='MESH_DATA')
         pie.operator('hgd.toggle_final_edit_mode', text='最終編集モード', icon='MESH_DATA')
@@ -143,7 +143,7 @@ class HGD_WST_hair_guide(WorkSpaceTool):
         col=layout.column(align=True)
         col.operator('hgd.edit_source_curve', text='Select / Edit Curve')
         col.operator('hgd.create_curve_from_points', text='Create Curve')
-        col.operator('hgd.update_card_previews_from_curves', text='Update Preview')
+        col.operator('hgd.update_card_previews_from_curves', text='Update CARD Preview with Current Settings')
         col.operator('hgd.convert_selected_card_preview_to_mesh', text='Output Mesh')
         col.operator('hgd.toggle_final_edit_mode', text='Final Edit Mode')
 
