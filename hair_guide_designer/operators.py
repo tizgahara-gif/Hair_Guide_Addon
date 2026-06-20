@@ -1231,7 +1231,29 @@ def _card_control_empty_side_vector(curve_obj, sample, tangent):
     empty = bpy.data.objects.get(empty_name) if empty_name else None
     if not empty or empty.type != 'EMPTY':
         return None
-    side = empty.matrix_world.to_3x3() @ mathutils.Vector((1.0, 0.0, 0.0))
+
+    scene = bpy.context.scene
+    mode = getattr(scene, "hair_card_control_empty_mode", "TARGET_POSITION")
+    if mode == "AXIS":
+        side = empty.matrix_world.to_3x3() @ mathutils.Vector((1.0, 0.0, 0.0))
+    elif mode == "TARGET_POSITION":
+        target_dir = empty.matrix_world.translation - sample
+        if target_dir.length < 1e-6:
+            return None
+        target_dir.normalize()
+
+        side = tangent.cross(target_dir)
+        if side.length < 1e-6:
+            side = target_dir.cross(tangent)
+        if side.length < 1e-6:
+            return None
+        side.normalize()
+
+        if getattr(scene, "hair_card_flip_side", False):
+            side *= -1
+    else:
+        return None
+
     side = side - tangent * side.dot(tangent)
     if side.length < 1e-6:
         return None
@@ -2804,7 +2826,12 @@ class HGD_OT_create_card_control_empty(bpy.types.Operator):
                 except RuntimeError:
                     pass
             samples = utils.sample_curve_world_points(curve, 3)
-            empty.location = samples[1] if len(samples) >= 2 else curve.matrix_world.translation
+            head = getattr(context.scene, "hair_target_head_object", None)
+            if head and head.type == "MESH":
+                _, _, center, _ = utils.head_bounds(head)
+                empty.location = center
+            else:
+                empty.location = samples[1] if len(samples) >= 2 else curve.matrix_world.translation
             empty.empty_display_type = 'SINGLE_ARROW'
             empty.empty_display_size = 0.08
             empty["hair_guide_type"] = "card_control_empty"

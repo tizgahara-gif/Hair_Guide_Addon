@@ -52,6 +52,7 @@ PROPERTY_NAMES = (
     "hair_card_width_root", "hair_card_width_root_cm", "hair_card_width_mid", "hair_card_width_mid_cm",
     "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
     "hair_card_use_parallel_transport", "hair_card_default_roll_angle",
+    "hair_card_control_empty_mode", "hair_card_flip_side",
     "hair_card_auto_apply_to_new_curves", "hair_card_auto_update_preview", "hair_card_auto_select_edit_curve", "hair_show_display_mode_settings",
     "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_width_cm", "hair_flat_mesh_thickness", "hair_flat_mesh_thickness_cm",
@@ -427,6 +428,20 @@ def register():
         min=-180.0,
         max=180.0,
         description="新規Curve/CARD生成時の初期Roll角です。",
+    )
+    scene.hair_card_control_empty_mode = EnumProperty(
+        name="CARD Control方式",
+        items=(
+            ("AXIS", "Empty X軸", "EmptyのローカルX軸をCARD幅方向にします"),
+            ("TARGET_POSITION", "Empty位置ターゲット", "CurveからEmpty位置への方向をCARD向きに使います"),
+        ),
+        default="TARGET_POSITION",
+        description="CARD Control EmptyをCARD方向へ反映する方式です。",
+    )
+    scene.hair_card_flip_side = BoolProperty(
+        name="CARD向きを反転",
+        default=False,
+        description="CARD Control Emptyから計算したCARD向きを反転します。",
     )
     scene.hair_card_auto_apply_to_new_curves = BoolProperty(
         name="新規Curveへ現在の表示モードを自動適用",
