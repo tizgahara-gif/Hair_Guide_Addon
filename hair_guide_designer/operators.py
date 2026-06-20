@@ -45,6 +45,51 @@ CARD_WIDTH_PRESET_LABELS = {
 CARD_SELECTION_REDIRECT_TYPES = {"card_preview", "flat_mesh_preview", "card_mesh", "flat_mesh"}
 
 
+def _is_card_control_empty(obj):
+    return bool(obj is not None and obj.type == 'EMPTY' and obj.get("hair_guide_type") == "card_control_empty")
+
+
+def _next_card_control_empty_index():
+    current = 0
+    for obj in bpy.data.objects:
+        if _is_card_control_empty(obj):
+            current = max(current, int(obj.get("hair_card_control_created_index", 0)))
+    return current + 1
+
+
+def _ensure_card_control_empty_index(empty):
+    if _is_card_control_empty(empty) and "hair_card_control_created_index" not in empty:
+        empty["hair_card_control_created_index"] = _next_card_control_empty_index()
+
+
+def _latest_card_control_empty(context):
+    scene = context.scene
+    selected_empty = getattr(scene, "hair_selected_card_control_empty", None)
+    if _is_card_control_empty(selected_empty):
+        return selected_empty
+
+    empties = [obj for obj in bpy.data.objects if _is_card_control_empty(obj)]
+    if not empties:
+        return None
+
+    empties.sort(
+        key=lambda obj: int(obj.get("hair_card_control_created_index", 0)),
+        reverse=True,
+    )
+    return empties[0]
+
+
+def _assign_latest_card_control_empty_if_available(context, curve_obj):
+    if not getattr(context.scene, "hair_auto_assign_latest_card_control_empty", True):
+        return False
+    empty = _latest_card_control_empty(context)
+    if not empty:
+        return False
+
+    curve_obj["hair_card_control_empty"] = empty.name
+    return True
+
+
 def _is_work_mode_lock_editable(obj):
     return obj.get("hair_guide_type") in WORK_MODE_LOCK_EDITABLE_TYPES
 
@@ -876,6 +921,8 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 obj["hair_card_use_parallel_transport"] = scene.hair_card_use_parallel_transport
                 obj["hair_card_mid_position"] = scene.hair_card_mid_position
                 obj["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
+                if "hair_card_control_empty" not in obj:
+                    _assign_latest_card_control_empty_if_available(context, obj)
                 _set_curve_mirror_metadata(obj, point)
                 obj["strand_type"] = scene.hair_strand_type
                 obj["root_radius"] = scene.hair_curve_root_radius
@@ -1577,7 +1624,10 @@ def _create_or_replace_twist_strand(context, control_obj):
     obj["hair_card_use_parallel_transport"] = bool(control_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
     obj["hair_card_mid_position"] = float(control_obj.get("hair_card_mid_position", scene.hair_card_mid_position))
     obj["hair_card_width_interpolation"] = str(control_obj.get("hair_card_width_interpolation", scene.hair_card_width_interpolation))
-    obj["hair_card_control_empty"] = control_obj.get("hair_card_control_empty", "")
+    if control_obj.get("hair_card_control_empty"):
+        obj["hair_card_control_empty"] = control_obj["hair_card_control_empty"]
+    else:
+        _assign_latest_card_control_empty_if_available(context, obj)
     taper_obj = None
     if scene.hair_auto_apply_taper_to_new_curves and scene.hair_use_shared_taper:
         taper_obj, _ = _create_or_update_default_taper(context)
@@ -1619,6 +1669,7 @@ def _make_twist_from_point(context, point):
     control["hair_card_use_parallel_transport"] = scene.hair_card_use_parallel_transport
     control["hair_card_mid_position"] = scene.hair_card_mid_position
     control["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
+    _assign_latest_card_control_empty_if_available(context, control)
     _set_curve_mirror_metadata(control, point)
     control.data.resolution_u = scene.hair_twist_resolution
     _set_twist_control_display(control)
@@ -3114,6 +3165,7 @@ def _link_card_control_empty(empty):
 def _mark_card_control_empty(empty):
     empty["hair_guide_type"] = "card_control_empty"
     empty["hair_card_control_empty"] = True
+    _ensure_card_control_empty_index(empty)
     return empty
 
 
@@ -3151,10 +3203,6 @@ def _card_control_empty_location_for_curves(context, curves):
         _, _, center, _ = utils.head_bounds(head)
         return center
     return _average_curve_world_center(curves)
-
-
-def _is_card_control_empty(obj):
-    return bool(obj and obj.type == 'EMPTY' and obj.get("hair_guide_type") == "card_control_empty")
 
 
 def _resolve_shared_card_control_empty(context, curves):
