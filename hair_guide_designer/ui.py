@@ -15,15 +15,16 @@ def _foldout(layout, scene, prop_name, label):
     return getattr(scene, prop_name)
 
 
-def _has_selected_card_or_output_mesh(context):
-    return any(obj.get("hair_guide_type") in {"card_preview", "card_mesh", "flat_mesh"} for obj in context.selected_objects)
+def _has_selected_card_preview(context):
+    return any(obj.get("hair_guide_type") == "card_preview" for obj in context.selected_objects)
 
 
 def _draw_card_edit_redirect(layout, context):
-    if not _has_selected_card_or_output_mesh(context):
+    if not _has_selected_card_preview(context):
         return
     box = layout.box()
-    box.label(text="CARD/出力Meshが選択されています。編集は元Curveで行います。", icon='INFO')
+    box.label(text="CARDプレビューが選択されています。編集は元Curveで行います。", icon='INFO')
+    box.label(text="出力Meshは通常のMeshとして編集できます。")
     box.label(text="ツイストCARDの場合は表示用twist_strandではなくtwist_controlを選択します。")
     box.operator('hgd.edit_source_curve', text='編集Curveを開く', icon='CURVE_BEZCURVE')
 
