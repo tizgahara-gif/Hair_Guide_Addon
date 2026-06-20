@@ -2,19 +2,20 @@ import math
 import bpy
 import mathutils
 
-ROOT = "HairGuideSystem"
-GUIDES = "Guides"
-REGIONS = "Regions"
-PLACEMENT_POINTS = "PlacementPoints"
-CURVES = "Curves"
-WARNINGS = "Warnings"
-TAPER_OBJECTS = "TaperObjects"
-PROFILE_OBJECTS = "ProfileObjects"
-FLAT_MESHES = "FlatMeshes"
-CARD_PREVIEWS = "CardPreviews"
-CARD_MESHES = "CardMeshes"
-CARD_CONTROLS = "CardControls"
-SYSTEM_COLLECTIONS = (GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, WARNINGS, TAPER_OBJECTS, CARD_PREVIEWS, CARD_MESHES, FLAT_MESHES, CARD_CONTROLS)
+ROOT = "hair_guide"
+GUIDES = "00_Guides"
+REGIONS = "99_Internal"
+PLACEMENT_POINTS = "01_PlacementPoints"
+CURVES = "02_Curves"
+WARNINGS = "06_Warnings"
+TAPER_OBJECTS = "99_Internal"
+PROFILE_OBJECTS = "99_Internal"
+FLAT_MESHES = "04_Outputs"
+CARD_PREVIEWS = "03_Previews"
+CARD_MESHES = "04_Outputs"
+CARD_CONTROLS = "05_Empties"
+SYSTEM_COLLECTIONS = tuple(dict.fromkeys((GUIDES, REGIONS, PLACEMENT_POINTS, CURVES, CARD_PREVIEWS, FLAT_MESHES, CARD_CONTROLS, WARNINGS, TAPER_OBJECTS, PROFILE_OBJECTS)))
+COLLECTION_COLOR_TAGS = {GUIDES: "COLOR_04", PLACEMENT_POINTS: "COLOR_03", CURVES: "COLOR_05", CARD_PREVIEWS: "COLOR_06", FLAT_MESHES: "COLOR_02", CARD_CONTROLS: "COLOR_07", WARNINGS: "COLOR_01", REGIONS: "COLOR_08"}
 CURVE_REGION_COLLECTIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape", "Twist")
 REGION_NAMES = ("Top", "Front", "Side", "Back_Upper", "Back_Middle", "Nape")
 POINT_REGIONS = ("Top", "Front", "Side_L", "Side_R", "Back_Upper", "Back_Middle", "Nape")
@@ -50,6 +51,9 @@ def ensure_collection(name, parent=None):
     parent_collection = parent or bpy.context.scene.collection
     if not any(child.name == collection.name for child in parent_collection.children):
         parent_collection.children.link(collection)
+    color_tag = COLLECTION_COLOR_TAGS.get(name) if "COLLECTION_COLOR_TAGS" in globals() else None
+    if color_tag and hasattr(collection, "color_tag"):
+        collection.color_tag = color_tag
     return collection
 
 
