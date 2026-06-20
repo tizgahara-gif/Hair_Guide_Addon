@@ -204,14 +204,14 @@ class HGD_PT_card_display(HGD_PT_base):
         ctrl_box.label(text='CARD方向制御', icon='EMPTY_SINGLE_ARROW')
         ctrl_box.prop(scene, 'hair_card_control_empty_mode')
         ctrl_box.prop(scene, 'hair_card_flip_side')
-        ctrl_box.operator('hgd.create_card_control_empty', text='CARD Control Empty作成', icon='EMPTY_SINGLE_ARROW')
-        ctrl_box.operator('hgd.assign_selected_card_control_empty', text='選択Emptyを割り当て', icon='CONSTRAINT')
-        ctrl_box.operator('hgd.clear_card_control_empty', text='CARD Control Empty割当解除', icon='X')
-        ctrl_box.separator()
+        ctrl_box.operator('hgd.create_card_control_empty', text='共有CARD Control Empty作成/割り当て', icon='EMPTY_SINGLE_ARROW')
+        if hasattr(scene, 'hair_selected_card_control_empty'):
+            ctrl_box.prop(scene, 'hair_selected_card_control_empty', text='参照Empty')
+            ctrl_box.operator('hgd.assign_pointer_card_control_empty', text='選択Curveへ割り当て', icon='CONSTRAINT')
         ctrl_box.operator('hgd.share_card_control_empty_to_selected_curves', text='参照Emptyを選択Curveへ共有', icon='LINKED')
-        ctrl_box.operator('hgd.unshare_card_control_empty_from_selected_curves', text='選択Curveの参照Empty共有を解除', icon='UNLINKED')
         ctrl_box.operator('hgd.select_shared_card_control_empty', text='参照Emptyを選択', icon='RESTRICT_SELECT_OFF')
-        ctrl_box.operator('hgd.update_card_previews_from_curves', text='選択CurveのCARD更新', icon='FILE_REFRESH')
+        ctrl_box.operator('hgd.clear_card_control_empty', text='CARD Control Empty割当解除', icon='X')
+        ctrl_box.operator('hgd.update_card_previews_from_curves', text='CARDプレビューを更新', icon='FILE_REFRESH')
         if scene.hair_show_inline_help:
             ctrl_box.label(text='Empty位置ターゲットでは、Emptyの位置がCARD面の向きの基準になります。', icon='HELP')
             ctrl_box.label(text='髪を内側に向けたい場合は、Emptyを頭部内側へ配置してください。')
@@ -224,6 +224,7 @@ class HGD_PT_card_display(HGD_PT_base):
         if _foldout(layout, scene, 'hair_ui_show_card_advanced', '詳細を表示'):
             adv=_section_box(layout, 'CARD詳細', 'MESH_PLANE', '[CARD]')
             for p in ['hair_card_samples','hair_card_auto_apply_to_new_curves','hair_card_auto_update_preview','hair_card_auto_select_edit_curve']: adv.prop(scene,p)
+            adv.operator('hgd.create_card_control_empty_per_curve', text='選択Curveごとに個別Empty作成', icon='EMPTY_ARROWS')
             adv.operator('hgd.lock_card_previews', text='CARDプレビューを選択可能にする', icon='RESTRICT_SELECT_OFF')
 
 class HGD_PT_output(HGD_PT_base):
@@ -247,6 +248,7 @@ class HGD_PT_cleanup(HGD_PT_base):
         if _foldout(layout, scene, 'hair_ui_show_cleanup_advanced', '詳細を表示'):
             adv=_section_box(layout, '表示・保守', 'TRASH', '[CLEANUP]')
             adv.operator('hgd.toggle_in_front_generated_helpers', text='最前面表示切替', icon='HIDE_OFF')
+            adv.operator('hgd.cleanup_card_control_empties', text='未使用CARD Control Emptyを削除', icon='TRASH')
             row=adv.row(align=True); row.operator('hgd.clear_shape_from_selected_curves', text='選択カーブ形状解除'); row.operator('hgd.clear_shape_from_all_curves', text='全カーブ形状解除')
             row=adv.row(align=True); row.operator('hgd.mirror_side_l_to_r', text='左側→右側へミラー'); row.operator('hgd.mirror_side_r_to_l', text='右側→左側へミラー')
             for p in ['hair_mirror_axis','hair_mirror_overwrite_existing','hair_mirror_copy_custom_properties','hair_show_guides_in_front']: adv.prop(scene,p)

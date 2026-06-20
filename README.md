@@ -216,18 +216,20 @@ CARDプレビューは表示用Meshであり、選択はできますが直接編
 
 ## CARD Control Empty
 
-CARDの向きは、Curveごとに割り当てたCARD Control Emptyで手動制御できます。
+CARDの向きは、Curveに割り当てたCARD Control Emptyで手動制御できます。通常は共有Emptyを1つ作成し、複数Curveで同じEmptyを使います。
 
 手順:
 
 1. CARD PreviewまたはCurveを選択
-2. CARD表示 > CARD Control Empty作成
-3. 作成されたEmptyを頭部内側など向けたい方向の基準位置へ移動
+2. CARD表示 > 共有CARD Control Empty作成/割り当て
+3. 作成または再利用された共有Emptyを頭部内側など向けたい方向の基準位置へ移動
 4. CARDプレビューを更新
+
+「共有CARD Control Empty作成/割り当て」は、既存共有Empty `HGD_CARD_CTRL_SHARED` や参照Emptyがあれば再利用し、無ければ1つだけ作成して選択Curve群へ同じ `hair_card_control_empty` 名を保存します。Curveごとに個別Emptyが必要な場合のみ、CARD表示の **詳細を表示** から **選択Curveごとに個別Empty作成** を使用してください。
 
 初期設定では、Emptyの位置をCARD方向ターゲットとして使います。Emptyを頭部内側へ置くと、CARD面が内側を向くように生成されます。回転で制御したい場合は、CARD Control方式を「Empty X軸」に切り替えてください。Empty未設定の場合は、自動フレーム方式（Parallel Transport Frame + CurveごとのRoll値）で生成されます。CARD Preview / CARD Mesh / Flat Meshを選択して作成・割り当てを行った場合も、保存された `hair_source_curve` から参照元Curveを解決し、そのCurveへ `hair_card_control_empty` が保存されます。
 
-複数のCurveで同じCARD Control Emptyを共有できます。共有したいEmpty（または既に参照Emptyを持つCurve / CARD Preview）と対象Curve・CARD Preview・CARD Mesh・Flat Meshを選択し、**参照Emptyを選択Curveへ共有** を押すと、各参照元Curveへ同じ `hair_card_control_empty` 名が保存されます。共有解除は **選択Curveの参照Empty共有を解除** を使います。この操作はCurve側の参照情報だけを削除し、Empty自体は削除しません。対象Curveの参照Emptyを探す場合は **参照Emptyを選択** を使ってください。
+複数のCurveで同じCARD Control Emptyを共有できます（標準運用）。共有したいEmpty（または既に参照Emptyを持つCurve / CARD Preview）と対象Curve・CARD Preview・CARD Mesh・Flat Meshを選択し、**参照Emptyを選択Curveへ共有** を押すと、各参照元Curveへ同じ `hair_card_control_empty` 名が保存されます。割当解除は **CARD Control Empty割当解除** を使います。この操作はCurve側の参照情報だけを削除し、Empty自体は削除しません。対象Curveの参照Emptyを探す場合は **参照Emptyを選択** を使ってください。
 
 共有Emptyを移動・回転してもCARDプレビューはリアルタイム更新されません。既存仕様通り、変更を見た目へ反映するには **CARDプレビューを更新**、**選択対象へ表示モード適用**、または **全Curveへ表示モード適用** を押してください。共有Emptyを削除した場合、Curve側の `hair_card_control_empty` は残ることがありますが、CARD生成時に参照Emptyが見つからなければ自動フレーム方式へフォールバックします。
 

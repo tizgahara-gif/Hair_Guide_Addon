@@ -2731,6 +2731,81 @@ def resolve_card_display_curve_from_object(context, obj):
 
 
 
+
+CARD_CONTROL_SHARED_NAME = "HGD_CARD_CTRL_SHARED"
+
+
+def _link_card_control_empty(empty):
+    _, collections = utils.ensure_system()
+    collection = collections[utils.CARD_CONTROLS]
+    if not any(obj.name == empty.name for obj in collection.objects):
+        try:
+            collection.objects.link(empty)
+        except RuntimeError:
+            pass
+    return collection
+
+
+def _setup_card_control_empty(context, empty):
+    empty.empty_display_type = 'SINGLE_ARROW'
+    empty.empty_display_size = 0.08
+    empty["hair_guide_type"] = "card_control_empty"
+    _link_card_control_empty(empty)
+    _apply_work_mode_lock_to_object(context, empty)
+    return empty
+
+
+def _average_curve_world_center(curves):
+    centers = []
+    for curve in curves:
+        samples = utils.sample_curve_world_points(curve, 3)
+        if samples:
+            center = mathutils.Vector((0.0, 0.0, 0.0))
+            for point in samples:
+                center += point
+            centers.append(center / len(samples))
+        else:
+            centers.append(curve.matrix_world.translation.copy())
+    if not centers:
+        return mathutils.Vector((0.0, 0.0, 0.0))
+    total = mathutils.Vector((0.0, 0.0, 0.0))
+    for center in centers:
+        total += center
+    return total / len(centers)
+
+
+def _card_control_empty_location_for_curves(context, curves):
+    head = getattr(context.scene, "hair_target_head_object", None)
+    if head and head.type == "MESH":
+        _, _, center, _ = utils.head_bounds(head)
+        return center
+    return _average_curve_world_center(curves)
+
+
+def _is_card_control_empty(obj):
+    return bool(obj and obj.type == 'EMPTY' and obj.get("hair_guide_type") == "card_control_empty")
+
+
+def _resolve_shared_card_control_empty(context, curves):
+    pointer_empty = getattr(context.scene, "hair_selected_card_control_empty", None)
+    if _is_card_control_empty(pointer_empty) or (pointer_empty and pointer_empty.type == 'EMPTY'):
+        return pointer_empty
+
+    selected_empty = next((obj for obj in context.selected_objects if obj.type == 'EMPTY' and (obj.get("hair_guide_type") == "card_control_empty" or obj.name.startswith("HGD_CARD_CTRL"))), None)
+    if selected_empty:
+        return selected_empty
+
+    for curve in curves:
+        empty = bpy.data.objects.get(curve.get("hair_card_control_empty", ""))
+        if empty and empty.type == 'EMPTY':
+            return empty
+
+    for name in (CARD_CONTROL_SHARED_NAME, "HGD_CARD_CTRL_FRONT", "HGD_CARD_CTRL_SIDE", "HGD_CARD_CTRL_BACK", "HGD_CARD_CTRL_TOP"):
+        empty = bpy.data.objects.get(name)
+        if empty and empty.type == 'EMPTY':
+            return empty
+    return None
+
 def _object_is_missing_card_control_empty(curve_obj):
     empty_name = curve_obj.get("hair_card_control_empty", "")
     return bool(empty_name) and bpy.data.objects.get(empty_name) is None
@@ -2931,8 +3006,41 @@ class HGD_OT_fix_card_twist(bpy.types.Operator):
 
 class HGD_OT_create_card_control_empty(bpy.types.Operator):
     bl_idname = "hgd.create_card_control_empty"
-    bl_label = "CARD Control Empty作成"
-    bl_description = "選択対象の参照元CurveへCARD Control Emptyを作成/割り当てします"
+    bl_label = "共有CARD Control Empty作成/割り当て"
+    bl_description = "既存の共有CARD Control Emptyを優先再利用し、無ければ1個だけ作成して選択Curveへ割り当てます"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = resolve_card_display_curves_from_selection(context)
+        if not curves:
+            self.report({'WARNING'}, "CARD Control Emptyを割り当てるCurveが見つかりません。")
+            return {'CANCELLED'}
+
+        empty = _resolve_shared_card_control_empty(context, curves)
+        created = False
+        if not empty:
+            empty = bpy.data.objects.new(CARD_CONTROL_SHARED_NAME, None)
+            empty.location = _card_control_empty_location_for_curves(context, curves)
+            created = True
+
+        _setup_card_control_empty(context, empty)
+        empty["hair_card_shared"] = True
+        empty["hair_shared_curve_count"] = len(curves)
+        if created or empty.name == CARD_CONTROL_SHARED_NAME:
+            empty["hair_source_curve"] = curves[-1].name
+
+        for curve in curves:
+            curve["hair_card_control_empty"] = empty.name
+
+        action = "作成" if created else "再利用"
+        self.report({'INFO'}, f"CARD Control Emptyを{action}し、{len(curves)}本のCurveへ割り当てました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_create_card_control_empty_per_curve(bpy.types.Operator):
+    bl_idname = "hgd.create_card_control_empty_per_curve"
+    bl_label = "選択Curveごとに個別Empty作成"
+    bl_description = "選択対象の参照元Curveごとに個別CARD Control Emptyを作成/割り当てします（詳細設定向け）"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2940,37 +3048,19 @@ class HGD_OT_create_card_control_empty(bpy.types.Operator):
         if not curves:
             self.report({'WARNING'}, "CARD Control Emptyを作成するCurveが見つかりません。")
             return {'CANCELLED'}
-        _, collections = utils.ensure_system()
-        collection = collections[utils.CARD_CONTROLS]
         count = 0
         for curve in curves:
             name = f"HGD_CARD_CTRL_{curve.name}"
             empty = bpy.data.objects.get(name)
             if not empty:
                 empty = bpy.data.objects.new(name, None)
-                collection.objects.link(empty)
-            elif not any(obj.name == empty.name for obj in collection.objects):
-                try:
-                    collection.objects.link(empty)
-                except RuntimeError:
-                    pass
-            samples = utils.sample_curve_world_points(curve, 3)
-            head = getattr(context.scene, "hair_target_head_object", None)
-            if head and head.type == "MESH":
-                _, _, center, _ = utils.head_bounds(head)
-                empty.location = center
-            else:
-                empty.location = samples[1] if len(samples) >= 2 else curve.matrix_world.translation
-            empty.empty_display_type = 'SINGLE_ARROW'
-            empty.empty_display_size = 0.08
-            empty["hair_guide_type"] = "card_control_empty"
+            empty.location = _card_control_empty_location_for_curves(context, [curve])
+            _setup_card_control_empty(context, empty)
             empty["hair_source_curve"] = curve.name
             curve["hair_card_control_empty"] = empty.name
-            _apply_work_mode_lock_to_object(context, empty)
             count += 1
-        self.report({'INFO'}, f"CARD Control Emptyを{count}個作成/割り当てしました。")
+        self.report({'INFO'}, f"個別CARD Control Emptyを{count}個作成/割り当てしました。")
         return {'FINISHED'}
-
 
 class HGD_OT_assign_selected_card_control_empty(bpy.types.Operator):
     bl_idname = "hgd.assign_selected_card_control_empty"
@@ -3101,6 +3191,50 @@ class HGD_OT_select_shared_card_control_empty(bpy.types.Operator):
         empty.select_set(True)
         context.view_layer.objects.active = empty
         self.report({'INFO'}, "参照Emptyを選択しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_assign_pointer_card_control_empty(bpy.types.Operator):
+    bl_idname = "hgd.assign_pointer_card_control_empty"
+    bl_label = "参照Emptyを選択Curveへ割り当て"
+    bl_description = "参照Empty欄のObjectを選択Curve/CARDの参照元Curveへ割り当てます"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        empty = getattr(context.scene, "hair_selected_card_control_empty", None)
+        if not empty or empty.type != 'EMPTY':
+            self.report({'WARNING'}, "参照Emptyが設定されていません。")
+            return {'CANCELLED'}
+        curves = resolve_card_display_curves_from_selection(context)
+        if not curves:
+            self.report({'WARNING'}, "参照Emptyを割り当てるCurveが見つかりません。")
+            return {'CANCELLED'}
+        _setup_card_control_empty(context, empty)
+        for curve in curves:
+            curve["hair_card_control_empty"] = empty.name
+        empty["hair_card_shared"] = len(curves) > 1
+        empty["hair_shared_curve_count"] = len(curves)
+        self.report({'INFO'}, f"参照Emptyを{len(curves)}本のCurveへ割り当てました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_cleanup_card_control_empties(bpy.types.Operator):
+    bl_idname = "hgd.cleanup_card_control_empties"
+    bl_label = "未使用CARD Control Emptyを削除"
+    bl_description = "どのCurveからも参照されていないCARD Control Emptyを削除します（共有Emptyは残します）"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        referenced = {obj.get("hair_card_control_empty", "") for obj in bpy.data.objects if obj.type == "CURVE" and obj.get("hair_card_control_empty", "")}
+        removed = 0
+        for obj in list(bpy.data.objects):
+            if obj.type != 'EMPTY' or obj.name == CARD_CONTROL_SHARED_NAME:
+                continue
+            is_card_empty = obj.get("hair_guide_type") == "card_control_empty" or obj.name.startswith("HGD_CARD_CTRL")
+            if is_card_empty and obj.name not in referenced:
+                bpy.data.objects.remove(obj, do_unlink=True)
+                removed += 1
+        self.report({'INFO'}, f"未使用CARD Control Emptyを{removed}個削除しました。")
         return {'FINISHED'}
 
 
@@ -3788,11 +3922,14 @@ classes = (
     HGD_OT_edit_source_curve,
     HGD_OT_select_source_curve_from_card_preview,
     HGD_OT_create_card_control_empty,
+    HGD_OT_create_card_control_empty_per_curve,
     HGD_OT_assign_selected_card_control_empty,
     HGD_OT_clear_card_control_empty,
     HGD_OT_share_card_control_empty_to_selected_curves,
     HGD_OT_unshare_card_control_empty_from_selected_curves,
     HGD_OT_select_shared_card_control_empty,
+    HGD_OT_assign_pointer_card_control_empty,
+    HGD_OT_cleanup_card_control_empties,
     HGD_OT_update_card_previews_from_curves,
     HGD_OT_apply_display_mode_to_selected_curves,
     HGD_OT_apply_display_mode_to_all_curves,
