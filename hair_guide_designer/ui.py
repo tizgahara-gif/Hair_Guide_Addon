@@ -127,10 +127,14 @@ class HGD_PT_quick_actions(HGD_PT_base):
         row = box.row(); row.enabled = counts['has_head']; row.operator('hgd.generate_placement_points', text='3. 配置点生成', icon='MESH_UVSPHERE')
         row = box.row(); row.enabled = counts['placement_points'] > 0; row.operator('hgd.create_curve_from_points', text='4. カーブ生成', icon='CURVE_BEZCURVE')
         display_box = box.box()
-        display_box.label(text='表示モード切替', icon='RESTRICT_VIEW_OFF')
-        display_box.prop(scene, 'hair_curve_display_mode', text='')
-        row = box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.apply_display_mode_to_selected_curves', text='5. 選択Curveへ表示モード適用', icon='RESTRICT_VIEW_OFF'); row.operator('hgd.apply_display_mode_to_all_curves', text='全Curve')
-        row = box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.export_flat_mesh_from_selected_curves', text='6. 扁平Mesh出力', icon='MESH_DATA'); row.operator('hgd.convert_selected_card_preview_to_mesh', text='CARD実体化', icon='MESH_PLANE')
+        display_box.label(text='---- 表示モード ----', icon='RESTRICT_VIEW_OFF')
+        display_box.prop(scene, 'hair_curve_display_mode', text='表示モード')
+        row = display_box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.apply_display_mode_to_selected_curves', text='5. 選択対象へ適用', icon='RESTRICT_VIEW_OFF')
+        row = display_box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.apply_display_mode_to_all_curves', text='6. 全Curveへ適用', icon='RESTRICT_VIEW_OFF')
+        output_box = box.box()
+        output_box.label(text='---- 出力 ----', icon='MESH_DATA')
+        row = output_box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.convert_selected_card_preview_to_mesh', text='7. CARD Mesh出力', icon='MESH_PLANE')
+        row = output_box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.export_flat_mesh_from_selected_curves', text='8. 扁平Mesh出力', icon='MESH_DATA')
         _draw_card_edit_redirect(layout, context)
 
 class HGD_PT_setup(HGD_PT_base):
@@ -173,7 +177,9 @@ class HGD_PT_curve_edit(HGD_PT_base):
     bl_order = 4
     def draw(self, context):
         scene=context.scene; layout=self.layout; box=_section_box(layout, 'カーブ編集', 'CURVE_BEZCURVE', '[CURVE]')
-        for p in ['hair_curve_length_cm','hair_curve_bevel_depth_cm','hair_curve_resolution','hair_curve_segment_count','hair_use_shared_taper','hair_auto_apply_taper_to_new_curves','hair_taper_preset']: box.prop(scene,p)
+        box.prop(scene, 'hair_curve_length_cm', text='毛先長さ(cm)')
+        box.label(text='（新規生成時のみ）', icon='INFO')
+        for p in ['hair_curve_bevel_depth_cm','hair_curve_resolution','hair_curve_segment_count','hair_use_shared_taper','hair_auto_apply_taper_to_new_curves','hair_taper_preset']: box.prop(scene,p)
         box.operator('hgd.apply_taper_preset', icon='CHECKMARK')
         for p,t in [('hair_taper_root_radius','Root'),('hair_taper_mid_radius','Mid'),('hair_taper_tip_radius','Tip')]: box.prop(scene,p,text=t)
         for p in ['hair_curve_variation_enabled','hair_curve_variation_seed','hair_curve_variation_randomize_seed_per_generation','hair_curve_root_jitter_ratio','hair_curve_mid_jitter_ratio','hair_curve_tip_jitter_ratio','hair_curve_length_variation']: box.prop(scene,p)
@@ -190,7 +196,7 @@ class HGD_PT_card_display(HGD_PT_base):
     bl_order = 5
     def draw(self, context):
         scene=context.scene; layout=self.layout; box=_section_box(layout, 'CARD表示', 'MESH_PLANE', '[CARD]')
-        box.prop(scene, 'hair_curve_display_mode'); box.prop(scene, 'hair_card_width_preset'); box.operator('hgd.apply_card_width_preset', icon='CHECKMARK')
+        box.prop(scene, 'hair_card_width_preset'); box.operator('hgd.apply_card_width_preset', icon='CHECKMARK')
         box.prop(scene, 'hair_card_sync_widths')
         if scene.hair_card_sync_widths: box.prop(scene, 'hair_card_synced_width_cm')
         else:
@@ -219,7 +225,6 @@ class HGD_PT_card_display(HGD_PT_base):
             ctrl_box.label(text='Empty未設定の場合は自動フレームで生成します。')
             ctrl_box.label(text='複数Curveへ同じEmptyを割り当てると、EmptyひとつでCARD方向をまとめて制御できます。')
         box.operator('hgd.edit_source_curve', text='編集Curveを開く', icon='CURVE_BEZCURVE')
-        row=box.row(align=True); row.operator('hgd.apply_display_mode_to_selected_curves', text='選択対象へ表示モード適用'); row.operator('hgd.apply_display_mode_to_all_curves', text='全Curveへ適用')
         _draw_card_edit_redirect(layout, context)
         if _foldout(layout, scene, 'hair_ui_show_card_advanced', '詳細を表示'):
             adv=_section_box(layout, 'CARD詳細', 'MESH_PLANE', '[CARD]')

@@ -6,6 +6,9 @@ from bpy.props import EnumProperty
 from . import utils
 
 
+TOP_POINT_OFFSET = 0.01
+
+
 def cm_to_m(value):
     return float(value) * 0.01
 
@@ -502,6 +505,8 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                     continue
                 for i, base in enumerate(positions):
                     loc = self._jittered(region, base, rng, scene)
+                    if region in {"Top", "Back_Upper"}:
+                        loc.z = max(loc.z, max_v.z + TOP_POINT_OFFSET)
                     radius = max(size.length * 0.008, 0.01) * (1.0 + rng.uniform(-scene.hair_size_variation, scene.hair_size_variation))
                     point_name = self._point_name(region, i)
                     obj = utils.make_marker(point_name, loc, max(radius, 0.004), collection, region, "placement_point", scene, use_unique_name=False)
@@ -549,7 +554,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             return utils.sample_curve_world_points(guides["side_r"], count)
         if region == "Back_Upper" and guides["back"]:
             points = utils.sample_curve_world_points(guides["back"], count)
-            return [point + mathutils.Vector((0.0, 0.0, size.z * 0.12)) for point in points]
+            return [mathutils.Vector((point.x, point.y, max(point.z + size.z * 0.12, max_v.z + TOP_POINT_OFFSET))) for point in points]
         if region == "Back_Middle" and guides["back"] and guides["nape"]:
             if count == 1:
                 return [mathutils.Vector((center.x, max_v.y + offset * 1.5, min_v.z + size.z * 0.5))]
@@ -593,7 +598,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             elif region == "Back_Upper":
                 x = center.x + (t - 0.5) * size.x * 0.75
                 y = max_v.y + offset
-                z = min_v.z + size.z * (0.78 - 0.12 * abs(t - 0.5))
+                z = max(max_v.z + TOP_POINT_OFFSET, min_v.z + size.z * (0.78 - 0.12 * abs(t - 0.5)))
             elif region == "Back_Middle":
                 pair_index = i // 2
                 is_left = i % 2 == 0
@@ -613,7 +618,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
         return positions
 
     def _top_positions(self, count, min_v, max_v, center, size, guides):
-        base = mathutils.Vector((center.x, center.y, max_v.z - size.z * 0.08))
+        base = mathutils.Vector((center.x, center.y, max_v.z + TOP_POINT_OFFSET))
         center_guide = guides.get("center") if guides else None
         if center_guide:
             guide_center = utils.get_curve_world_center(center_guide)
@@ -1388,7 +1393,7 @@ def _create_or_replace_twist_strand(context, control_obj):
         t = index / max(len(samples) - 1, 1)
         angle = math.tau * scene.hair_twist_turns * t + scene.hair_twist_phase
         taper = max(1.0 - scene.hair_twist_taper_strength * t, 0.05)
-        radius = scene.hair_twist_radius * taper
+        radius = cm_to_m(scene.hair_twist_radius) * taper
         points.append(sample + side * math.cos(angle) * radius + normal_hint * math.sin(angle) * radius)
     obj = utils.make_curve(
         f"HGD_TWIST_STRAND_{twist_id}",
@@ -1406,7 +1411,7 @@ def _create_or_replace_twist_strand(context, control_obj):
     obj["hair_twist_id"] = twist_id
     obj["hair_twist_control"] = control_obj.name
     obj["hair_twist_segments"] = scene.hair_twist_segments
-    obj["hair_twist_radius"] = scene.hair_twist_radius
+    obj["hair_twist_radius"] = cm_to_m(scene.hair_twist_radius)
     obj["hair_twist_turns"] = scene.hair_twist_turns
     obj["hair_twist_phase"] = scene.hair_twist_phase
     obj["hair_twist_bevel_depth"] = cm_to_m(scene.hair_twist_bevel_depth_cm)

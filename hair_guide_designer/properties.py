@@ -29,6 +29,25 @@ STRAND_GENERATION_TYPES = (
     ("TWIST_CURVE", "ツイストカーブ", "1本の制御カーブからドリル状・縦ロール状の表示カーブを生成します"),
 )
 
+
+def cm_to_m(value):
+    return float(value) * 0.01
+
+
+def m_to_cm(value):
+    return float(value) * 100.0
+
+
+def _get_twist_radius_cm(scene):
+    if "_hair_twist_radius_m" in scene:
+        return m_to_cm(scene["_hair_twist_radius_m"])
+    return m_to_cm(scene.get("hair_twist_radius", 0.08))
+
+
+def _set_twist_radius_cm(scene, value):
+    scene["_hair_twist_radius_m"] = cm_to_m(value)
+
+
 CURVE_PROFILE_TYPES = (
     ("ROUND", "丸", "CurveのBevel Depthで丸い断面を表示します"),
 )
@@ -720,11 +739,14 @@ def register():
         description="ツイスト表示カーブを生成するサンプル分割数。",
     )
     scene.hair_twist_radius = FloatProperty(
-        name="巻き半径",
-        default=0.08,
+        name="巻き半径(cm)",
+        default=8.0,
         min=0.0,
-        max=2.0,
-        description="制御カーブの周囲に作るツイストの半径。",
+        max=200.0,
+        precision=2,
+        get=_get_twist_radius_cm,
+        set=_set_twist_radius_cm,
+        description="制御カーブの周囲に作るツイスト半径をcm単位で指定します。内部ではmへ変換し、既存Blendのm保存値は描画時にcm換算します。",
     )
     scene.hair_twist_turns = FloatProperty(
         name="巻き数",
