@@ -587,3 +587,18 @@ CurveにCARD Control Emptyが割り当てられている場合、扁平メッシ
 ツイストCurveでは、制御用の `twist_control` 自体にはCARD Preview / Flat Mesh Previewを作成しません。表示モードを適用すると、選択中の `twist_control` や既存Preview/出力メッシュから対応する表示用 `twist_strand` を自動的に解決し、その `twist_strand` へPreviewを生成・更新します。
 
 扁平メッシュ生成では、通常Curveは従来通りCARD Control EmptyなどのCARD方向設定を使用します。ツイストCurveのみ、「ツイスト扁平面を内側へ向ける」設定により、頭部中心または参照Empty方向を基準に面を内側へ揃えた扁平メッシュを生成できます。Previewと確定出力は同じ向き計算を使用します。
+
+## 最終編集モード
+
+CARD MeshまたはFlat Meshを出力した後、「最終編集モード」を押すと出力Meshだけが表示されます。
+
+非表示になるもの:
+- ガイド
+- 配置点
+- Curve
+- Preview
+- CARD Control Empty
+- Warning
+
+削除はされません。
+解除すると、ON前の表示/選択状態へ戻ります。
