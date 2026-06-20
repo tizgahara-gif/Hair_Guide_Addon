@@ -1217,6 +1217,8 @@ class HGD_OT_apply_curve_region_colors(bpy.types.Operator):
 def _replace_preview_mesh_data(preview_obj, new_mesh):
     old_mesh = preview_obj.data
     preview_obj.data = new_mesh
+    preview_obj.data.update()
+    preview_obj.update_tag(refresh={'DATA'})
     if old_mesh and old_mesh.users == 0:
         bpy.data.meshes.remove(old_mesh)
     return preview_obj
@@ -2216,16 +2218,23 @@ def _set_card_preview_visible(curve_obj, visible):
 
 
 def _card_width(scene, t, curve_obj=None):
-    if scene.hair_card_sync_widths:
-        return cm_to_m(scene.hair_card_synced_width_cm)
     root = cm_to_m(scene.hair_card_width_root_cm)
     mid = cm_to_m(scene.hair_card_width_mid_cm)
     tip = cm_to_m(scene.hair_card_width_tip_cm)
+    sync = bool(scene.hair_card_sync_widths)
+    synced = float(scene.hair_card_synced_width_cm)
     mid_pos = scene.hair_card_mid_position
     mode = scene.hair_card_width_interpolation
     if curve_obj:
+        root = cm_to_m(float(curve_obj.get("hair_card_width_root_cm", scene.hair_card_width_root_cm)))
+        mid = cm_to_m(float(curve_obj.get("hair_card_width_mid_cm", scene.hair_card_width_mid_cm)))
+        tip = cm_to_m(float(curve_obj.get("hair_card_width_tip_cm", scene.hair_card_width_tip_cm)))
+        sync = bool(curve_obj.get("hair_card_sync_widths", scene.hair_card_sync_widths))
+        synced = float(curve_obj.get("hair_card_synced_width_cm", scene.hair_card_synced_width_cm))
         mid_pos = float(curve_obj.get("hair_card_mid_position", mid_pos))
         mode = str(curve_obj.get("hair_card_width_interpolation", mode))
+    if sync:
+        return cm_to_m(synced)
     mid_pos = max(0.05, min(0.95, mid_pos))
 
     def _ease(f):
@@ -2243,14 +2252,25 @@ def _card_width(scene, t, curve_obj=None):
     return mid + (tip - mid) * f
 
 
-def _store_scene_card_width_shape(curve_obj, scene):
+def _sync_scene_card_settings_to_curve(scene, curve_obj):
     curve_obj["hair_card_mid_position"] = scene.hair_card_mid_position
     curve_obj["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
+    curve_obj["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
+    curve_obj["hair_card_width_mid_cm"] = scene.hair_card_width_mid_cm
+    curve_obj["hair_card_width_tip_cm"] = scene.hair_card_width_tip_cm
+    curve_obj["hair_card_sync_widths"] = scene.hair_card_sync_widths
+    curve_obj["hair_card_synced_width_cm"] = scene.hair_card_synced_width_cm
+    curve_obj["hair_card_samples"] = scene.hair_card_samples
+
+
+def _store_scene_card_width_shape(curve_obj, scene):
+    _sync_scene_card_settings_to_curve(scene, curve_obj)
 
 
 def _build_card_preview_mesh(context, curve_obj, name):
     scene = context.scene
-    samples = utils.sample_curve_world_points_evaluated(curve_obj, max(scene.hair_card_samples, 2))
+    sample_count = int(curve_obj.get("hair_card_samples", scene.hair_card_samples))
+    samples = utils.sample_curve_world_points_evaluated(curve_obj, max(sample_count, 2))
     if len(samples) < 2:
         return None, []
     frames = _build_card_frames(context, curve_obj, samples)
@@ -2286,14 +2306,19 @@ def _apply_card_preview_props(preview, curve_obj, scene, samples):
     curve_obj["hair_card_width_interpolation"] = width_interpolation
     preview["hair_card_mid_position"] = mid_pos
     preview["hair_card_width_interpolation"] = width_interpolation
-    preview["hair_card_width_root"] = cm_to_m(scene.hair_card_width_root_cm)
-    preview["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
-    preview["hair_card_width_mid"] = cm_to_m(scene.hair_card_width_mid_cm)
-    preview["hair_card_width_mid_cm"] = scene.hair_card_width_mid_cm
-    preview["hair_card_width_tip"] = cm_to_m(scene.hair_card_width_tip_cm)
-    preview["hair_card_width_tip_cm"] = scene.hair_card_width_tip_cm
-    preview["hair_card_sync_widths"] = scene.hair_card_sync_widths
-    preview["hair_card_synced_width_cm"] = scene.hair_card_synced_width_cm
+    root_cm = float(curve_obj.get("hair_card_width_root_cm", scene.hair_card_width_root_cm))
+    mid_cm = float(curve_obj.get("hair_card_width_mid_cm", scene.hair_card_width_mid_cm))
+    tip_cm = float(curve_obj.get("hair_card_width_tip_cm", scene.hair_card_width_tip_cm))
+    sync_widths = bool(curve_obj.get("hair_card_sync_widths", scene.hair_card_sync_widths))
+    synced_cm = float(curve_obj.get("hair_card_synced_width_cm", scene.hair_card_synced_width_cm))
+    preview["hair_card_width_root"] = cm_to_m(root_cm)
+    preview["hair_card_width_root_cm"] = root_cm
+    preview["hair_card_width_mid"] = cm_to_m(mid_cm)
+    preview["hair_card_width_mid_cm"] = mid_cm
+    preview["hair_card_width_tip"] = cm_to_m(tip_cm)
+    preview["hair_card_width_tip_cm"] = tip_cm
+    preview["hair_card_sync_widths"] = sync_widths
+    preview["hair_card_synced_width_cm"] = synced_cm
     preview["hair_card_samples"] = len(samples)
     preview["hair_card_roll_angle"] = float(curve_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle))
     preview["hair_card_use_parallel_transport"] = bool(curve_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
@@ -2316,6 +2341,8 @@ def _create_or_update_card_preview_for_scene(context, curve_obj):
         _, collections = utils.ensure_system()
         collections[utils.CARD_PREVIEWS].objects.link(preview)
     _apply_card_preview_props(preview, curve_obj, scene, samples)
+    preview.hide_viewport = False
+    preview.hide_render = False
     curve_obj["hair_card_preview_object"] = preview.name
     if scene.hair_work_mode_lock_enabled:
         preview.hide_select = False
@@ -2431,7 +2458,7 @@ def _apply_display_mode_to_curve(context, obj):
         _set_flat_mesh_preview_visible(obj, False)
         _ensure_curve_visible_geometry(context, obj)
     elif mode == "CARD":
-        _store_scene_card_width_shape(obj, scene)
+        _sync_scene_card_settings_to_curve(scene, obj)
         obj.hide_viewport = False
         obj.display_type = 'WIRE'
         obj.data.bevel_depth = 0.0
@@ -3602,8 +3629,8 @@ class HGD_OT_cleanup_card_control_empties(bpy.types.Operator):
 
 class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
     bl_idname = "hgd.update_card_previews_from_curves"
-    bl_label = "CARDプレビューを更新"
-    bl_description = "選択中または全CARD表示Curveから、現在のCurve形状でCARDプレビューを再生成します"
+    bl_label = "CARD Previewを現在設定で更新"
+    bl_description = "現在のCARD幅、Mid位置、補間、参照Empty設定を選択Curveへ反映してPreviewを再生成します。"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -3624,15 +3651,16 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
 
         updated = 0
         for control in twist_controls:
-            _store_scene_card_width_shape(control, context.scene)
+            _sync_scene_card_settings_to_curve(context.scene, control)
             strand = _create_or_replace_twist_strand(context, control)
             if strand:
+                _sync_scene_card_settings_to_curve(context.scene, strand)
                 strand["hair_curve_display_mode"] = "CARD"
                 if _create_or_update_card_preview(context, strand):
                     updated += 1
 
         for curve_obj in curves:
-            _store_scene_card_width_shape(curve_obj, context.scene)
+            _sync_scene_card_settings_to_curve(context.scene, curve_obj)
             if curve_obj.get("hair_guide_type") == "twist_strand":
                 curve_obj["hair_curve_display_mode"] = "CARD"
             elif curve_obj.get("hair_guide_type") == "curve":
@@ -3643,6 +3671,7 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
         if not updated:
             self.report({'WARNING'}, "更新できるCurveが見つかりません。")
             return {'CANCELLED'}
+        context.view_layer.update()
         missing_empty = any(_object_is_missing_card_control_empty(curve) for curve in [*curves, *twist_controls])
         if missing_empty:
             self.report({'WARNING'}, "参照Emptyが見つからないため自動フレームを使用しました。")
