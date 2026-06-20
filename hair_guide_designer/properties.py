@@ -34,7 +34,7 @@ CURVE_PROFILE_TYPES = (
 )
 
 PROPERTY_NAMES = (
-    "hair_target_head_object", "hair_guide_scale", "hair_guide_offset",
+    "hair_target_head_object", "hair_selected_card_control_empty", "hair_guide_scale", "hair_guide_offset",
     "hair_seed", "hair_density", "hair_symmetry_bias",
     "hair_height_variation", "hair_width_variation", "hair_depth_variation",
     "hair_height_variation_cm", "hair_width_variation_cm", "hair_depth_variation_cm",
@@ -81,6 +81,11 @@ def register():
         name="頭部オブジェクト",
         type=bpy.types.Object,
         description="髪ガイド生成の基準にする頭部メッシュオブジェクト",
+    )
+    scene.hair_selected_card_control_empty = PointerProperty(
+        name="参照Empty",
+        type=bpy.types.Object,
+        description="選択Curveへ共有割り当てするCARD Control Empty",
     )
     scene.hair_guide_scale = FloatProperty(
         name="ガイド倍率",
