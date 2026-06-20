@@ -22,7 +22,7 @@ def require_head(context, operator):
     return head
 
 
-WORK_MODE_LOCK_EDITABLE_TYPES = {"guide", "region", "placement_point", "warning", "curve", "twist_control", "card_preview"}
+WORK_MODE_LOCK_EDITABLE_TYPES = {"guide", "region", "placement_point", "warning", "curve", "twist_control", "card_preview", "card_control_empty"}
 WORK_MODE_LOCK_PREV_KEY = "hgd_prev_hide_select"
 
 CARD_WIDTH_PRESETS = {
@@ -1005,7 +1005,7 @@ class HGD_OT_clear_all_generated(bpy.types.Operator):
             self.report({'WARNING'}, "HairGuideSystemが存在しません。")
             return {'CANCELLED'}
         total = 0
-        for collection_name in (utils.GUIDES, utils.REGIONS, utils.PLACEMENT_POINTS, utils.CURVES, utils.WARNINGS, utils.TAPER_OBJECTS, utils.PROFILE_OBJECTS, utils.CARD_PREVIEWS, utils.CARD_MESHES, utils.FLAT_MESHES):
+        for collection_name in (utils.GUIDES, utils.REGIONS, utils.PLACEMENT_POINTS, utils.CURVES, utils.WARNINGS, utils.TAPER_OBJECTS, utils.PROFILE_OBJECTS, utils.CARD_PREVIEWS, utils.CARD_MESHES, utils.FLAT_MESHES, utils.CARD_CONTROLS):
             total += utils.clear_collection_objects(collection_name)
         context.scene.hair_warning_count = 0
         _apply_work_mode_lock_to_all_objects(context)
@@ -1225,6 +1225,19 @@ def _apply_card_roll(side, tangent, roll_deg):
     return (rot @ side).normalized()
 
 
+
+def _card_control_empty_side_vector(curve_obj, sample, tangent):
+    empty_name = curve_obj.get("hair_card_control_empty", "")
+    empty = bpy.data.objects.get(empty_name) if empty_name else None
+    if not empty or empty.type != 'EMPTY':
+        return None
+    side = empty.matrix_world.to_3x3() @ mathutils.Vector((1.0, 0.0, 0.0))
+    side = side - tangent * side.dot(tangent)
+    if side.length < 1e-6:
+        return None
+    side.normalize()
+    return side
+
 def _build_card_frames(context, curve_obj, samples):
     scene = context.scene
     frames = []
@@ -1241,11 +1254,16 @@ def _build_card_frames(context, curve_obj, samples):
         if tangent.length < 1e-6:
             tangent = prev_tangent.copy() if prev_tangent else mathutils.Vector((0.0, 0.0, 1.0))
         tangent.normalize()
-        if index == 0 or prev_side is None or not use_ptf:
-            side = _initial_card_side(scene, curve_obj, sample, tangent)
+        side = _card_control_empty_side_vector(curve_obj, sample, tangent)
+        if side is not None:
+            if prev_side is not None and side.dot(prev_side) < 0:
+                side *= -1
         else:
-            side = _parallel_transport_side(prev_tangent, tangent, prev_side)
-        side = _apply_card_roll(side, tangent, roll)
+            if index == 0 or prev_side is None or not use_ptf:
+                side = _initial_card_side(scene, curve_obj, sample, tangent)
+            else:
+                side = _parallel_transport_side(prev_tangent, tangent, prev_side)
+            side = _apply_card_roll(side, tangent, roll)
         frames.append((sample, tangent.copy(), side.copy()))
         prev_tangent = tangent.copy()
         prev_side = side.copy()
@@ -2752,6 +2770,96 @@ class HGD_OT_fix_card_twist(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_create_card_control_empty(bpy.types.Operator):
+    bl_idname = "hgd.create_card_control_empty"
+    bl_label = "CARD Control Empty作成"
+    bl_description = "選択対象の参照元CurveへCARD Control Emptyを作成/割り当てします"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = resolve_card_display_curves_from_selection(context)
+        if not curves:
+            self.report({'WARNING'}, "CARD Control Emptyを作成するCurveが見つかりません。")
+            return {'CANCELLED'}
+        _, collections = utils.ensure_system()
+        collection = collections[utils.CARD_CONTROLS]
+        count = 0
+        for curve in curves:
+            name = f"HGD_CARD_CTRL_{curve.name}"
+            empty = bpy.data.objects.get(name)
+            if not empty:
+                empty = bpy.data.objects.new(name, None)
+                collection.objects.link(empty)
+            elif not any(obj.name == empty.name for obj in collection.objects):
+                try:
+                    collection.objects.link(empty)
+                except RuntimeError:
+                    pass
+            samples = utils.sample_curve_world_points(curve, 3)
+            empty.location = samples[1] if len(samples) >= 2 else curve.matrix_world.translation
+            empty.empty_display_type = 'SINGLE_ARROW'
+            empty.empty_display_size = 0.08
+            empty["hair_guide_type"] = "card_control_empty"
+            empty["hair_source_curve"] = curve.name
+            curve["hair_card_control_empty"] = empty.name
+            _apply_work_mode_lock_to_object(context, empty)
+            count += 1
+        self.report({'INFO'}, f"CARD Control Emptyを{count}個作成/割り当てしました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_assign_selected_card_control_empty(bpy.types.Operator):
+    bl_idname = "hgd.assign_selected_card_control_empty"
+    bl_label = "選択Emptyを割り当て"
+    bl_description = "選択中のEmptyを選択Curve/CARDの参照元Curveへ割り当てします"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        empty = next((obj for obj in context.selected_objects if obj.type == 'EMPTY'), None)
+        if not empty:
+            self.report({'WARNING'}, "割り当てるEmptyが選択されていません。")
+            return {'CANCELLED'}
+        curves = [curve for curve in resolve_card_display_curves_from_selection(context) if curve != empty]
+        if not curves:
+            self.report({'WARNING'}, "Emptyを割り当てるCurveが見つかりません。")
+            return {'CANCELLED'}
+        _, collections = utils.ensure_system()
+        collection = collections[utils.CARD_CONTROLS]
+        if not any(obj.name == empty.name for obj in collection.objects):
+            try:
+                collection.objects.link(empty)
+            except RuntimeError:
+                pass
+        for curve in curves:
+            curve["hair_card_control_empty"] = empty.name
+        empty["hair_guide_type"] = "card_control_empty"
+        empty["hair_source_curve"] = curves[-1].name
+        _apply_work_mode_lock_to_object(context, empty)
+        suffix = "（同一Emptyを複数Curveへ割り当て）" if len(curves) > 1 else ""
+        self.report({'INFO'}, f"選択Emptyを{len(curves)}本のCurveへ割り当てました。{suffix}")
+        return {'FINISHED'}
+
+
+class HGD_OT_clear_card_control_empty(bpy.types.Operator):
+    bl_idname = "hgd.clear_card_control_empty"
+    bl_label = "CARD Control Empty割当解除"
+    bl_description = "選択対象の参照元CurveからCARD Control Empty割り当てを解除します（Emptyは削除しません）"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curves = resolve_card_display_curves_from_selection(context)
+        cleared = 0
+        for curve in curves:
+            if "hair_card_control_empty" in curve:
+                del curve["hair_card_control_empty"]
+                cleared += 1
+        if not cleared:
+            self.report({'WARNING'}, "解除するCARD Control Empty割り当てが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"CARD Control Empty割当を{cleared}本解除しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
     bl_idname = "hgd.update_card_previews_from_curves"
     bl_label = "CARDプレビューを更新"
@@ -3385,10 +3493,9 @@ classes = (
     HGD_OT_select_edit_curve_from_preview,
     HGD_OT_edit_source_curve,
     HGD_OT_select_source_curve_from_card_preview,
-    HGD_OT_twist_selected_curve_handles,
-    HGD_OT_twist_selected_bezier_points,
-    HGD_OT_apply_card_roll_to_selected,
-    HGD_OT_fix_card_twist,
+    HGD_OT_create_card_control_empty,
+    HGD_OT_assign_selected_card_control_empty,
+    HGD_OT_clear_card_control_empty,
     HGD_OT_update_card_previews_from_curves,
     HGD_OT_apply_display_mode_to_selected_curves,
     HGD_OT_apply_display_mode_to_all_curves,

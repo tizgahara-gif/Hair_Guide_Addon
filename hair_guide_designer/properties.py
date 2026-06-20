@@ -48,14 +48,10 @@ PROPERTY_NAMES = (
     "hair_curve_root_jitter_cm", "hair_curve_mid_jitter_cm", "hair_curve_tip_jitter_cm",
     "hair_curve_root_jitter_ratio", "hair_curve_mid_jitter_ratio", "hair_curve_tip_jitter_ratio",
     "hair_curve_length_variation", "hair_curve_display_mode",
-    "hair_curve_twist_handle_angle", "hair_curve_twist_handle_strength",
-    "hair_curve_twist_handle_falloff", "hair_curve_twist_preserve_end_handles",
-    "hair_curve_selected_point_twist_angle", "hair_curve_selected_point_twist_strength",
-    "hair_curve_selected_point_twist_axis",
-    "hair_ui_show_handle_twist", "hair_card_width_preset",
+    "hair_card_width_preset",
     "hair_card_width_root", "hair_card_width_root_cm", "hair_card_width_mid", "hair_card_width_mid_cm",
     "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
-    "hair_card_use_parallel_transport", "hair_card_default_roll_angle", "hair_card_roll_apply_scope", "hair_card_twist_fix_scope",
+    "hair_card_use_parallel_transport", "hair_card_default_roll_angle",
     "hair_card_auto_apply_to_new_curves", "hair_card_auto_update_preview", "hair_card_auto_select_edit_curve", "hair_show_display_mode_settings",
     "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_width_cm", "hair_flat_mesh_thickness", "hair_flat_mesh_thickness_cm",
@@ -376,60 +372,6 @@ def register():
         default="SOLID",
         description="Curveを維持したまま表示方式を切り替えます。",
     )
-    scene.hair_curve_twist_handle_angle = FloatProperty(
-        name="ハンドルねじり角",
-        default=25.0,
-        min=-180.0,
-        max=180.0,
-        description="選択CurveのBezierハンドルを接線軸まわりに回転する角度です。",
-    )
-    scene.hair_curve_twist_handle_strength = FloatProperty(
-        name="ハンドルねじり強度",
-        default=1.0,
-        min=0.0,
-        max=3.0,
-        description="既存ハンドル長を基準に、ねじり後のハンドル長へ倍率をかけます。",
-    )
-    scene.hair_curve_twist_handle_falloff = EnumProperty(
-        name="ねじり分布",
-        items=(
-            ("LINEAR", "線形", "根元から毛先へ線形にねじります"),
-            ("CENTER", "中間最大", "中間でねじりを最大にします"),
-            ("TIP", "毛先最大", "毛先側でねじりを強くします"),
-        ),
-        default="LINEAR",
-        description="ハンドルねじり角をカーブ上に分布させる方法です。",
-    )
-    scene.hair_curve_twist_preserve_end_handles = BoolProperty(
-        name="両端ハンドルを弱める",
-        default=True,
-        description="根元と毛先の破綻を避けるため、両端のハンドルねじりを弱めます。",
-    )
-    scene.hair_curve_selected_point_twist_angle = FloatProperty(
-        name="選択点ねじり角",
-        default=15.0,
-        min=-180.0,
-        max=180.0,
-        description="Curve編集モードで選択中のBezier点だけに適用するハンドルねじり角です。",
-    )
-    scene.hair_curve_selected_point_twist_strength = FloatProperty(
-        name="選択点ハンドル強度",
-        default=1.0,
-        min=0.0,
-        max=3.0,
-        description="選択Bezier点の既存ハンドル長を基準に、ねじり後のハンドル長へ倍率をかけます。",
-    )
-    scene.hair_curve_selected_point_twist_axis = EnumProperty(
-        name="ねじり軸",
-        items=(
-            ("LOCAL_TANGENT", "接線方向", "前後制御点から求めた接線方向を軸にします"),
-            ("OBJECT_Z", "Object Z", "ObjectのローカルZ軸を軸にします"),
-            ("WORLD_Z", "World Z", "World Z軸を軸にします"),
-        ),
-        default="LOCAL_TANGENT",
-        description="選択Bezier点のハンドルを回転する軸です。",
-    )
-
     scene.hair_card_width_preset = EnumProperty(
         name="CARD幅プリセット",
         items=CARD_WIDTH_PRESETS,
@@ -485,22 +427,6 @@ def register():
         min=-180.0,
         max=180.0,
         description="新規Curve/CARD生成時の初期Roll角です。",
-    )
-    scene.hair_card_roll_apply_scope = EnumProperty(
-        name="Roll適用対象",
-        items=(
-            ("SELECTED", "選択対象", "選択中のCurveまたはPreview参照元へ適用"),
-            ("ALL_CARD", "全CARD", "CARD表示中の全Curveへ適用"),
-        ),
-        default="SELECTED",
-    )
-    scene.hair_card_twist_fix_scope = EnumProperty(
-        name="ねじれ修正対象",
-        items=(
-            ("SELECTED", "選択対象", "選択中のCurveまたはPreview参照元を修正"),
-            ("ALL_CARD", "全CARD", "CARD表示中の全Curveを修正"),
-        ),
-        default="SELECTED",
     )
     scene.hair_card_auto_apply_to_new_curves = BoolProperty(
         name="新規Curveへ現在の表示モードを自動適用",
@@ -714,12 +640,6 @@ def register():
         name="詳細/互換設定を表示",
         default=False,
         description="将来互換用のカーブ詳細パラメータを表示します。",
-    )
-
-    scene.hair_ui_show_handle_twist = BoolProperty(
-        name="ハンドルねじり",
-        default=False,
-        description="制御点位置を維持したままBezierハンドルだけをねじる低頻度設定を表示します。",
     )
 
     scene.hair_ui_show_curve_advanced = BoolProperty(
