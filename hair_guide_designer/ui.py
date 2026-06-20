@@ -126,7 +126,10 @@ class HGD_PT_quick_actions(HGD_PT_base):
         row = box.row(); row.enabled = counts['has_head']; row.operator('hgd.create_hair_guides', text='2. 基本ガイド生成', icon='OUTLINER_OB_CURVE')
         row = box.row(); row.enabled = counts['has_head']; row.operator('hgd.generate_placement_points', text='3. 配置点生成', icon='MESH_UVSPHERE')
         row = box.row(); row.enabled = counts['placement_points'] > 0; row.operator('hgd.create_curve_from_points', text='4. カーブ生成', icon='CURVE_BEZCURVE')
-        row = box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.apply_display_mode_to_selected_curves', text='5. 表示モード適用', icon='RESTRICT_VIEW_OFF'); row.operator('hgd.apply_display_mode_to_all_curves', text='全Curve')
+        display_box = box.box()
+        display_box.label(text='表示モード切替', icon='RESTRICT_VIEW_OFF')
+        display_box.prop(scene, 'hair_curve_display_mode', text='')
+        row = box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.apply_display_mode_to_selected_curves', text='5. 選択Curveへ表示モード適用', icon='RESTRICT_VIEW_OFF'); row.operator('hgd.apply_display_mode_to_all_curves', text='全Curve')
         row = box.row(align=True); row.enabled = counts['display_curves'] > 0; row.operator('hgd.export_flat_mesh_from_selected_curves', text='6. 扁平Mesh出力', icon='MESH_DATA'); row.operator('hgd.convert_selected_card_preview_to_mesh', text='CARD実体化', icon='MESH_PLANE')
         _draw_card_edit_redirect(layout, context)
 
