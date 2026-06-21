@@ -60,12 +60,15 @@ class HGD_PT_setup(HGD_PT_base):
 class HGD_PT_guides_points(HGD_PT_base):
     bl_label='[GUIDE] Guide / Points'; bl_order=2
     def draw(self, context):
+        scene=context.scene
         box=_section_box(self.layout,'Guide / Points','OUTLINER_OB_CURVE','[GUIDE]')
         box.operator('hgd.create_hair_guides', text='基本ガイド生成'); box.operator('hgd.generate_placement_points', text='配置点生成')
         _all_region_buttons(box)
         for args in [('頭頂部','Top'),('前髪','Front'),('側頭部','Side'),('左側','Side_L'),('右側','Side_R'),('後頭部上層','Back_Upper'),('後頭部中層','Back_Middle'),('襟足','Nape')]: _region_buttons(box,*args)
         box.operator('hgd.symmetrize_front_back_guides', text='前後ガイド左右対称化', icon='MOD_MIRROR')
         row=box.row(align=True); row.operator('hgd.mirror_side_guide_l_to_r', text='左→右'); row.operator('hgd.mirror_side_guide_r_to_l', text='右→左')
+        box.prop(scene,'hair_mirror_mode_enabled'); box.prop(scene,'hair_mirror_source_side'); box.prop(scene,'hair_mirror_axis_mode')
+        row=box.row(align=True); row.operator('hgd.mirror_mode_sync_pairs', text='ミラーペア同期')
 
 class HGD_PT_curve_shape(HGD_PT_base):
     bl_label='[CURVE] Curve Shape'; bl_order=3
@@ -79,7 +82,7 @@ class HGD_PT_curve_shape(HGD_PT_base):
             box.prop(scene,p)
         if _foldout(self.layout, scene, 'hair_ui_show_curve_advanced', 'ツイスト詳細 / 個体差詳細'):
             adv=_section_box(self.layout,'詳細','PREFERENCES','[CURVE]')
-            for p in ['hair_twist_radius','hair_twist_turns','hair_twist_segments','hair_twist_phase','hair_twist_bevel_depth_cm','hair_twist_resolution','hair_twist_taper_strength','hair_curve_variation_seed','hair_curve_variation_randomize_seed_per_generation','hair_curve_root_jitter_ratio','hair_curve_mid_jitter_ratio','hair_curve_tip_jitter_ratio','hair_curve_length_variation']:
+            for p in ['hair_twist_radius','hair_twist_turns','hair_twist_segments','hair_twist_phase','hair_twist_bevel_depth_cm','hair_twist_resolution','hair_twist_taper_strength','hair_curve_root_jitter_ratio','hair_curve_mid_jitter_ratio','hair_curve_tip_jitter_ratio','hair_curve_length_variation']:
                 adv.prop(scene,p)
 
 class HGD_PT_display_mode(HGD_PT_base):
@@ -161,7 +164,8 @@ class HGD_MT_hair_guide_pie(bpy.types.Menu):
         pie.operator('hgd.edit_source_curve', text='編集Curveを開く', icon='CURVE_BEZCURVE')
         pie.operator('hgd.update_card_previews_from_curves', text='CARD Previewを現在設定で更新', icon='FILE_REFRESH')
         pie.operator('hgd.apply_display_mode_to_selected_curves', text='表示モード適用', icon='RESTRICT_VIEW_OFF')
-        pie.operator('hgd.convert_selected_card_preview_to_mesh', text='Mesh出力', icon='MESH_DATA')
+        pie.operator('hgd.convert_selected_card_preview_to_mesh', text='CARD Mesh出力', icon='MESH_PLANE')
+        pie.operator('hgd.export_flat_mesh_from_selected_curves', text='Flat Mesh出力', icon='MESH_DATA')
         pie.operator('hgd.toggle_final_edit_mode', text='最終編集モード', icon='MESH_DATA')
         pie.operator('hgd.create_card_control_empty', text='参照Empty作成/共有', icon='EMPTY_SINGLE_ARROW')
         pie.operator('hgd.clear_card_previews', text='Cleanup / Preview削除', icon='TRASH')

@@ -22,6 +22,21 @@ def m_to_cm(value):
     return float(value) * 100.0
 
 
+
+
+def _addon_preferences(context):
+    addon = context.preferences.addons.get(__package__ or "hair_guide_designer")
+    return addon.preferences if addon else None
+
+def _variation_seed_settings(scene):
+    prefs = _addon_preferences(bpy.context)
+    if prefs:
+        return (
+            int(getattr(prefs, "hair_curve_variation_seed", getattr(scene, "hair_curve_variation_seed", 1))),
+            bool(getattr(prefs, "hair_curve_variation_randomize_seed_per_generation", getattr(scene, "hair_curve_variation_randomize_seed_per_generation", False))),
+        )
+    return int(getattr(scene, "hair_curve_variation_seed", 1)), bool(getattr(scene, "hair_curve_variation_randomize_seed_per_generation", False))
+
 def require_head(context, operator):
     head = context.scene.hair_target_head_object
     if not head or head.type != "MESH":
@@ -880,10 +895,12 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
 
 
     def _sample_guide_positions_with_debug(self, guide_obj, count):
-        print("[HGD] placement source:", guide_obj.name, guide_obj.location)
+        if getattr(bpy.context.scene, "hair_ui_show_debug", False):
+            print("[HGD] placement source:", guide_obj.name, guide_obj.location)
         points = utils.sample_curve_world_points(guide_obj, count)
-        for position in points:
-            print("[HGD] sampled point:", position)
+        if getattr(bpy.context.scene, "hair_ui_show_debug", False):
+            for position in points:
+                print("[HGD] sampled point:", position)
         return points
 
     def _evaluate_guide_position_with_debug(self, guide_obj, t):
@@ -1136,6 +1153,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 curves_by_point[point.name] = obj
                 made += 1
             _link_created_curve_mirror_pairs(curves_by_point)
+            _auto_create_mirror_pairs_for_generated_curves(context, curves_by_point)
             _apply_work_mode_lock_to_all_objects(context)
             self.report({'INFO'}, f"カーブ毛束を{made}本生成しました。")
             return {'FINISHED'}
@@ -1157,16 +1175,18 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
 
 def _stable_curve_variation_rng(scene, source_name):
     stable_id = sum(ord(char) for char in str(source_name))
-    return random.Random(scene.hair_curve_variation_seed + stable_id)
+    seed, _randomize = _variation_seed_settings(scene)
+    return random.Random(seed + stable_id)
 
 
 def _stable_curve_variation_rng_for_obj(scene, obj, source_name):
     stable_key = f"{source_name}|{obj.name}|{obj.get('hair_region', '')}|{obj.get('hair_guide_type', '')}"
     stable_id = sum(ord(char) for char in stable_key)
-    if scene.hair_curve_variation_randomize_seed_per_generation:
+    seed, randomize = _variation_seed_settings(scene)
+    if randomize:
         runtime_seed = random.SystemRandom().randint(0, 2_147_483_647)
     else:
-        runtime_seed = scene.hair_curve_variation_seed + stable_id
+        runtime_seed = seed + stable_id
     return random.Random(runtime_seed), runtime_seed
 
 
@@ -1175,12 +1195,13 @@ def _apply_curve_variation(obj, scene, source_name):
         return 1.0
 
     obj["hair_curve_variation_enabled"] = scene.hair_curve_variation_enabled
-    obj["hair_curve_variation_seed"] = scene.hair_curve_variation_seed
+    seed, randomize = _variation_seed_settings(scene)
+    obj["hair_curve_variation_seed"] = seed
     obj["hair_curve_root_jitter_ratio"] = scene.hair_curve_root_jitter_ratio
     obj["hair_curve_mid_jitter_ratio"] = scene.hair_curve_mid_jitter_ratio
     obj["hair_curve_tip_jitter_ratio"] = scene.hair_curve_tip_jitter_ratio
     obj["hair_curve_length_variation"] = scene.hair_curve_length_variation
-    obj["hair_curve_variation_randomized"] = scene.hair_curve_variation_randomize_seed_per_generation
+    obj["hair_curve_variation_randomized"] = randomize
     length_scale = 1.0
     if obj.get("hair_guide_type") not in {"curve", "twist_control"}:
         obj["hair_curve_variation_runtime_seed"] = 0
@@ -2625,9 +2646,11 @@ def _curve_has_card_preview(curve_obj):
 
 def _create_card_mesh_from_curve(context, curve_obj):
     scene = context.scene
+    _sync_scene_card_width_settings_to_curve(scene, curve_obj)
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return None
-    samples = utils.sample_curve_world_points_evaluated(curve_obj, max(scene.hair_card_samples, 2))
+    sample_count = int(curve_obj.get("hair_card_samples", scene.hair_card_samples))
+    samples = utils.sample_curve_world_points_evaluated(curve_obj, max(sample_count, 2))
     if len(samples) < 2:
         return None
     frames = _build_card_frames(context, curve_obj, samples)
@@ -2660,14 +2683,19 @@ def _create_card_mesh_from_curve(context, curve_obj):
     curve_obj["hair_card_width_interpolation"] = width_interpolation
     obj["hair_card_mid_position"] = mid_pos
     obj["hair_card_width_interpolation"] = width_interpolation
-    obj["hair_card_width_root"] = cm_to_m(scene.hair_card_width_root_cm)
-    obj["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
-    obj["hair_card_width_mid"] = cm_to_m(scene.hair_card_width_mid_cm)
-    obj["hair_card_width_mid_cm"] = scene.hair_card_width_mid_cm
-    obj["hair_card_width_tip"] = cm_to_m(scene.hair_card_width_tip_cm)
-    obj["hair_card_width_tip_cm"] = scene.hair_card_width_tip_cm
-    obj["hair_card_sync_widths"] = scene.hair_card_sync_widths
-    obj["hair_card_synced_width_cm"] = scene.hair_card_synced_width_cm
+    root_cm = float(curve_obj.get("hair_card_width_root_cm", scene.hair_card_width_root_cm))
+    mid_cm = float(curve_obj.get("hair_card_width_mid_cm", scene.hair_card_width_mid_cm))
+    tip_cm = float(curve_obj.get("hair_card_width_tip_cm", scene.hair_card_width_tip_cm))
+    sync_widths = bool(curve_obj.get("hair_card_sync_widths", scene.hair_card_sync_widths))
+    synced_cm = float(curve_obj.get("hair_card_synced_width_cm", scene.hair_card_synced_width_cm))
+    obj["hair_card_width_root"] = cm_to_m(root_cm)
+    obj["hair_card_width_root_cm"] = root_cm
+    obj["hair_card_width_mid"] = cm_to_m(mid_cm)
+    obj["hair_card_width_mid_cm"] = mid_cm
+    obj["hair_card_width_tip"] = cm_to_m(tip_cm)
+    obj["hair_card_width_tip_cm"] = tip_cm
+    obj["hair_card_sync_widths"] = sync_widths
+    obj["hair_card_synced_width_cm"] = synced_cm
     obj["hair_card_samples"] = len(samples)
     obj["hair_card_roll_angle"] = float(curve_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle))
     obj["hair_card_use_parallel_transport"] = bool(curve_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
@@ -4335,6 +4363,44 @@ class HGD_OT_clear_legacy_braid_objects(bpy.types.Operator):
         return {'FINISHED'}
 
 
+
+def _mirror_axis_x(context):
+    if getattr(context.scene, "hair_mirror_axis_mode", "HEAD_CENTER_X") == "WORLD_X":
+        return 0.0
+    head = getattr(context.scene, "hair_target_head_object", None)
+    if head:
+        _min_v, _max_v, center, _size = utils.head_bounds(head)
+        return center.x
+    return 0.0
+
+def _auto_create_mirror_pairs_for_generated_curves(context, curves_by_point):
+    scene = context.scene
+    if not getattr(scene, "hair_mirror_mode_enabled", False):
+        return 0
+    src_region, dst_region = ("Side_L", "Side_R") if scene.hair_mirror_source_side == "L" else ("Side_R", "Side_L")
+    mirror_x = _mirror_axis_x(context)
+    created = 0
+    for point_name, obj in list(curves_by_point.items()):
+        if not obj or obj.get("hair_region") != src_region:
+            continue
+        if obj.get("hair_mirror_pair") and bpy.data.objects.get(obj.get("hair_mirror_pair")):
+            continue
+        new_name = utils.unique_name(_swap_side(obj.name, src_region, dst_region))
+        new_obj = obj.copy()
+        new_obj.data = obj.data.copy()
+        new_obj.name = new_name
+        new_obj.data.name = new_name + "Curve"
+        utils.get_curve_collection(dst_region, obj.get("hair_guide_type", "curve")).objects.link(new_obj)
+        _copy_mirrored_bezier_shape(obj, new_obj, mirror_x)
+        new_obj["hair_region"] = dst_region
+        new_obj["flow_side"] = _mirrored_flow_side(dst_region)
+        new_obj["hair_mirror_source"] = obj.name
+        new_obj["hair_mirror_pair"] = obj.name
+        obj["hair_mirror_pair"] = new_obj.name
+        utils.apply_curve_region_color(new_obj)
+        created += 1
+    return created
+
 def _copy_mirrored_curve_data_world_x(source, target):
     new_data = source.data.copy()
     new_data.name = target.name + "Curve"
@@ -4815,6 +4881,31 @@ class HGD_OT_mirror_selected_curves(bpy.types.Operator):
         return {'FINISHED'}
 
 
+
+class HGD_OT_mirror_mode_sync_pairs(bpy.types.Operator):
+    bl_idname = "hgd.mirror_mode_sync_pairs"
+    bl_label = "ミラーペア同期"
+    bl_description = "ミラーモード設定のミラー元からhair_mirror_pairの反対側Curveへ形状を反映します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        src_side = "L" if context.scene.hair_mirror_source_side == "L" else "R"
+        mirror_x = _mirror_axis_x(context)
+        updated = 0
+        for source in utils.generated_objects():
+            if source.type != "CURVE" or source.get("hair_guide_type") not in {"curve", "twist_control"}:
+                continue
+            if source.get("hair_mirror_side", _mirror_side_from_object(source)) != src_side:
+                continue
+            target = bpy.data.objects.get(source.get("hair_mirror_pair", ""))
+            if target and _copy_mirrored_bezier_shape(source, target, mirror_x):
+                updated += 1
+        if updated == 0:
+            self.report({'WARNING'}, "同期対象のミラーペアが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"ミラーペア{updated}本を同期しました。")
+        return {'FINISHED'}
+
 class HGD_OT_mirror_side_l_to_r(bpy.types.Operator):
     bl_idname = "hgd.mirror_side_l_to_r"
     bl_label = "左側→右側へミラー"
@@ -4929,6 +5020,7 @@ classes = (
     HGD_OT_mirror_side_guide_r_to_l,
     HGD_OT_mirror_side,
     HGD_OT_mirror_selected_curves,
+    HGD_OT_mirror_mode_sync_pairs,
     HGD_OT_mirror_side_l_to_r,
     HGD_OT_mirror_side_r_to_l,
 )
