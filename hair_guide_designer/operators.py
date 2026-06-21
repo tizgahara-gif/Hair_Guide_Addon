@@ -488,7 +488,7 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
             ry = size.y * 0.5 * scale + offset
             top = max_v.z + offset
             hairline_z = min_v.z + size.z * 0.66
-            back_volume_z = min_v.z + size.z * 0.58
+            side_back_z = min_v.z + size.z * 0.58
             nape_z = min_v.z + size.z * 0.18
             front_surface = min_v.y
             front_out = front_surface - max(scene.hair_guide_offset, size.y * 0.04)
@@ -522,8 +522,8 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
 
             guide_specs = [
                 ("HAIR_GUIDE_Hairline", hairline_points, "Front"),
-                ("HAIR_GUIDE_SideBoundary_L", [mathutils.Vector((center.x - rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x - rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x - rx * 0.82, back_out - size.y * 0.16, back_volume_z + size.z * 0.02))], "Side"),
-                ("HAIR_GUIDE_SideBoundary_R", [mathutils.Vector((center.x + rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x + rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x + rx * 0.82, back_out - size.y * 0.16, back_volume_z + size.z * 0.02))], "Side"),
+                ("HAIR_GUIDE_SideBoundary_L", [mathutils.Vector((center.x - rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x - rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x - rx * 0.82, back_out - size.y * 0.16, side_back_z + size.z * 0.02))], "Side"),
+                ("HAIR_GUIDE_SideBoundary_R", [mathutils.Vector((center.x + rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x + rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x + rx * 0.82, back_out - size.y * 0.16, side_back_z + size.z * 0.02))], "Side"),
                 ("HAIR_GUIDE_BackUpper", back_upper_points, "Back_Upper"),
                 ("HAIR_GUIDE_BackMiddle", back_middle_points, "Back_Middle"),
                 ("HAIR_GUIDE_Nape", nape_points, "Nape"),
@@ -947,68 +947,6 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
         if region == "Nape" and guides["nape"]:
             return utils.sample_curve_world_points(guides["nape"], count)
         return None
-
-    def _back_layer_positions(self, region, count, guides, min_v, max_v, center, size, offset):
-        guide_obj = guides.get("legacy_back_upper") if region == "Back_Upper" else guides.get("legacy_back_middle")
-        if region == "Back_Middle" and count > 1:
-            sample_count = max(count // 2, 1)
-        else:
-            sample_count = count
-        back_points = self._sample_guide_positions_with_debug(guide_obj, sample_count)
-        if not back_points:
-            return None
-
-        positions = []
-        for i, back_pos in enumerate(back_points):
-            t = i / max(sample_count - 1, 1)
-            if region == "Back_Upper":
-                target_pos = self._reference_back_layer_position(guides.get("top"), t, back_pos, max_v.z + TOP_POINT_OFFSET)
-                layer_pos = back_pos.lerp(target_pos, BACK_UPPER_TO_TOP_BLEND)
-                positions.append(self._apply_back_layer_outward_offset(layer_pos, center, size, offset))
-            else:
-                target_pos = self._reference_back_layer_position(guides.get("nape"), t, back_pos, self._nape_fallback_z(min_v, size))
-                layer_pos = back_pos.lerp(target_pos, BACK_MIDDLE_TO_NAPE_BLEND)
-                layer_pos = self._apply_back_layer_outward_offset(layer_pos, center, size, offset)
-                if count == 1:
-                    layer_pos.x = center.x
-                    positions.append(layer_pos)
-                    continue
-                offset_x = abs(layer_pos.x - center.x)
-                if offset_x <= size.x * 0.02:
-                    left_point = layer_pos.copy()
-                    right_point = layer_pos.copy()
-                else:
-                    left_point = layer_pos.copy()
-                    left_point.x = center.x - offset_x
-                    right_point = layer_pos.copy()
-                    right_point.x = center.x + offset_x
-                positions.extend((left_point, right_point))
-        if region == "Back_Middle" and count % 2:
-            back_pos = self._evaluate_guide_position_with_debug(guide_obj, 0.5)
-            if back_pos:
-                target_pos = self._reference_back_layer_position(guides.get("nape"), 0.5, back_pos, self._nape_fallback_z(min_v, size))
-                center_point = back_pos.lerp(target_pos, BACK_MIDDLE_TO_NAPE_BLEND)
-                center_point = self._apply_back_layer_outward_offset(center_point, center, size, offset)
-                center_point.x = center.x
-                positions.append(center_point)
-        return positions[:count]
-
-    def _reference_back_layer_position(self, guide_obj, t, back_pos, fallback_z):
-        if guide_obj:
-            guide_pos = self._evaluate_guide_position_with_debug(guide_obj, t)
-            if guide_pos:
-                return guide_pos
-        return mathutils.Vector((back_pos.x, back_pos.y, fallback_z))
-
-    def _apply_back_layer_outward_offset(self, pos, center, size, offset):
-        adjusted = pos.copy()
-        outward = mathutils.Vector((adjusted.x - center.x, adjusted.y - center.y, 0.0))
-        if outward.length < 1e-6:
-            outward = mathutils.Vector((0.0, 1.0, 0.0))
-        else:
-            outward.normalize()
-        adjusted += outward * max(offset, size.y * BACK_LAYER_OUTWARD_OFFSET_RATIO)
-        return adjusted
 
     def _nape_fallback_z(self, min_v, size):
         return min_v.z + size.z * 0.24
