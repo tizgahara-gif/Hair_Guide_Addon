@@ -44,6 +44,7 @@ class HGD_PT_quick_flow(HGD_PT_base):
         box.operator('hgd.create_hair_guides', text='2. 基本ガイド生成', icon='OUTLINER_OB_CURVE')
         box.operator('hgd.generate_placement_points', text='3. 配置点生成', icon='MESH_UVSPHERE')
         box.operator('hgd.create_curve_from_points', text='4. Curve生成', icon='CURVE_BEZCURVE')
+        box.operator('hgd.duplicate_selected_hair_curves', text='選択Curveを複製', icon='DUPLICATE')
         box.prop(scene,'hair_curve_display_mode', text='5. 表示モード')
         box.operator('hgd.apply_display_mode_to_selected_curves', text='6. 選択対象へ表示モード適用', icon='RESTRICT_VIEW_OFF')
         row=box.row(align=True); row.operator('hgd.update_card_previews_from_curves', text='7. CARD Previewを現在設定で更新', icon='FILE_REFRESH'); row.operator('hgd.update_flat_mesh_previews_from_curves', text='Flat Preview更新', icon='MESH_DATA')

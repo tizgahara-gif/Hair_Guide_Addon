@@ -6,6 +6,15 @@ from bpy.props import EnumProperty, StringProperty
 from . import utils
 
 
+HAIR_CURVE_NAME_PREFIXES = {
+    "Top": "HAIR_TOP",
+    "Front": "HAIR_FRONT",
+    "Side_L": "HAIR_SIDE_L",
+    "Side_R": "HAIR_SIDE_R",
+    "Back_Upper": "HAIR_BACK_UPPER",
+    "Back_Middle": "HAIR_BACK_MIDDLE",
+    "Nape": "HAIR_NAPE",
+}
 TOP_POINT_OFFSET = 0.01
 BACK_UPPER_TO_MIDDLE_BLEND = 0.65
 BACK_MIDDLE_HEIGHT_RATIO = 0.55
@@ -1243,15 +1252,100 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
             return {'CANCELLED'}
 
     def _prefix(self, region):
-        return {
-            "Top": "HAIR_TOP",
-            "Front": "HAIR_FRONT",
-            "Side_L": "HAIR_SIDE_L",
-            "Side_R": "HAIR_SIDE_R",
-            "Back_Upper": "HAIR_BACK_UPPER",
-            "Back_Middle": "HAIR_BACK_MIDDLE",
-            "Nape": "HAIR_NAPE",
-        }.get(region, "HAIR_CURVE")
+        return _hair_curve_name_prefix(region)
+
+
+def _hair_curve_name_prefix(region):
+    return HAIR_CURVE_NAME_PREFIXES.get(region, "HAIR_CURVE")
+
+
+class HGD_OT_duplicate_selected_hair_curves(bpy.types.Operator):
+    bl_idname = "hgd.duplicate_selected_hair_curves"
+    bl_label = "選択Curveを複製"
+    bl_description = "選択中のHGD Curveを、現在の形状とワールド位置を維持した独立Curveとして複製します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    COPY_PROPS = (
+        "hair_region",
+        "hair_root_id",
+        "hair_source_point",
+        "hair_curve_length",
+        "hair_curve_length_cm",
+        "hair_curve_bevel_depth",
+        "hair_curve_resolution",
+        "hair_card_roll_angle",
+        "hair_card_use_parallel_transport",
+        "hair_card_mid_position",
+        "hair_card_width_interpolation",
+        "strand_type",
+        "root_radius",
+        "tip_radius",
+        "taper_strength",
+        "segment_count",
+    )
+    PREVIEW_REF_PROPS = (
+        "hair_card_preview_object",
+        "hair_flat_mesh_preview_object",
+        "hair_card_mesh_object",
+        "hair_flat_mesh_object",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return any(cls._is_target_curve(obj) for obj in context.selected_objects)
+
+    @staticmethod
+    def _is_target_curve(obj):
+        return bool(obj and obj.type == "CURVE" and obj.get("hair_guide_type") == "curve")
+
+    def execute(self, context):
+        sources = [obj for obj in context.selected_objects if self._is_target_curve(obj)]
+        if not sources:
+            self.report({'WARNING'}, "複製対象のHGD Curveが選択されていません。")
+            return {'CANCELLED'}
+
+        created = []
+        scene = context.scene
+        for src in sources:
+            region = src.get("hair_region", "")
+            prefix = _hair_curve_name_prefix(region)
+            curves = utils.get_curve_collection(region, "curve")
+            curve_data = src.data.copy()
+            new_obj = bpy.data.objects.new(utils.unique_numbered(prefix), curve_data)
+            curves.objects.link(new_obj)
+            new_obj.matrix_world = src.matrix_world.copy()
+
+            utils.set_common_props(new_obj, "curve", region, scene)
+            for prop_name in self.COPY_PROPS:
+                if prop_name in src:
+                    new_obj[prop_name] = src[prop_name]
+            new_obj["hair_guide_type"] = "curve"
+            new_obj["hair_region"] = region
+            new_obj["hair_curve_profile_type"] = "ROUND"
+
+            if "hair_card_control_empty" in src:
+                empty_name = src.get("hair_card_control_empty", "")
+                if empty_name and bpy.data.objects.get(empty_name):
+                    new_obj["hair_card_control_empty"] = empty_name
+            if "hair_card_control_empty" not in new_obj:
+                _assign_latest_card_control_empty_if_available(context, new_obj)
+
+            for prop_name in self.PREVIEW_REF_PROPS:
+                if prop_name in new_obj:
+                    del new_obj[prop_name]
+
+            _ensure_curve_visible_geometry(context, new_obj)
+            _apply_work_mode_lock_to_object(context, new_obj)
+            created.append(new_obj)
+
+        for obj in context.selected_objects:
+            obj.select_set(False)
+        for obj in created:
+            obj.select_set(True)
+        context.view_layer.objects.active = created[-1]
+
+        self.report({'INFO'}, f"HGD Curveを{len(created)}本複製しました。")
+        return {'FINISHED'}
 
 
 def _stable_curve_variation_rng(scene, source_name):
@@ -5051,6 +5145,7 @@ classes = (
     HGD_OT_generate_placement_points,
     HGD_OT_clear_placement_points,
     HGD_OT_create_curve_from_points,
+    HGD_OT_duplicate_selected_hair_curves,
     HGD_OT_check_root_clustering,
     HGD_OT_clear_warnings,
     HGD_OT_clear_card_previews,
