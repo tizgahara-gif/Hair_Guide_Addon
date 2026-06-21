@@ -9,10 +9,22 @@ def _section_box(layout, title, icon='NONE', prefix=''):
 def _foldout(layout, scene, prop_name, label):
     row=layout.row(); icon='TRIA_DOWN' if getattr(scene, prop_name) else 'TRIA_RIGHT'; row.prop(scene, prop_name, text=label, icon=icon, toggle=True); return getattr(scene, prop_name)
 
+def _region_button_text_and_icon(region):
+    state = utils.get_region_visibility_state(region)
+    if state in {"VISIBLE", "MIXED"}:
+        return "非表示にする", "HIDE_ON"
+    return "表示する", "HIDE_OFF"
+
+
 def _region_buttons(layout, label, region):
-    row=layout.row(align=True)
-    op=row.operator('hgd.region_visibility', text=f'{label} 表示', icon='HIDE_OFF'); op.region=region; op.action='SHOW'
-    op=row.operator('hgd.region_visibility', text=f'{label} 非表示', icon='HIDE_ON'); op.region=region; op.action='HIDE'
+    text, icon = _region_button_text_and_icon(region)
+    op=layout.operator('hgd.toggle_region_visibility', text=f'{label} {text}', icon=icon)
+    op.region=region
+
+
+def _all_region_buttons(layout, label='全領域'):
+    text, icon = _region_button_text_and_icon('ALL')
+    layout.operator('hgd.toggle_all_region_visibility', text=f'{label} {text}', icon=icon)
 
 def _display_mode_buttons(layout, scene):
     layout.prop(scene, 'hair_curve_display_mode', text='表示モード')
@@ -50,7 +62,8 @@ class HGD_PT_guides_points(HGD_PT_base):
     def draw(self, context):
         box=_section_box(self.layout,'Guide / Points','OUTLINER_OB_CURVE','[GUIDE]')
         box.operator('hgd.create_hair_guides', text='基本ガイド生成'); box.operator('hgd.generate_placement_points', text='配置点生成')
-        for args in [('全領域','ALL'),('頭頂部','Top'),('前髪','Front'),('側頭部','Side'),('左側','Side_L'),('右側','Side_R'),('後頭部上層','Back_Upper'),('後頭部中層','Back_Middle'),('襟足','Nape')]: _region_buttons(box,*args)
+        _all_region_buttons(box)
+        for args in [('頭頂部','Top'),('前髪','Front'),('側頭部','Side'),('左側','Side_L'),('右側','Side_R'),('後頭部上層','Back_Upper'),('後頭部中層','Back_Middle'),('襟足','Nape')]: _region_buttons(box,*args)
         box.operator('hgd.symmetrize_front_back_guides', text='前後ガイド左右対称化', icon='MOD_MIRROR')
         row=box.row(align=True); row.operator('hgd.mirror_side_guide_l_to_r', text='左→右'); row.operator('hgd.mirror_side_guide_r_to_l', text='右→左')
 

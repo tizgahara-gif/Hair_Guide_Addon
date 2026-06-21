@@ -2,7 +2,7 @@ import math
 import random
 import mathutils
 import bpy
-from bpy.props import EnumProperty
+from bpy.props import EnumProperty, StringProperty
 from . import utils
 
 
@@ -579,6 +579,65 @@ class HGD_OT_region_visibility(bpy.types.Operator):
             self.report({'WARNING'}, "領域オブジェクトが見つかりません。")
             return {'CANCELLED'}
         self.report({'INFO'}, f"領域表示を更新しました: {self.region} {self.action.lower()}。")
+        return {'FINISHED'}
+
+
+def _region_visibility_targets(region):
+    all_regions = set(utils.REGION_NAMES) | set(utils.POINT_REGIONS)
+    return [
+        obj for obj in utils.generated_objects()
+        if (
+            region == "ALL" and obj.get("hair_region", "") in all_regions
+        ) or (
+            region == "Side" and obj.get("hair_region", "") in {"Side", "Side_L", "Side_R"}
+        ) or obj.get("hair_region", "") == region
+    ]
+
+
+class HGD_OT_toggle_region_visibility(bpy.types.Operator):
+    bl_idname = "hgd.toggle_region_visibility"
+    bl_label = "表示切替"
+    bl_description = "対象領域の生成物を1ボタンで表示/非表示に切り替えます"
+    bl_options = {'REGISTER', 'UNDO'}
+    region: StringProperty(default="", description="表示切替する髪領域")
+
+    def execute(self, context):
+        if not bpy.data.collections.get(utils.ROOT):
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
+            return {'CANCELLED'}
+        targets = _region_visibility_targets(self.region)
+        if not targets:
+            self.report({'WARNING'}, "領域オブジェクトが見つかりません。")
+            return {'CANCELLED'}
+        visible_count = sum(not obj.hide_viewport for obj in targets)
+        visible = visible_count == 0
+        for obj in targets:
+            obj.hide_viewport = not visible
+            obj.hide_render = not visible
+        self.report({'INFO'}, "領域を表示しました。" if visible else "領域を非表示にしました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_toggle_all_region_visibility(bpy.types.Operator):
+    bl_idname = "hgd.toggle_all_region_visibility"
+    bl_label = "表示切替"
+    bl_description = "全領域の生成物を1ボタンで表示/非表示に切り替えます"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        if not bpy.data.collections.get(utils.ROOT):
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
+            return {'CANCELLED'}
+        targets = _region_visibility_targets("ALL")
+        if not targets:
+            self.report({'WARNING'}, "領域オブジェクトが見つかりません。")
+            return {'CANCELLED'}
+        visible_count = sum(not obj.hide_viewport for obj in targets)
+        visible = visible_count == 0
+        for obj in targets:
+            obj.hide_viewport = not visible
+            obj.hide_render = not visible
+        self.report({'INFO'}, "全領域を表示しました。" if visible else "全領域を非表示にしました。")
         return {'FINISHED'}
 
 
@@ -4436,6 +4495,8 @@ classes = (
     HGD_OT_delete_hair_guides,
     HGD_OT_show_hide_guides,
     HGD_OT_region_visibility,
+    HGD_OT_toggle_region_visibility,
+    HGD_OT_toggle_all_region_visibility,
     HGD_OT_generate_placement_points,
     HGD_OT_clear_placement_points,
     HGD_OT_create_curve_from_points,
