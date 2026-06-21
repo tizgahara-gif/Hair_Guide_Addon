@@ -75,18 +75,16 @@ CARD_SELECTION_REDIRECT_TYPES = {"card_preview", "flat_mesh_preview", "card_mesh
 
 
 def _sync_card_width_preset_to_scene(scene):
-    """Apply the active non-CUSTOM CARD width preset to scene cm values."""
-    preset = getattr(scene, "hair_card_width_preset", "CUSTOM")
+    preset = scene.hair_card_width_preset
     if preset == "CUSTOM":
-        return False
+        return
     values = CARD_WIDTH_PRESETS.get(preset)
     if not values:
-        return False
+        return
     root, mid, tip = values
     scene.hair_card_width_root_cm = root
     scene.hair_card_width_mid_cm = mid
     scene.hair_card_width_tip_cm = tip
-    return True
 
 
 def _is_card_control_empty(obj):
@@ -2746,6 +2744,7 @@ def _sync_scene_card_width_settings_to_curve(scene, curve_obj):
     UI上のCARD幅設定を、対象CurveのCustom Propertyへ同期する。
     CARD Preview更新・表示モード適用の直前に必ず呼ぶ。
     """
+    _sync_card_width_preset_to_scene(scene)
     curve_obj["hair_card_mid_position"] = scene.hair_card_mid_position
     curve_obj["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
     curve_obj["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
@@ -3069,11 +3068,11 @@ class HGD_OT_apply_card_width_preset(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
         preset = scene.hair_card_width_preset
+        _sync_card_width_preset_to_scene(scene)
         if preset == "CUSTOM":
             self.report({'INFO'}, "カスタム設定を使用します。")
             return {'FINISHED'}
-        _sync_card_width_preset_to_scene(scene)
-        self.report({'INFO'}, f"CARD幅プリセット「{CARD_WIDTH_PRESET_LABELS[preset]}」を反映しました。")
+        self.report({'INFO'}, f"CARD幅プリセット「{CARD_WIDTH_PRESET_LABELS.get(preset, preset)}」を反映しました。")
         return {'FINISHED'}
 
 
