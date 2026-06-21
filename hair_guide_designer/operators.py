@@ -1326,10 +1326,16 @@ HGD_CURVE_DUPLICATE_COPY_PROPS = (
     "hair_curve_length_cm",
     "hair_curve_bevel_depth",
     "hair_curve_resolution",
-    "hair_card_roll_angle",
-    "hair_card_use_parallel_transport",
+    "hair_card_width_root_cm",
+    "hair_card_width_mid_cm",
+    "hair_card_width_tip_cm",
     "hair_card_mid_position",
     "hair_card_width_interpolation",
+    "hair_card_samples",
+    "hair_card_sync_widths",
+    "hair_card_synced_width_cm",
+    "hair_card_roll_angle",
+    "hair_card_use_parallel_transport",
     "strand_type",
     "root_radius",
     "tip_radius",
@@ -1453,8 +1459,9 @@ class HGD_OT_duplicate_selected_or_preview_source_curves(bpy.types.Operator):
             return {'CANCELLED'}
 
         created = [_duplicate_hgd_curve_object(context, src) for src in sources]
+        mode = getattr(context.scene, "hair_curve_display_mode", "CURVE")
         for new_obj in created:
-            _apply_display_mode_to_curve(context, new_obj)
+            _apply_duplicate_display_mode_keep_curve_width(context, new_obj, mode)
         _select_only_objects(context, created)
 
         self.report({'INFO'}, f"HGD Curve/Preview元Curveを{len(created)}本複製しました。")
@@ -2677,7 +2684,7 @@ def _build_flat_mesh_data(context, curve_obj):
     scene = context.scene
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return [], [], set()
-    sample_count = max(int(scene.hair_card_samples), 2)
+    sample_count = max(int(curve_obj.get("hair_card_samples", scene.hair_card_samples)), 2)
     samples = utils.sample_curve_world_points_evaluated(curve_obj, sample_count)
     if len(samples) < 2:
         return [], [], set()
@@ -2737,7 +2744,7 @@ def _apply_flat_mesh_custom_props(obj, curve_obj, scene, guide_type):
     obj["hair_card_width_tip_cm"] = tip_cm
     obj["hair_card_sync_widths"] = sync_widths
     obj["hair_card_synced_width_cm"] = synced_cm
-    obj["hair_card_samples"] = max(int(scene.hair_card_samples), 2)
+    obj["hair_card_samples"] = int(curve_obj.get("hair_card_samples", scene.hair_card_samples))
     obj["hair_card_mid_position"] = float(curve_obj.get("hair_card_mid_position", scene.hair_card_mid_position))
     obj["hair_card_width_interpolation"] = str(curve_obj.get("hair_card_width_interpolation", scene.hair_card_width_interpolation))
     obj["hair_flat_mesh_thickness"] = cm_to_m(scene.hair_flat_mesh_thickness_cm)
@@ -2837,6 +2844,7 @@ def _create_or_update_flat_mesh_preview_keep_curve_width(context, curve_obj):
     preview["hair_locked_preview"] = True
     preview["hair_editable"] = False
     curve_obj["hair_flat_mesh_preview_object"] = preview.name
+    _copy_curve_card_width_props_to_preview(preview, curve_obj, scene)
     _apply_work_mode_lock_to_object(context, preview)
     context.view_layer.update()
     return preview
@@ -3003,6 +3011,8 @@ CARD_WIDTH_CURVE_PROP_KEYS = (
     "hair_card_mid_position",
     "hair_card_width_interpolation",
     "hair_card_samples",
+    "hair_card_roll_angle",
+    "hair_card_use_parallel_transport",
 )
 
 
@@ -3078,6 +3088,22 @@ def _read_bool_prop(obj, key, fallback):
 
 def _store_scene_card_width_shape(curve_obj, scene):
     _sync_scene_card_width_settings_to_curve(scene, curve_obj)
+
+
+def _copy_curve_card_width_props_to_preview(preview, curve_obj, scene):
+    preview["hair_card_width_root_cm"] = float(curve_obj.get("hair_card_width_root_cm", scene.hair_card_width_root_cm))
+    preview["hair_card_width_mid_cm"] = float(curve_obj.get("hair_card_width_mid_cm", scene.hair_card_width_mid_cm))
+    preview["hair_card_width_tip_cm"] = float(curve_obj.get("hair_card_width_tip_cm", scene.hair_card_width_tip_cm))
+    preview["hair_card_mid_position"] = float(curve_obj.get("hair_card_mid_position", scene.hair_card_mid_position))
+    preview["hair_card_width_interpolation"] = str(curve_obj.get("hair_card_width_interpolation", scene.hair_card_width_interpolation))
+    preview["hair_card_samples"] = int(curve_obj.get("hair_card_samples", scene.hair_card_samples))
+    preview["hair_card_sync_widths"] = bool(curve_obj.get("hair_card_sync_widths", False))
+    preview["hair_card_synced_width_cm"] = float(curve_obj.get("hair_card_synced_width_cm", scene.hair_card_synced_width_cm))
+    preview["hair_card_roll_angle"] = float(curve_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle))
+    preview["hair_card_use_parallel_transport"] = bool(curve_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport))
+    preview["debug_card_width_root_cm"] = preview["hair_card_width_root_cm"]
+    preview["debug_card_width_mid_cm"] = preview["hair_card_width_mid_cm"]
+    preview["debug_card_width_tip_cm"] = preview["hair_card_width_tip_cm"]
 
 
 def _build_card_preview_mesh(context, curve_obj, name):
@@ -3203,9 +3229,7 @@ def _create_or_update_card_preview_keep_curve_width(context, curve_obj):
 
     _apply_card_preview_props(preview, curve_obj, scene, samples)
     _restore_custom_props(curve_obj, protected_props)
-    preview["debug_card_width_root_cm"] = float(curve_obj.get("hair_card_width_root_cm", scene.hair_card_width_root_cm))
-    preview["debug_card_width_mid_cm"] = float(curve_obj.get("hair_card_width_mid_cm", scene.hair_card_width_mid_cm))
-    preview["debug_card_width_tip_cm"] = float(curve_obj.get("hair_card_width_tip_cm", scene.hair_card_width_tip_cm))
+    _copy_curve_card_width_props_to_preview(preview, curve_obj, scene)
     preview["debug_card_vertex_count"] = len(preview.data.vertices)
     preview.hide_viewport = False
     preview.hide_render = False
@@ -3217,6 +3241,64 @@ def _create_or_update_card_preview_keep_curve_width(context, curve_obj):
     _apply_work_mode_lock_to_object(context, preview)
     context.view_layer.update()
     return preview
+
+
+def _apply_duplicate_display_mode_keep_curve_width(context, obj, mode):
+    if obj.type != "CURVE" or obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
+        return False
+    if mode == "CURVE":
+        obj.data.bevel_depth = 0.0
+        obj.data.bevel_object = None
+        obj.data.taper_object = None
+        _clear_all_previews_for_curve(obj)
+    elif mode == "SOLID":
+        obj.display_type = 'TEXTURED'
+        obj.data.bevel_object = None
+        obj.data.bevel_depth = _fallback_curve_bevel(context.scene, obj)
+        if context.scene.hair_use_shared_taper:
+            _apply_taper_to_curve_obj(context, obj)
+        else:
+            obj.data.taper_object = None
+            obj["hair_use_taper"] = False
+            obj["hair_taper_object"] = ""
+        _clear_all_previews_for_curve(obj)
+        _ensure_curve_visible_geometry(context, obj)
+    elif mode == "CARD":
+        obj.hide_viewport = False
+        obj.display_type = 'WIRE'
+        obj.data.bevel_depth = 0.0
+        obj.data.bevel_object = None
+        obj.data.taper_object = None
+        preview = _create_or_update_card_preview_keep_curve_width(context, obj)
+        if preview:
+            preview.hide_viewport = False
+            preview.hide_render = False
+            preview["hair_source_curve"] = obj.name
+            preview.hide_select = False
+            preview["hair_select_redirect"] = True
+            preview["hair_locked_preview"] = True
+        _set_card_preview_visible(obj, True)
+        _set_flat_mesh_preview_visible(obj, False)
+    elif mode == "FLAT_MESH":
+        obj.hide_viewport = False
+        obj.display_type = 'WIRE'
+        obj.data.bevel_depth = 0.0
+        obj.data.bevel_object = None
+        obj.data.taper_object = None
+        _set_card_preview_visible(obj, False)
+        preview = _create_or_update_flat_mesh_preview_keep_curve_width(context, obj)
+        if preview:
+            preview.hide_viewport = False
+            preview.hide_render = False
+            preview["hair_source_curve"] = obj.name
+            preview.hide_select = False
+            preview["hair_select_redirect"] = True
+            preview["hair_locked_preview"] = True
+        _set_flat_mesh_preview_visible(obj, True)
+    obj["hair_curve_display_mode"] = mode
+    if obj.get("hair_guide_type") == "twist_strand":
+        obj["hair_twist_display_preview_ready"] = True
+    return True
 
 
 def _card_mesh_name_for_curve(curve_obj):
