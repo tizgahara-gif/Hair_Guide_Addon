@@ -65,6 +65,21 @@ CARD_WIDTH_PRESET_LABELS = {
 CARD_SELECTION_REDIRECT_TYPES = {"card_preview", "flat_mesh_preview", "card_mesh", "flat_mesh"}
 
 
+def _sync_card_width_preset_to_scene(scene):
+    """Apply the active non-CUSTOM CARD width preset to scene cm values."""
+    preset = getattr(scene, "hair_card_width_preset", "CUSTOM")
+    if preset == "CUSTOM":
+        return False
+    values = CARD_WIDTH_PRESETS.get(preset)
+    if not values:
+        return False
+    root, mid, tip = values
+    scene.hair_card_width_root_cm = root
+    scene.hair_card_width_mid_cm = mid
+    scene.hair_card_width_tip_cm = tip
+    return True
+
+
 def _is_card_control_empty(obj):
     return bool(obj is not None and obj.type == 'EMPTY' and obj.get("hair_guide_type") == "card_control_empty")
 
@@ -2365,10 +2380,23 @@ def _flat_mesh_preview_name_for_curve(curve_obj):
     return f"{FLAT_MESH_PREVIEW_PREFIX}{curve_obj.name.split('.')[0]}"
 
 
-def _remove_flat_mesh_preview_for_curve(curve_obj):
+def _unlink_preview_reference_properties(curve_obj):
+    curve_obj["hair_card_preview_object"] = ""
+    curve_obj["hair_flat_mesh_preview_object"] = ""
+
+
+def _clear_flat_mesh_preview_for_curve(curve_obj):
+    removed = 0
     for obj in list(utils.generated_objects("flat_mesh_preview")):
         if obj.get("hair_source_curve") == curve_obj.name or obj.name == _flat_mesh_preview_name_for_curve(curve_obj):
             bpy.data.objects.remove(obj, do_unlink=True)
+            removed += 1
+    curve_obj["hair_flat_mesh_preview_object"] = ""
+    return removed
+
+
+def _remove_flat_mesh_preview_for_curve(curve_obj):
+    return _clear_flat_mesh_preview_for_curve(curve_obj)
 
 
 def _set_flat_mesh_preview_visible(curve_obj, visible):
@@ -2505,6 +2533,7 @@ def _create_flat_mesh_object(context, curve_obj, guide_type, name, collection):
 
 def _create_or_update_flat_mesh_preview(context, curve_obj):
     scene = context.scene
+    _clear_card_preview_for_curve(curve_obj)
     _sync_scene_card_width_settings_to_curve(scene, curve_obj)
     _, collections = utils.ensure_system()
     name = _flat_mesh_preview_name_for_curve(curve_obj)
@@ -2556,10 +2585,24 @@ def _card_preview_name_for_curve(curve_obj):
     return f"{CARD_PREVIEW_PREFIX}{curve_obj.name.split('.')[0]}"
 
 
-def _remove_card_preview_for_curve(curve_obj):
+def _clear_card_preview_for_curve(curve_obj):
+    removed = 0
     for obj in list(utils.generated_objects("card_preview")):
         if obj.get("hair_source_curve") == curve_obj.name or obj.name == _card_preview_name_for_curve(curve_obj):
             bpy.data.objects.remove(obj, do_unlink=True)
+            removed += 1
+    curve_obj["hair_card_preview_object"] = ""
+    return removed
+
+
+def _remove_card_preview_for_curve(curve_obj):
+    return _clear_card_preview_for_curve(curve_obj)
+
+
+def _clear_all_previews_for_curve(curve_obj):
+    removed = _clear_card_preview_for_curve(curve_obj)
+    removed += _clear_flat_mesh_preview_for_curve(curve_obj)
+    return removed
 
 
 def _set_card_preview_visible(curve_obj, visible):
@@ -2683,6 +2726,7 @@ def _apply_card_preview_props(preview, curve_obj, scene, samples):
 
 def _create_or_update_card_preview_for_scene(context, curve_obj):
     scene = context.scene
+    _clear_flat_mesh_preview_for_curve(curve_obj)
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return None
     name = _card_preview_name_for_curve(curve_obj)
@@ -2808,8 +2852,7 @@ def _apply_display_mode_to_curve(context, obj):
         obj.data.bevel_depth = 0.0
         obj.data.bevel_object = None
         obj.data.taper_object = None
-        _set_card_preview_visible(obj, False)
-        _set_flat_mesh_preview_visible(obj, False)
+        _clear_all_previews_for_curve(obj)
     elif mode == "SOLID":
         obj.display_type = 'TEXTURED'
         obj.data.bevel_object = None
@@ -2820,10 +2863,10 @@ def _apply_display_mode_to_curve(context, obj):
             obj.data.taper_object = None
             obj["hair_use_taper"] = False
             obj["hair_taper_object"] = ""
-        _set_card_preview_visible(obj, False)
-        _set_flat_mesh_preview_visible(obj, False)
+        _clear_all_previews_for_curve(obj)
         _ensure_curve_visible_geometry(context, obj)
     elif mode == "CARD":
+        _clear_flat_mesh_preview_for_curve(obj)
         _sync_scene_card_width_settings_to_curve(scene, obj)
         obj.hide_viewport = False
         obj.display_type = 'WIRE'
@@ -2841,6 +2884,7 @@ def _apply_display_mode_to_curve(context, obj):
         _set_card_preview_visible(obj, True)
         _set_flat_mesh_preview_visible(obj, False)
     elif mode == "FLAT_MESH":
+        _clear_card_preview_for_curve(obj)
         obj.hide_viewport = False
         obj.display_type = 'WIRE'
         obj.data.bevel_depth = 0.0
@@ -2934,10 +2978,7 @@ class HGD_OT_apply_card_width_preset(bpy.types.Operator):
         if preset == "CUSTOM":
             self.report({'INFO'}, "カスタム設定を使用します。")
             return {'FINISHED'}
-        root, mid, tip = CARD_WIDTH_PRESETS[preset]
-        scene.hair_card_width_root_cm = root
-        scene.hair_card_width_mid_cm = mid
-        scene.hair_card_width_tip_cm = tip
+        _sync_card_width_preset_to_scene(scene)
         self.report({'INFO'}, f"CARD幅プリセット「{CARD_WIDTH_PRESET_LABELS[preset]}」を反映しました。")
         return {'FINISHED'}
 
@@ -3100,6 +3141,7 @@ class HGD_OT_update_flat_mesh_previews_from_curves(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        _sync_card_width_preset_to_scene(context.scene)
         curves = _generated_curves_from_context(context, True)
         if not curves:
             curves = [
@@ -4108,6 +4150,7 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        _sync_card_width_preset_to_scene(context.scene)
         curves, twist_controls = _selected_card_update_targets(context)
         if not curves and not twist_controls:
             for obj in utils.generated_objects():
