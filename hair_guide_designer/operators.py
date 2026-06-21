@@ -432,6 +432,8 @@ BASIC_GUIDE_NAMES = {
     "HAIR_GUIDE_SideBoundary_L",
     "HAIR_GUIDE_SideBoundary_R",
     "HAIR_GUIDE_BackVolume",
+    "HAIR_GUIDE_BackUpper",
+    "HAIR_GUIDE_BackMiddle",
     "HAIR_GUIDE_Nape",
     "HAIR_GUIDE_Center",
 }
@@ -468,7 +470,7 @@ def _remove_detailed_guides():
 class HGD_OT_create_hair_guides(bpy.types.Operator):
     bl_idname = "hgd.create_hair_guides"
     bl_label = "基本ガイドを生成"
-    bl_description = "生え際、サイド境界、後頭部ボリューム、襟足、正中線だけの基本ガイドを生成します"
+    bl_description = "生え際、サイド境界、後頭部専用、襟足、正中線の基本ガイドを生成します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -513,12 +515,26 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
                 mathutils.Vector((center.x, back_out, nape_z - size.z * 0.03)),
                 mathutils.Vector((center.x + rx * 0.35, back_surface + size.y * 0.015, nape_z)),
             ]
+            back_upper_z = top * (1.0 - 0.38) + nape_z * 0.38
+            back_middle_z = top * (1.0 - 0.62) + nape_z * 0.62
+            back_upper_points = [
+                mathutils.Vector((center.x - size.x * 0.35, back_surface + size.y * 0.02, back_upper_z - size.z * 0.01)),
+                mathutils.Vector((center.x, back_out + size.y * 0.015, back_upper_z + size.z * 0.025)),
+                mathutils.Vector((center.x + size.x * 0.35, back_surface + size.y * 0.02, back_upper_z - size.z * 0.01)),
+            ]
+            back_middle_points = [
+                mathutils.Vector((center.x - size.x * 0.35, back_surface + size.y * 0.02, back_middle_z - size.z * 0.01)),
+                mathutils.Vector((center.x, back_out + size.y * 0.015, back_middle_z + size.z * 0.015)),
+                mathutils.Vector((center.x + size.x * 0.35, back_surface + size.y * 0.02, back_middle_z - size.z * 0.01)),
+            ]
 
             guide_specs = [
                 ("HAIR_GUIDE_Hairline", hairline_points, "Front"),
                 ("HAIR_GUIDE_SideBoundary_L", [mathutils.Vector((center.x - rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x - rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x - rx * 0.82, back_out - size.y * 0.16, back_volume_z + size.z * 0.02))], "Side"),
                 ("HAIR_GUIDE_SideBoundary_R", [mathutils.Vector((center.x + rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x + rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x + rx * 0.82, back_out - size.y * 0.16, back_volume_z + size.z * 0.02))], "Side"),
                 ("HAIR_GUIDE_BackVolume", back_points, "Back_Middle"),
+                ("HAIR_GUIDE_BackUpper", back_upper_points, "Back_Upper"),
+                ("HAIR_GUIDE_BackMiddle", back_middle_points, "Back_Middle"),
                 ("HAIR_GUIDE_Nape", nape_points, "Nape"),
                 ("HAIR_GUIDE_Center", [mathutils.Vector((center.x, center.y, top)), mathutils.Vector((center.x, center.y, nape_z))], "Back_Middle"),
             ]
@@ -620,6 +636,8 @@ class HGD_OT_create_detailed_guides(bpy.types.Operator):
 FRONT_BACK_SYMMETRY_GUIDES = (
     "HAIR_GUIDE_Hairline",
     "HAIR_GUIDE_BackVolume",
+    "HAIR_GUIDE_BackUpper",
+    "HAIR_GUIDE_BackMiddle",
     "HAIR_GUIDE_Nape",
 )
 
@@ -863,6 +881,7 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             guides = self._basic_guides()
             guide_count = sum(1 for obj in guides.values() if obj)
             used_fallback = False
+            used_back_guide_fallback = False
             rng = random.Random(scene.hair_seed)
             count_total = 0
             for region, base_count in self._preference_counts().items():
@@ -873,9 +892,9 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                 if positions is None:
                     positions = self._base_positions(region, count, min_v, max_v, center, size, scene.hair_guide_offset)
                     used_fallback = True
-                if region == "Back_Middle":
-                    count_total += self._create_back_middle_points(positions, rng, scene, collection, center, size, min_v, max_v)
-                    continue
+                if region in {"Back_Upper", "Back_Middle"} and not guides["back_upper" if region == "Back_Upper" else "back_middle"]:
+                    used_fallback = True
+                    used_back_guide_fallback = True
                 for i, base in enumerate(positions):
                     loc = self._jittered(region, base, rng, scene)
                     if region == "Top":
@@ -894,7 +913,9 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                     count_total += 1
             if guide_count == 0:
                 self.report({'WARNING'}, "基本ガイドが見つからないため、頭部Bounding Boxから配置点を生成しました。")
-            elif used_fallback or guide_count < 6:
+            elif used_back_guide_fallback:
+                self.report({'WARNING'}, "後頭部専用ガイドが無いため互換フォールバックで生成しました。基本ガイドを再生成してください。")
+            elif used_fallback:
                 self.report({'WARNING'}, "一部の基本ガイドが見つからないため、頭部Bounding Box基準で補完しました。")
             _apply_work_mode_lock_to_all_objects(context)
             if removed_points or removed_warnings:
@@ -913,8 +934,10 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             "side_r": utils.get_guide_object("HAIR_GUIDE_SideBoundary_R"),
             "top": utils.get_guide_object("HAIR_GUIDE_Top"),
             "back": utils.get_guide_object("HAIR_GUIDE_BackVolume"),
-            "back_upper": utils.get_guide_object("HAIR_GUIDE_Hachi") or utils.get_guide_object("HAIR_GUIDE_BackVolume"),
-            "back_middle": utils.get_guide_object("HAIR_GUIDE_Occipital") or utils.get_guide_object("HAIR_GUIDE_BackVolume"),
+            "back_upper": utils.get_guide_object("HAIR_GUIDE_BackUpper"),
+            "back_middle": utils.get_guide_object("HAIR_GUIDE_BackMiddle"),
+            "legacy_back_upper": utils.get_guide_object("HAIR_GUIDE_Hachi") or utils.get_guide_object("HAIR_GUIDE_BackVolume"),
+            "legacy_back_middle": utils.get_guide_object("HAIR_GUIDE_Occipital") or utils.get_guide_object("HAIR_GUIDE_BackVolume"),
             "nape": utils.get_guide_object("HAIR_GUIDE_Nape"),
             "center": utils.get_guide_object("HAIR_GUIDE_Center"),
         }
@@ -928,16 +951,22 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             return utils.sample_curve_world_points(guides["side_l"], count)
         if region == "Side_R" and guides["side_r"]:
             return utils.sample_curve_world_points(guides["side_r"], count)
-        if region == "Back_Upper" and guides["back_upper"]:
-            return self._back_layer_positions("Back_Upper", count, guides, min_v, max_v, center, size, offset)
-        if region == "Back_Middle" and guides["back_middle"]:
-            return self._back_layer_positions("Back_Middle", count, guides, min_v, max_v, center, size, offset)
+        if region == "Back_Upper":
+            if guides["back_upper"]:
+                return utils.sample_curve_world_points(guides["back_upper"], count)
+            if guides.get("legacy_back_upper"):
+                return self._back_layer_positions("Back_Upper", count, guides, min_v, max_v, center, size, offset)
+        if region == "Back_Middle":
+            if guides["back_middle"]:
+                return utils.sample_curve_world_points(guides["back_middle"], count)
+            if guides.get("legacy_back_middle"):
+                return self._back_layer_positions("Back_Middle", count, guides, min_v, max_v, center, size, offset)
         if region == "Nape" and guides["nape"]:
             return utils.sample_curve_world_points(guides["nape"], count)
         return None
 
     def _back_layer_positions(self, region, count, guides, min_v, max_v, center, size, offset):
-        guide_obj = guides["back_upper"] if region == "Back_Upper" else guides["back_middle"]
+        guide_obj = guides.get("legacy_back_upper") if region == "Back_Upper" else guides.get("legacy_back_middle")
         if region == "Back_Middle" and count > 1:
             sample_count = max(count // 2, 1)
         else:
