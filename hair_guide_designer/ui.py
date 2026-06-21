@@ -49,6 +49,7 @@ class HGD_PT_quick_flow(HGD_PT_base):
         box.operator('hgd.mirror_selected_curves', text='6. 選択Curveを複製', icon='MOD_MIRROR')
         box.prop(scene,'hair_curve_display_mode', text='7. 表示モード')
         box.operator('hgd.apply_display_mode_to_selected_curves', text='7. 選択対象へ表示モード適用', icon='RESTRICT_VIEW_OFF')
+        box.operator('hgd.refresh_preview_keep_curve_width', text='幅を維持してPreview更新', icon='FILE_REFRESH')
         box.operator('hgd.duplicate_selected_or_preview_source_curves', text='選択Curve/Preview元Curveを複製', icon='DUPLICATE')
         box.operator('hgd.toggle_final_edit_mode', text='8. 最終編集モード OFF' if scene.hair_final_edit_mode_enabled else '8. 最終編集モード ON', icon='HIDE_OFF' if scene.hair_final_edit_mode_enabled else 'MESH_DATA')
 

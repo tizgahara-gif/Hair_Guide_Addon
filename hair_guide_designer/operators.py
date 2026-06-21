@@ -2807,6 +2807,41 @@ def _create_or_update_flat_mesh_preview(context, curve_obj):
     return preview
 
 
+def _create_or_update_flat_mesh_preview_keep_curve_width(context, curve_obj):
+    scene = context.scene
+    if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
+        return None
+
+    protected_props = _snapshot_custom_props(curve_obj, CARD_WIDTH_CURVE_PROP_KEYS)
+    _clear_card_preview_for_curve(curve_obj)
+    _, collections = utils.ensure_system()
+    name = _flat_mesh_preview_name_for_curve(curve_obj)
+    new_mesh = _build_flat_mesh_mesh_data(context, curve_obj, name)
+    if not new_mesh:
+        _restore_custom_props(curve_obj, protected_props)
+        return None
+    existing = bpy.data.objects.get(name)
+    if existing and existing.get("hair_guide_type") == "flat_mesh_preview":
+        preview = _replace_preview_mesh_data(existing, new_mesh)
+    else:
+        preview = bpy.data.objects.new(name, new_mesh)
+        collections[utils.CARD_PREVIEWS].objects.link(preview)
+        if scene.hair_flat_mesh_add_subdivision:
+            sub = preview.modifiers.new("HGD_Subdivision_Surface", "SUBSURF")
+            sub.levels = 1
+            sub.render_levels = 1
+    _apply_flat_mesh_custom_props(preview, curve_obj, scene, "flat_mesh_preview")
+    _restore_custom_props(curve_obj, protected_props)
+    preview.hide_select = False
+    preview["hair_select_redirect"] = True
+    preview["hair_locked_preview"] = True
+    preview["hair_editable"] = False
+    curve_obj["hair_flat_mesh_preview_object"] = preview.name
+    _apply_work_mode_lock_to_object(context, preview)
+    context.view_layer.update()
+    return preview
+
+
 def _create_flat_mesh_from_curve(context, curve_obj):
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return None
@@ -2957,6 +2992,30 @@ def _card_width(scene, t, curve_obj=None):
     f = _ease((t - mid_pos) / (1.0 - mid_pos))
     return mid + (tip - mid) * f
 
+
+
+CARD_WIDTH_CURVE_PROP_KEYS = (
+    "hair_card_width_root_cm",
+    "hair_card_width_mid_cm",
+    "hair_card_width_tip_cm",
+    "hair_card_sync_widths",
+    "hair_card_synced_width_cm",
+    "hair_card_mid_position",
+    "hair_card_width_interpolation",
+    "hair_card_samples",
+)
+
+
+def _snapshot_custom_props(obj, keys):
+    return {key: (key in obj, obj.get(key)) for key in keys}
+
+
+def _restore_custom_props(obj, snapshot):
+    for key, (exists, value) in snapshot.items():
+        if exists:
+            obj[key] = value
+        elif key in obj:
+            del obj[key]
 
 def _sync_scene_card_width_settings_to_curve(scene, curve_obj):
     """
@@ -3117,6 +3176,46 @@ def _create_or_update_card_preview(context, curve_obj):
         preview.update_tag(refresh={'DATA'})
         context.view_layer.update()
         _apply_work_mode_lock_to_object(context, preview)
+    return preview
+
+
+def _create_or_update_card_preview_keep_curve_width(context, curve_obj):
+    scene = context.scene
+    if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
+        return None
+
+    protected_props = _snapshot_custom_props(curve_obj, CARD_WIDTH_CURVE_PROP_KEYS)
+    _clear_flat_mesh_preview_for_curve(curve_obj)
+    _remove_mismatched_card_previews_for_curve(curve_obj)
+    name = _card_preview_name_for_curve(curve_obj)
+    mesh, samples = _build_card_preview_mesh(context, curve_obj, name)
+    if not mesh:
+        _restore_custom_props(curve_obj, protected_props)
+        return None
+
+    existing = _find_card_preview_for_curve(curve_obj)
+    if existing:
+        preview = _replace_preview_mesh_data(existing, mesh)
+    else:
+        preview = bpy.data.objects.new(name, mesh)
+        _, collections = utils.ensure_system()
+        collections[utils.CARD_PREVIEWS].objects.link(preview)
+
+    _apply_card_preview_props(preview, curve_obj, scene, samples)
+    _restore_custom_props(curve_obj, protected_props)
+    preview["debug_card_width_root_cm"] = float(curve_obj.get("hair_card_width_root_cm", scene.hair_card_width_root_cm))
+    preview["debug_card_width_mid_cm"] = float(curve_obj.get("hair_card_width_mid_cm", scene.hair_card_width_mid_cm))
+    preview["debug_card_width_tip_cm"] = float(curve_obj.get("hair_card_width_tip_cm", scene.hair_card_width_tip_cm))
+    preview["debug_card_vertex_count"] = len(preview.data.vertices)
+    preview.hide_viewport = False
+    preview.hide_render = False
+    curve_obj["hair_card_preview_object"] = preview.name
+    if scene.hair_work_mode_lock_enabled:
+        preview.hide_select = False
+    preview.data.update()
+    preview.update_tag(refresh={'DATA'})
+    _apply_work_mode_lock_to_object(context, preview)
+    context.view_layer.update()
     return preview
 
 
@@ -4602,6 +4701,97 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def _resolve_keep_width_preview_curve_from_object(context, obj):
+    if not obj:
+        return None
+    guide_type = obj.get("hair_guide_type", "")
+    if obj.type == "CURVE" and guide_type in {"curve", "twist_strand"}:
+        return obj
+    if guide_type in {"card_preview", "flat_mesh_preview"}:
+        source = bpy.data.objects.get(obj.get("hair_source_curve", ""))
+        if source and source.type == "CURVE" and source.get("hair_guide_type") in {"curve", "twist_strand"}:
+            return source
+    return None
+
+
+def _resolve_keep_width_preview_curve_from_selection(context):
+    active = context.active_object
+    candidates = []
+    if active:
+        candidates.append(active)
+    candidates.extend([obj for obj in context.selected_objects if obj != active])
+    for obj in candidates:
+        curve_obj = _resolve_keep_width_preview_curve_from_object(context, obj)
+        if curve_obj:
+            return curve_obj
+    return None
+
+
+class HGD_OT_refresh_preview_keep_curve_width(bpy.types.Operator):
+    bl_idname = "hgd.refresh_preview_keep_curve_width"
+    bl_label = "幅を維持してPreview更新"
+    bl_description = "選択中のCurveまたはPreview参照元Curveについて、保存済みCARD幅を変更せずにPreviewだけ再生成します。"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        curve_obj = _resolve_keep_width_preview_curve_from_selection(context)
+        if not curve_obj:
+            self.report({'WARNING'}, "更新対象のCurveまたはPreview参照元Curveが見つかりません。")
+            return {'CANCELLED'}
+
+        scene = context.scene
+        mode = getattr(scene, "hair_curve_display_mode", "CARD")
+        updated = False
+        if mode == "FLAT_MESH":
+            curve_obj.hide_viewport = False
+            curve_obj.display_type = 'WIRE'
+            curve_obj.data.bevel_depth = 0.0
+            curve_obj.data.bevel_object = None
+            curve_obj.data.taper_object = None
+            preview = _create_or_update_flat_mesh_preview_keep_curve_width(context, curve_obj)
+            if preview:
+                _set_flat_mesh_preview_visible(curve_obj, True)
+                updated = True
+        elif mode == "SOLID":
+            curve_obj.display_type = 'TEXTURED'
+            curve_obj.data.bevel_object = None
+            curve_obj.data.bevel_depth = _fallback_curve_bevel(scene, curve_obj)
+            if scene.hair_use_shared_taper:
+                _apply_taper_to_curve_obj(context, curve_obj)
+            else:
+                curve_obj.data.taper_object = None
+                curve_obj["hair_use_taper"] = False
+                curve_obj["hair_taper_object"] = ""
+            _clear_all_previews_for_curve(curve_obj)
+            _ensure_curve_visible_geometry(context, curve_obj)
+            updated = True
+        elif mode == "CURVE":
+            curve_obj.data.bevel_depth = 0.0
+            curve_obj.data.bevel_object = None
+            curve_obj.data.taper_object = None
+            _clear_all_previews_for_curve(curve_obj)
+            updated = True
+        else:
+            curve_obj.hide_viewport = False
+            curve_obj.display_type = 'WIRE'
+            curve_obj.data.bevel_depth = 0.0
+            curve_obj.data.bevel_object = None
+            curve_obj.data.taper_object = None
+            preview = _create_or_update_card_preview_keep_curve_width(context, curve_obj)
+            if preview:
+                _set_card_preview_visible(curve_obj, True)
+                _set_flat_mesh_preview_visible(curve_obj, False)
+                updated = True
+
+        if not updated:
+            self.report({'WARNING'}, "Previewを更新できませんでした。")
+            return {'CANCELLED'}
+        curve_obj["hair_curve_display_mode"] = mode
+        context.view_layer.update()
+        self.report({'INFO'}, f"{curve_obj.name} のPreviewを保存済み幅のまま更新しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_apply_display_mode_to_selected_curves(bpy.types.Operator):
     bl_idname = "hgd.apply_display_mode_to_selected_curves"
     bl_label = "選択Curveへ表示モードを適用"
@@ -5544,6 +5734,7 @@ classes = (
     HGD_OT_move_selected_curve_origins_to_reference_empty,
     HGD_OT_cleanup_card_control_empties,
     HGD_OT_update_card_previews_from_curves,
+    HGD_OT_refresh_preview_keep_curve_width,
     HGD_OT_apply_display_mode_to_selected_curves,
     HGD_OT_apply_display_mode_to_all_curves,
     HGD_OT_load_selected_curve_settings,
