@@ -3603,6 +3603,18 @@ def _link_card_control_empty(empty):
     return collection
 
 
+def _is_object_in_view_layer(context, obj):
+    return bool(obj is not None and obj.name in context.view_layer.objects)
+
+
+def _ensure_object_in_active_scene_collection(context, obj):
+    if obj is not None and not _is_object_in_view_layer(context, obj):
+        try:
+            context.scene.collection.objects.link(obj)
+        except RuntimeError:
+            pass
+
+
 def _mark_card_control_empty(empty):
     empty["hair_guide_type"] = "card_control_empty"
     empty["hair_card_control_empty"] = True
@@ -3615,6 +3627,8 @@ def _setup_card_control_empty(context, empty):
     empty.empty_display_size = 0.08
     _mark_card_control_empty(empty)
     _link_card_control_empty(empty)
+    _ensure_object_in_active_scene_collection(context, empty)
+    context.scene.hair_selected_card_control_empty = empty
     _apply_work_mode_lock_to_object(context, empty)
     return empty
 
@@ -3650,20 +3664,6 @@ def _resolve_shared_card_control_empty(context, curves):
     pointer_empty = getattr(context.scene, "hair_selected_card_control_empty", None)
     if _is_card_control_empty(pointer_empty):
         return pointer_empty
-
-    selected_empty = next((obj for obj in context.selected_objects if obj.type == 'EMPTY' and (obj.get("hair_guide_type") == "card_control_empty" or obj.name.startswith("HGD_CARD_CTRL"))), None)
-    if selected_empty:
-        return selected_empty
-
-    for curve in curves:
-        empty = bpy.data.objects.get(curve.get("hair_card_control_empty", ""))
-        if empty and empty.type == 'EMPTY':
-            return empty
-
-    for name in (CARD_CONTROL_SHARED_NAME, "HGD_CARD_CTRL_FRONT", "HGD_CARD_CTRL_SIDE", "HGD_CARD_CTRL_BACK", "HGD_CARD_CTRL_TOP"):
-        empty = bpy.data.objects.get(name)
-        if empty and empty.type == 'EMPTY':
-            return empty
     return None
 
 def _object_is_missing_card_control_empty(curve_obj):
@@ -3875,7 +3875,7 @@ class HGD_OT_create_card_control_empty(bpy.types.Operator):
     def execute(self, context):
         curves = resolve_card_display_curves_from_selection(context)
         if not curves:
-            self.report({'WARNING'}, "CARD Control Emptyを割り当てるCurveが見つかりません。")
+            self.report({'WARNING'}, "参照Emptyを割り当てるCurveがありません。")
             return {'CANCELLED'}
 
         empty = _resolve_shared_card_control_empty(context, curves)
@@ -4049,7 +4049,14 @@ class HGD_OT_select_shared_card_control_empty(bpy.types.Operator):
         if not empty:
             self.report({'WARNING'}, "参照Emptyが見つかりません。")
             return {'CANCELLED'}
+        _ensure_object_in_active_scene_collection(context, empty)
+        context.view_layer.update()
+        if not _is_object_in_view_layer(context, empty):
+            self.report({'WARNING'}, "参照Emptyは現在のViewLayerに存在しないため選択できません。")
+            return {'CANCELLED'}
         bpy.ops.object.select_all(action='DESELECT')
+        empty.hide_viewport = False
+        empty.hide_select = False
         empty.select_set(True)
         context.view_layer.objects.active = empty
         self.report({'INFO'}, "参照Emptyを選択しました。")
@@ -4101,14 +4108,14 @@ class HGD_OT_assign_pointer_card_control_empty(bpy.types.Operator):
 class HGD_OT_cleanup_card_control_empties(bpy.types.Operator):
     bl_idname = "hgd.cleanup_card_control_empties"
     bl_label = "未使用CARD Control Emptyを削除"
-    bl_description = "どのCurveからも参照されていないCARD Control Emptyを削除します（共有Emptyは残します）"
+    bl_description = "どのCurveからも参照されていないCARD Control Emptyを削除します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         referenced = {obj.get("hair_card_control_empty", "") for obj in bpy.data.objects if obj.type == "CURVE" and obj.get("hair_card_control_empty", "")}
         removed = 0
         for obj in list(bpy.data.objects):
-            if obj.type != 'EMPTY' or obj.name == CARD_CONTROL_SHARED_NAME:
+            if obj.type != 'EMPTY':
                 continue
             is_card_empty = obj.get("hair_guide_type") == "card_control_empty" or obj.name.startswith("HGD_CARD_CTRL")
             if is_card_empty and obj.name not in referenced:
