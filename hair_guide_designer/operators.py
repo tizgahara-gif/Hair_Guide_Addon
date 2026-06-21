@@ -92,6 +92,60 @@ def _assign_latest_card_control_empty_if_available(context, curve_obj):
     return True
 
 
+
+
+def _reference_empty_for_curve(curve_obj):
+    empty_name = curve_obj.get("hair_card_control_empty", "") if curve_obj else ""
+    empty = bpy.data.objects.get(empty_name) if empty_name else None
+    if _is_card_control_empty(empty):
+        return empty
+    return None
+
+
+def _move_curve_origin_to_world_position_keep_shape(curve_obj, new_origin_world):
+    """Move only the Curve object origin while preserving its world-space shape."""
+    if not curve_obj or curve_obj.type != "CURVE":
+        return False
+
+    old_matrix = curve_obj.matrix_world.copy()
+    old_origin_world = old_matrix.translation.copy()
+    new_origin_world = mathutils.Vector(new_origin_world)
+    delta_world = new_origin_world - old_origin_world
+
+    if delta_world.length < 1e-8:
+        return True
+
+    new_matrix = old_matrix.copy()
+    new_matrix.translation = new_origin_world
+    curve_obj.matrix_world = new_matrix
+
+    delta_local = curve_obj.matrix_world.inverted().to_3x3() @ delta_world
+
+    for spline in curve_obj.data.splines:
+        if spline.type == "BEZIER":
+            for bp in spline.bezier_points:
+                bp.co -= delta_local
+                bp.handle_left -= delta_local
+                bp.handle_right -= delta_local
+        elif spline.type in {"POLY", "NURBS"}:
+            for point in spline.points:
+                point.co.x -= delta_local.x
+                point.co.y -= delta_local.y
+                point.co.z -= delta_local.z
+
+    curve_obj.data.update_tag()
+    curve_obj.update_tag(refresh={'OBJECT', 'DATA'})
+    return True
+
+
+def _move_curve_origin_to_reference_empty_if_enabled(context, curve_obj):
+    if not getattr(context.scene, "hair_curve_origin_to_reference_empty", True):
+        return False
+    empty = _reference_empty_for_curve(curve_obj)
+    if not empty:
+        return False
+    return _move_curve_origin_to_world_position_keep_shape(curve_obj, empty.matrix_world.translation)
+
 def _is_work_mode_lock_editable(obj):
     return obj.get("hair_guide_type") in WORK_MODE_LOCK_EDITABLE_TYPES
 
@@ -1010,6 +1064,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 obj["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
                 if "hair_card_control_empty" not in obj:
                     _assign_latest_card_control_empty_if_available(context, obj)
+                _move_curve_origin_to_reference_empty_if_enabled(context, obj)
                 _set_curve_mirror_metadata(obj, point)
                 obj["strand_type"] = scene.hair_strand_type
                 obj["root_radius"] = scene.hair_curve_root_radius
@@ -1757,6 +1812,7 @@ def _make_twist_from_point(context, point):
     control["hair_card_mid_position"] = scene.hair_card_mid_position
     control["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
     _assign_latest_card_control_empty_if_available(context, control)
+    _move_curve_origin_to_reference_empty_if_enabled(context, control)
     _set_curve_mirror_metadata(control, point)
     control.data.resolution_u = scene.hair_twist_resolution
     _set_twist_control_display(control)
@@ -3290,6 +3346,59 @@ def resolve_card_display_curve_from_object(context, obj):
 
 
 
+def _resolve_origin_move_curve_from_object(obj):
+    if not obj:
+        return None
+    guide_type = obj.get("hair_guide_type", "")
+    if obj.type == "CURVE" and guide_type in {"curve", "twist_control"}:
+        return obj
+    if guide_type == "twist_strand":
+        control = bpy.data.objects.get(obj.get("hair_twist_control", ""))
+        if control and control.type == "CURVE" and control.get("hair_guide_type") == "twist_control":
+            return control
+        return None
+    if guide_type in CARD_SELECTION_REDIRECT_TYPES:
+        source = bpy.data.objects.get(obj.get("hair_source_curve", ""))
+        if not source:
+            return None
+        source_type = source.get("hair_guide_type", "")
+        if source.type == "CURVE" and source_type in {"curve", "twist_control"}:
+            return source
+        if source_type == "twist_strand":
+            control = bpy.data.objects.get(source.get("hair_twist_control", ""))
+            if control and control.type == "CURVE" and control.get("hair_guide_type") == "twist_control":
+                return control
+    return None
+
+
+class HGD_OT_move_selected_curve_origins_to_reference_empty(bpy.types.Operator):
+    bl_idname = "hgd.move_selected_curve_origins_to_reference_empty"
+    bl_label = "選択Curve原点を参照Emptyへ移動"
+    bl_description = "参照Emptyがある選択Curveの見た目を維持したまま、Object原点をEmpty位置へ移動します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        targets = []
+        seen = set()
+        for obj in context.selected_objects:
+            curve = _resolve_origin_move_curve_from_object(obj)
+            if curve and curve.name not in seen:
+                targets.append(curve)
+                seen.add(curve.name)
+
+        moved = 0
+        for curve in targets:
+            empty = _reference_empty_for_curve(curve)
+            if empty and _move_curve_origin_to_world_position_keep_shape(curve, empty.matrix_world.translation):
+                moved += 1
+
+        if moved == 0:
+            self.report({'WARNING'}, "参照Emptyがある選択Curveが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"{moved}本のCurve原点を参照Emptyへ移動しました。")
+        return {'FINISHED'}
+
+
 
 CARD_CONTROL_SHARED_NAME = "HGD_CARD_CTRL_SHARED"
 
@@ -4533,6 +4642,7 @@ classes = (
     HGD_OT_select_shared_card_control_empty,
     HGD_OT_load_card_control_empty_from_selected,
     HGD_OT_assign_pointer_card_control_empty,
+    HGD_OT_move_selected_curve_origins_to_reference_empty,
     HGD_OT_cleanup_card_control_empties,
     HGD_OT_update_card_previews_from_curves,
     HGD_OT_apply_display_mode_to_selected_curves,

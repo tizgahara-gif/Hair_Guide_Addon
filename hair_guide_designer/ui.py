@@ -72,6 +72,8 @@ class HGD_PT_curve_shape(HGD_PT_base):
     def draw(self, context):
         scene=context.scene; box=_section_box(self.layout,'Curve Shape','CURVE_BEZCURVE','[CURVE]')
         box.prop(scene,'hair_strand_generation_type'); box.operator('hgd.create_curve_from_points', text='Curve生成')
+        box.prop(scene,'hair_curve_origin_to_reference_empty'); box.operator('hgd.move_selected_curve_origins_to_reference_empty', text='選択Curve原点を参照Emptyへ移動')
+        box.label(text='参照EmptyがあるCurveは見た目を維持して原点をEmpty位置へ移動します。', icon='INFO')
         box.prop(scene,'hair_curve_length_cm', text='毛束長さ(cm)'); box.label(text='毛先長さは新規生成時のみ反映されます。', icon='INFO')
         for p in ['hair_curve_bevel_depth_cm','hair_curve_segment_count','hair_use_shared_taper','hair_taper_preset','hair_taper_root_radius','hair_taper_mid_radius','hair_taper_tip_radius','hair_curve_variation_enabled']:
             box.prop(scene,p)
