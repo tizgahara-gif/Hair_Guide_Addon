@@ -112,6 +112,32 @@ def _assign_latest_card_control_empty_if_available(context, curve_obj):
 
 
 
+
+def _curve_first_point_world(obj):
+    """Return the first Bezier point world coordinate for a Curve object."""
+    if not obj or obj.type != "CURVE" or not obj.data:
+        return None
+    for spline in obj.data.splines:
+        if spline.type == "BEZIER" and spline.bezier_points:
+            return obj.matrix_world @ spline.bezier_points[0].co
+    return None
+
+
+def _restore_curve_root_world(obj, target_world):
+    """Translate the whole Curve object so its first Bezier point matches target_world."""
+    current_root_world = _curve_first_point_world(obj)
+    if current_root_world is None:
+        return False
+    target_world = mathutils.Vector(target_world)
+    delta = target_world - current_root_world
+    if delta.length < 1e-8:
+        return True
+    matrix = obj.matrix_world.copy()
+    matrix.translation = matrix.translation + delta
+    obj.matrix_world = matrix
+    obj.update_tag(refresh={'OBJECT', 'DATA'})
+    return True
+
 def _reference_empty_for_curve(curve_obj):
     empty_name = curve_obj.get("hair_card_control_empty", "") if curve_obj else ""
     empty = bpy.data.objects.get(empty_name) if empty_name else None
@@ -1206,6 +1232,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 _ensure_curve_visible_geometry(context, obj)
                 if scene.hair_card_auto_apply_to_new_curves:
                     _apply_display_mode_to_curve(context, obj)
+                _restore_curve_root_world(obj, root_world)
                 curves_by_point[point.name] = obj
                 made += 1
             _apply_work_mode_lock_to_all_objects(context)
