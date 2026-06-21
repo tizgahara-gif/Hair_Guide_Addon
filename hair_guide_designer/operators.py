@@ -212,7 +212,14 @@ def _move_curve_origin_to_reference_empty_if_enabled(context, curve_obj):
         return False
     return _move_curve_origin_to_world_position_keep_shape(curve_obj, empty.matrix_world.translation)
 
+def _is_in_hair_guide_collection(obj):
+    root = bpy.data.collections.get(utils.ROOT)
+    return bool(root and obj in utils.collection_objects_recursive(root))
+
+
 def _is_work_mode_lock_editable(obj):
+    if not obj or not _is_in_hair_guide_collection(obj):
+        return False
     return obj.get("hair_guide_type") in WORK_MODE_LOCK_EDITABLE_TYPES
 
 
@@ -238,11 +245,33 @@ def _apply_work_mode_lock_to_all_objects(context):
         _apply_work_mode_lock_to_object(context, obj)
 
 
+def _sync_work_mode_lock(context):
+    if context.scene.hair_work_mode_lock_enabled:
+        _apply_work_mode_lock_to_all_objects(context)
+    else:
+        _restore_work_mode_lock(context)
+
+
 def _restore_work_mode_lock(context):
     for obj in context.scene.objects:
         if WORK_MODE_LOCK_PREV_KEY in obj:
             obj.hide_select = bool(obj[WORK_MODE_LOCK_PREV_KEY])
             del obj[WORK_MODE_LOCK_PREV_KEY]
+
+
+class HGD_OT_apply_work_mode_lock(bpy.types.Operator):
+    bl_idname = "hgd.apply_work_mode_lock"
+    bl_label = "作業集中モードを反映"
+    bl_description = "作業集中モードのON/OFFを現在のオブジェクト選択可否へ反映します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        _sync_work_mode_lock(context)
+        if context.scene.hair_work_mode_lock_enabled:
+            self.report({'INFO'}, "作業集中モードを有効化し、hair_guide外のオブジェクトを選択不可にしました。")
+        else:
+            self.report({'INFO'}, "作業集中モードを解除し、選択可否を復元しました。")
+        return {'FINISHED'}
 
 
 class HGD_OT_toggle_work_mode_lock(bpy.types.Operator):
@@ -253,14 +282,12 @@ class HGD_OT_toggle_work_mode_lock(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
+        scene.hair_work_mode_lock_enabled = not scene.hair_work_mode_lock_enabled
+        _sync_work_mode_lock(context)
         if scene.hair_work_mode_lock_enabled:
-            scene.hair_work_mode_lock_enabled = False
-            _restore_work_mode_lock(context)
-            self.report({'INFO'}, "Hair Guide作業ロックを解除し、選択状態を復元しました。")
-        else:
-            scene.hair_work_mode_lock_enabled = True
-            _apply_work_mode_lock_to_all_objects(context)
             self.report({'INFO'}, "Hair Guide作業ロックを有効化しました。他オブジェクトは選択不可です。")
+        else:
+            self.report({'INFO'}, "Hair Guide作業ロックを解除し、選択状態を復元しました。")
         return {'FINISHED'}
 
 
@@ -5301,6 +5328,7 @@ class HGD_OT_reload_keymaps(bpy.types.Operator):
 
 classes = (
     HGD_OT_reload_keymaps,
+    HGD_OT_apply_work_mode_lock,
     HGD_OT_toggle_work_mode_lock,
     HGD_OT_toggle_final_edit_mode,
     HGD_OT_finish_hair_guide_work,
