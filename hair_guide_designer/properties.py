@@ -71,7 +71,7 @@ PROPERTY_NAMES = (
     "hair_card_width_root", "hair_card_width_root_cm", "hair_card_width_mid", "hair_card_width_mid_cm",
     "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_mid_position", "hair_card_width_interpolation", "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
     "hair_card_use_parallel_transport", "hair_card_default_roll_angle",
-    "hair_card_control_empty_mode", "hair_card_flip_side",
+    "hair_card_control_empty_mode", "hair_card_flip_side", "hair_auto_assign_latest_card_control_empty",
     "hair_card_auto_apply_to_new_curves", "hair_card_auto_update_preview", "hair_card_auto_select_edit_curve", "hair_show_display_mode_settings",
     "hair_curve_profile_type", "hair_flat_profile_fallback_to_round", "hair_curve_flat_width",
     "hair_curve_flat_thickness", "hair_flat_mesh_width", "hair_flat_mesh_width_cm", "hair_flat_mesh_thickness", "hair_flat_mesh_thickness_cm",
@@ -758,6 +758,11 @@ def register():
         name="詳細を表示",
         default=False,
         description="互換Propertyやデバッグ/保守用設定を表示します。",
+    )
+    scene.hair_auto_assign_latest_card_control_empty = BoolProperty(
+        name="Curve生成時に最新参照Emptyを自動割当",
+        default=True,
+        description="Curve生成時、参照可能なCARD Control Emptyがあれば参照Emptyを優先し、なければ最新のEmptyを自動割り当てします。",
     )
 
     scene.hair_twist_segments = IntProperty(

@@ -83,6 +83,8 @@ class HGD_PT_card_flat_preview(HGD_PT_base):
         ctrl=_section_box(self.layout,'CARD方向制御','EMPTY_SINGLE_ARROW','[CARD]')
         ctrl.operator('hgd.create_card_control_empty', text='共有CARD Control Empty作成/割当')
         ctrl.prop(scene,'hair_selected_card_control_empty', text='参照Empty')
+        ctrl.label(text='Curve生成時、参照可能なCARD Control Emptyが存在する場合は自動で最新のEmptyを割り当てます。', icon='INFO')
+        ctrl.label(text='特定Emptyを使いたい場合は「参照Empty」に指定してください。')
         ctrl.operator('hgd.load_card_control_empty_from_selected', text='選択Curveから参照Empty読み込み')
         ctrl.operator('hgd.assign_pointer_card_control_empty', text='参照Emptyを選択Curveへ割当')
         ctrl.operator('hgd.share_card_control_empty_to_selected_curves', text='参照Empty共有')
@@ -121,7 +123,7 @@ class HGD_PT_advanced(HGD_PT_base):
         box.operator('hgd.lock_twist_visual_curves', text='ツイスト表示Curveを選択不可')
         box.operator('hgd.toggle_in_front_generated_helpers', text='最前面表示切替')
         box.label(text='Seedランダム化: Curve Shapeの個体差詳細を開いて設定します。', icon='INFO')
-        for p in ['hair_curve_bevel_depth','hair_curve_root_radius','hair_curve_tip_radius','hair_flat_profile_fallback_to_round','hair_card_auto_apply_to_new_curves','hair_card_auto_update_preview','hair_card_auto_select_edit_curve']:
+        for p in ['hair_curve_bevel_depth','hair_curve_root_radius','hair_curve_tip_radius','hair_flat_profile_fallback_to_round','hair_card_auto_apply_to_new_curves','hair_card_auto_update_preview','hair_card_auto_select_edit_curve','hair_auto_assign_latest_card_control_empty']:
             box.prop(scene,p)
 
 class HGD_MT_hair_guide_pie(bpy.types.Menu):
