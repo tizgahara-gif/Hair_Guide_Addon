@@ -66,9 +66,6 @@ class HGD_PT_guides_points(HGD_PT_base):
         _all_region_buttons(box)
         for args in [('頭頂部','Top'),('前髪','Front'),('側頭部','Side'),('左側','Side_L'),('右側','Side_R'),('後頭部上層','Back_Upper'),('後頭部中層','Back_Middle'),('襟足','Nape')]: _region_buttons(box,*args)
         box.operator('hgd.symmetrize_front_back_guides', text='前後ガイド左右対称化', icon='MOD_MIRROR')
-        finish=_section_box(self.layout,'作業完了','CHECKMARK','[GUIDE]')
-        finish.label(text='出力Meshだけを残し、ガイド・配置点・Curve・Preview・Emptyを削除します。', icon='INFO')
-        finish.operator('hgd.finish_hair_guide_work', text='作業終了：出力Meshのみ残す', icon='CHECKMARK')
 
 class HGD_PT_curve_shape(HGD_PT_base):
     bl_label='[CURVE] Curve Shape'; bl_order=3
@@ -134,9 +131,8 @@ class HGD_PT_cleanup_utility(HGD_PT_base):
     bl_label='[CLEANUP] Cleanup / Utility'; bl_order=8
     def draw(self, context):
         box=_section_box(self.layout,'Cleanup / Utility','TRASH','[CLEANUP]')
-        for op,text in [('hgd.clear_card_previews','CARD Preview削除'),('hgd.clear_flat_mesh_previews','Flat Mesh Preview削除'),('hgd.clear_placement_points','配置点削除'),('hgd.delete_hair_guides','ガイド削除'),('hgd.clear_warnings','Warning削除'),('hgd.cleanup_card_control_empties','未使用CARD Control Empty削除'),('hgd.organize_curves_by_region','hair_guideへ整理')]: box.operator(op,text=text, icon='TRASH')
+        for op,text in [('hgd.clear_card_previews','CARD Preview削除'),('hgd.clear_flat_mesh_previews','Flat Mesh Preview削除'),('hgd.clear_placement_points','配置点削除'),('hgd.delete_hair_guides','ガイド削除'),('hgd.cleanup_card_control_empties','未使用CARD Control Empty削除'),('hgd.organize_curves_by_region','hair_guideへ整理')]: box.operator(op,text=text, icon='TRASH')
         box.operator('hgd.clear_all_generated', text='全生成物削除（確認あり）', icon='ERROR')
-        box.operator('hgd.finish_hair_guide_work', text='作業終了：出力Meshのみ残す', icon='CHECKMARK')
 
 class HGD_PT_advanced(HGD_PT_base):
     bl_label='Advanced'; bl_order=9; bl_options={'DEFAULT_CLOSED'}
