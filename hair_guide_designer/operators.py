@@ -1318,92 +1318,146 @@ def _hair_curve_name_prefix(region):
     return HAIR_CURVE_NAME_PREFIXES.get(region, "HAIR_CURVE")
 
 
+HGD_CURVE_DUPLICATE_COPY_PROPS = (
+    "hair_region",
+    "hair_root_id",
+    "hair_source_point",
+    "hair_curve_length",
+    "hair_curve_length_cm",
+    "hair_curve_bevel_depth",
+    "hair_curve_resolution",
+    "hair_card_roll_angle",
+    "hair_card_use_parallel_transport",
+    "hair_card_mid_position",
+    "hair_card_width_interpolation",
+    "strand_type",
+    "root_radius",
+    "tip_radius",
+    "taper_strength",
+    "segment_count",
+)
+HGD_CURVE_DUPLICATE_PREVIEW_REF_PROPS = (
+    "hair_card_preview_object",
+    "hair_flat_mesh_preview_object",
+    "hair_card_mesh_object",
+    "hair_flat_mesh_object",
+)
+
+
+def _is_hgd_control_curve(obj):
+    return bool(obj and obj.type == "CURVE" and obj.get("hair_guide_type") == "curve")
+
+
+def _resolve_duplicate_source_curve_from_object(obj):
+    if not obj:
+        return None
+    guide_type = obj.get("hair_guide_type", "")
+    if guide_type == "curve" and obj.type == "CURVE":
+        return obj
+    if guide_type in {"card_preview", "flat_mesh_preview"}:
+        source = bpy.data.objects.get(obj.get("hair_source_curve", ""))
+        if _is_hgd_control_curve(source):
+            return source
+    return None
+
+
+def _duplicate_hgd_curve_object(context, src):
+    region = src.get("hair_region", "")
+    prefix = _hair_curve_name_prefix(region)
+    curves = utils.get_curve_collection(region, "curve")
+    curve_data = src.data.copy()
+    new_obj = bpy.data.objects.new(utils.unique_numbered(prefix), curve_data)
+    curves.objects.link(new_obj)
+    new_obj.matrix_world = src.matrix_world.copy()
+
+    utils.set_common_props(new_obj, "curve", region, context.scene)
+    for prop_name in HGD_CURVE_DUPLICATE_COPY_PROPS:
+        if prop_name in src:
+            new_obj[prop_name] = src[prop_name]
+    new_obj["hair_guide_type"] = "curve"
+    new_obj["hair_region"] = region
+    new_obj["hair_curve_profile_type"] = "ROUND"
+
+    if "hair_card_control_empty" in src:
+        empty_name = src.get("hair_card_control_empty", "")
+        if empty_name and bpy.data.objects.get(empty_name):
+            new_obj["hair_card_control_empty"] = empty_name
+    if "hair_card_control_empty" not in new_obj:
+        _assign_latest_card_control_empty_if_available(context, new_obj)
+
+    for prop_name in HGD_CURVE_DUPLICATE_PREVIEW_REF_PROPS:
+        if prop_name in new_obj:
+            del new_obj[prop_name]
+
+    _ensure_curve_visible_geometry(context, new_obj)
+    _apply_work_mode_lock_to_object(context, new_obj)
+    return new_obj
+
+
+def _unique_duplicate_source_curves_from_selection(context, resolver):
+    sources = []
+    seen = set()
+    for obj in context.selected_objects:
+        src = resolver(obj)
+        if src and src.name not in seen:
+            sources.append(src)
+            seen.add(src.name)
+    return sources
+
+
+def _select_only_objects(context, objects):
+    for obj in context.selected_objects:
+        obj.select_set(False)
+    for obj in objects:
+        obj.select_set(True)
+    context.view_layer.objects.active = objects[-1] if objects else None
+
+
 class HGD_OT_duplicate_selected_hair_curves(bpy.types.Operator):
     bl_idname = "hgd.duplicate_selected_hair_curves"
     bl_label = "選択Curveを複製"
     bl_description = "選択中のHGD Curveを、現在の形状とワールド位置を維持した独立Curveとして複製します"
     bl_options = {'REGISTER', 'UNDO'}
 
-    COPY_PROPS = (
-        "hair_region",
-        "hair_root_id",
-        "hair_source_point",
-        "hair_curve_length",
-        "hair_curve_length_cm",
-        "hair_curve_bevel_depth",
-        "hair_curve_resolution",
-        "hair_card_roll_angle",
-        "hair_card_use_parallel_transport",
-        "hair_card_mid_position",
-        "hair_card_width_interpolation",
-        "strand_type",
-        "root_radius",
-        "tip_radius",
-        "taper_strength",
-        "segment_count",
-    )
-    PREVIEW_REF_PROPS = (
-        "hair_card_preview_object",
-        "hair_flat_mesh_preview_object",
-        "hair_card_mesh_object",
-        "hair_flat_mesh_object",
-    )
-
     @classmethod
     def poll(cls, context):
-        return any(cls._is_target_curve(obj) for obj in context.selected_objects)
-
-    @staticmethod
-    def _is_target_curve(obj):
-        return bool(obj and obj.type == "CURVE" and obj.get("hair_guide_type") == "curve")
+        return any(_is_hgd_control_curve(obj) for obj in context.selected_objects)
 
     def execute(self, context):
-        sources = [obj for obj in context.selected_objects if self._is_target_curve(obj)]
+        sources = _unique_duplicate_source_curves_from_selection(context, _is_hgd_control_curve)
         if not sources:
             self.report({'WARNING'}, "複製対象のHGD Curveが選択されていません。")
             return {'CANCELLED'}
 
-        created = []
-        scene = context.scene
-        for src in sources:
-            region = src.get("hair_region", "")
-            prefix = _hair_curve_name_prefix(region)
-            curves = utils.get_curve_collection(region, "curve")
-            curve_data = src.data.copy()
-            new_obj = bpy.data.objects.new(utils.unique_numbered(prefix), curve_data)
-            curves.objects.link(new_obj)
-            new_obj.matrix_world = src.matrix_world.copy()
-
-            utils.set_common_props(new_obj, "curve", region, scene)
-            for prop_name in self.COPY_PROPS:
-                if prop_name in src:
-                    new_obj[prop_name] = src[prop_name]
-            new_obj["hair_guide_type"] = "curve"
-            new_obj["hair_region"] = region
-            new_obj["hair_curve_profile_type"] = "ROUND"
-
-            if "hair_card_control_empty" in src:
-                empty_name = src.get("hair_card_control_empty", "")
-                if empty_name and bpy.data.objects.get(empty_name):
-                    new_obj["hair_card_control_empty"] = empty_name
-            if "hair_card_control_empty" not in new_obj:
-                _assign_latest_card_control_empty_if_available(context, new_obj)
-
-            for prop_name in self.PREVIEW_REF_PROPS:
-                if prop_name in new_obj:
-                    del new_obj[prop_name]
-
-            _ensure_curve_visible_geometry(context, new_obj)
-            _apply_work_mode_lock_to_object(context, new_obj)
-            created.append(new_obj)
-
-        for obj in context.selected_objects:
-            obj.select_set(False)
-        for obj in created:
-            obj.select_set(True)
-        context.view_layer.objects.active = created[-1]
+        created = [_duplicate_hgd_curve_object(context, src) for src in sources]
+        _select_only_objects(context, created)
 
         self.report({'INFO'}, f"HGD Curveを{len(created)}本複製しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_duplicate_selected_or_preview_source_curves(bpy.types.Operator):
+    bl_idname = "hgd.duplicate_selected_or_preview_source_curves"
+    bl_label = "選択Curve/Preview元Curveを複製"
+    bl_description = "選択中のHGD Curve、またはCARD/Flat Mesh Previewの参照元Curveだけを複製します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return any(_resolve_duplicate_source_curve_from_object(obj) for obj in context.selected_objects)
+
+    def execute(self, context):
+        sources = _unique_duplicate_source_curves_from_selection(context, _resolve_duplicate_source_curve_from_object)
+        if not sources:
+            self.report({'WARNING'}, "複製対象のHGD CurveまたはPreview元Curveが選択されていません。")
+            return {'CANCELLED'}
+
+        created = [_duplicate_hgd_curve_object(context, src) for src in sources]
+        for new_obj in created:
+            _apply_display_mode_to_curve(context, new_obj)
+        _select_only_objects(context, created)
+
+        self.report({'INFO'}, f"HGD Curve/Preview元Curveを{len(created)}本複製しました。")
         return {'FINISHED'}
 
 
@@ -5450,6 +5504,7 @@ classes = (
     HGD_OT_clear_placement_points,
     HGD_OT_create_curve_from_points,
     HGD_OT_duplicate_selected_hair_curves,
+    HGD_OT_duplicate_selected_or_preview_source_curves,
     HGD_OT_check_root_clustering,
     HGD_OT_clear_warnings,
     HGD_OT_clear_card_previews,

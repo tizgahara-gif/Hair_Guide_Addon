@@ -49,6 +49,7 @@ class HGD_PT_quick_flow(HGD_PT_base):
         box.operator('hgd.mirror_selected_curves', text='6. 選択Curveを複製', icon='MOD_MIRROR')
         box.prop(scene,'hair_curve_display_mode', text='7. 表示モード')
         box.operator('hgd.apply_display_mode_to_selected_curves', text='7. 選択対象へ表示モード適用', icon='RESTRICT_VIEW_OFF')
+        box.operator('hgd.duplicate_selected_or_preview_source_curves', text='選択Curve/Preview元Curveを複製', icon='DUPLICATE')
         box.operator('hgd.toggle_final_edit_mode', text='8. 最終編集モード OFF' if scene.hair_final_edit_mode_enabled else '8. 最終編集モード ON', icon='HIDE_OFF' if scene.hair_final_edit_mode_enabled else 'MESH_DATA')
 
 class HGD_PT_setup(HGD_PT_base):
@@ -91,6 +92,7 @@ class HGD_PT_display_mode(HGD_PT_base):
     def draw(self, context):
         scene=context.scene; box=_section_box(self.layout,'Display Mode','RESTRICT_VIEW_OFF','[DISPLAY]')
         box.prop(scene,'hair_curve_display_mode'); box.operator('hgd.apply_display_mode_to_selected_curves', text='選択対象へ適用'); box.operator('hgd.apply_display_mode_to_all_curves', text='全Curveへ適用')
+        box.operator('hgd.duplicate_selected_or_preview_source_curves', text='選択Curve/Preview元Curveを複製', icon='DUPLICATE')
 class HGD_PT_card_flat_preview(HGD_PT_base):
     bl_label='[CARD] CARD / Flat Preview'; bl_order=5
     def draw(self, context):
