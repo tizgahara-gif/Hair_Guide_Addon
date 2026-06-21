@@ -90,6 +90,16 @@ class HGD_PT_display_mode(HGD_PT_base):
     def draw(self, context):
         scene=context.scene; box=_section_box(self.layout,'Display Mode','RESTRICT_VIEW_OFF','[DISPLAY]')
         box.prop(scene,'hair_curve_display_mode'); box.operator('hgd.apply_display_mode_to_selected_curves', text='選択対象へ適用'); box.operator('hgd.apply_display_mode_to_all_curves', text='全Curveへ適用')
+        mirror=_section_box(self.layout,'Mirror','MOD_MIRROR','[DISPLAY]')
+        mirror.prop(scene,'hair_mirror_modifier_enabled')
+        mirror.prop(scene,'hair_mirror_axis')
+        mirror.prop(scene,'hair_mirror_empty')
+        mirror.prop(scene,'hair_mirror_resolve_remove_modifier')
+        mirror.operator('hgd.create_mirror_empty', text='Mirror Empty作成')
+        mirror.operator('hgd.apply_mirror_modifier_to_selected', text='選択対象へMirror適用')
+        mirror.operator('hgd.apply_mirror_modifier_to_all', text='全Curve/PreviewへMirror適用')
+        mirror.operator('hgd.resolve_mirror_modifier', text='Mirror解決')
+        mirror.operator('hgd.remove_mirror_modifier', text='Mirror Modifier削除')
 
 class HGD_PT_card_flat_preview(HGD_PT_base):
     bl_label='[CARD] CARD / Flat Preview'; bl_order=5

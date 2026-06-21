@@ -4421,6 +4421,215 @@ def _copy_mirrored_curve_data_world_x(source, target):
     return new_data
 
 
+MIRROR_MODIFIER_TYPES = {"curve", "twist_control", "twist_strand", "card_preview", "flat_mesh_preview"}
+MIRROR_CURVE_TYPES = {"curve", "twist_control", "twist_strand"}
+MIRROR_PREVIEW_TYPES = {"card_preview", "flat_mesh_preview"}
+
+
+def _mirror_empty_location(context):
+    scene = context.scene
+    axis = getattr(scene, "hair_mirror_axis", "HEAD_CENTER_X")
+    if axis == "EMPTY" and getattr(scene, "hair_mirror_empty", None):
+        return scene.hair_mirror_empty.matrix_world.translation.copy()
+    if axis == "HEAD_CENTER_X":
+        head = getattr(scene, "hair_target_head_object", None)
+        if head:
+            return head.matrix_world.translation.copy()
+    return mathutils.Vector((0.0, 0.0, 0.0))
+
+
+def _ensure_or_get_mirror_empty(context):
+    scene = context.scene
+    if getattr(scene, "hair_mirror_axis", "HEAD_CENTER_X") == "EMPTY" and getattr(scene, "hair_mirror_empty", None):
+        return scene.hair_mirror_empty
+    empty = getattr(scene, "hair_mirror_empty", None)
+    if empty and empty.type == 'EMPTY' and empty.get("hair_guide_type") == "mirror_empty":
+        empty.location = _mirror_empty_location(context)
+        return empty
+    _, collections = utils.ensure_system()
+    empty = bpy.data.objects.new(utils.unique_name("HGD_Mirror_Empty"), None)
+    empty.empty_display_type = 'ARROWS'
+    empty.empty_display_size = 0.25
+    empty.location = _mirror_empty_location(context)
+    empty["hair_guide_type"] = "mirror_empty"
+    collections[utils.CARD_CONTROLS].objects.link(empty)
+    scene.hair_mirror_empty = empty
+    return empty
+
+
+def _ensure_mirror_modifier(context, obj):
+    if not obj or obj.get("hair_guide_type") not in MIRROR_MODIFIER_TYPES:
+        return False
+    empty = _ensure_or_get_mirror_empty(context)
+    try:
+        mod = obj.modifiers.get("HGD_Mirror")
+        if not mod:
+            mod = obj.modifiers.new("HGD_Mirror", "MIRROR")
+        mod.use_axis[0] = True
+        mod.use_axis[1] = False
+        mod.use_axis[2] = False
+        mod.use_bisect_axis[0] = False
+        mod.use_clip = False
+        mod.mirror_object = empty
+    except Exception:
+        return False
+    obj["hair_mirror_modifier_enabled"] = True
+    obj["hair_mirror_empty"] = empty.name
+    return True
+
+
+def _remove_hgd_mirror_modifier(obj):
+    mod = obj.modifiers.get("HGD_Mirror") if obj else None
+    if mod:
+        obj.modifiers.remove(mod)
+    if obj:
+        obj["hair_mirror_modifier_enabled"] = False
+
+
+def _mirror_world_point(point, mirror_matrix):
+    local = mirror_matrix.inverted() @ point
+    local.x *= -1
+    return mirror_matrix @ local
+
+
+def _mirror_name(name):
+    if "Side_L" in name:
+        return name.replace("Side_L", "Side_R")
+    if "Side_R" in name:
+        return name.replace("Side_R", "Side_L")
+    if name.endswith("_L"):
+        return name[:-2] + "_R"
+    if name.endswith("_R"):
+        return name[:-2] + "_L"
+    return name + "_Mirror"
+
+
+def _mirror_region_value(region):
+    return "Side_R" if region == "Side_L" else "Side_L" if region == "Side_R" else region
+
+
+def _mirror_flow_side_value(side):
+    return "R" if side == "L" else "L" if side == "R" else side
+
+
+def _resolve_curve_mirror_object(context, source, mirror_empty):
+    if not source or source.type != "CURVE" or source.get("hair_guide_type") not in MIRROR_CURVE_TYPES:
+        return None
+    new_name = utils.unique_name(_mirror_name(source.name))
+    new_data = source.data.copy()
+    new_data.name = new_name + "Curve"
+    mirrored = bpy.data.objects.new(new_name, new_data)
+    mirrored.matrix_world = source.matrix_world.copy()
+    target_inv = mirrored.matrix_world.inverted()
+    for spline in new_data.splines:
+        if spline.type != "BEZIER":
+            continue
+        for point in spline.bezier_points:
+            for attr in ("co", "handle_left", "handle_right"):
+                world_point = source.matrix_world @ getattr(point, attr)
+                setattr(point, attr, target_inv @ _mirror_world_point(world_point, mirror_empty.matrix_world))
+    for key in source.keys():
+        mirrored[key] = source[key]
+    mirrored["hair_mirror_source"] = source.name
+    mirrored["hair_mirror_resolved"] = True
+    mirrored["hair_mirror_pair"] = source.name
+    mirrored["hair_region"] = _mirror_region_value(source.get("hair_region", ""))
+    mirrored["flow_side"] = _mirror_flow_side_value(source.get("flow_side", ""))
+    source["hair_mirror_pair"] = mirrored.name
+    _remove_hgd_mirror_modifier(mirrored)
+    utils.get_curve_collection(mirrored.get("hair_region", ""), mirrored.get("hair_guide_type", "curve")).objects.link(mirrored)
+    utils.apply_curve_region_color(mirrored)
+    return mirrored
+
+
+class HGD_OT_create_mirror_empty(bpy.types.Operator):
+    bl_idname = "hgd.create_mirror_empty"
+    bl_label = "Mirror Empty作成"
+    bl_description = "head centerまたはworld originにMirror Modifier用Emptyを作成します"
+    bl_options = {'REGISTER', 'UNDO'}
+    def execute(self, context):
+        empty = _ensure_or_get_mirror_empty(context)
+        self.report({'INFO'}, f"Mirror Emptyを設定しました: {empty.name}")
+        return {'FINISHED'}
+
+
+class HGD_OT_apply_mirror_modifier_to_selected(bpy.types.Operator):
+    bl_idname = "hgd.apply_mirror_modifier_to_selected"
+    bl_label = "選択対象へMirror適用"
+    bl_options = {'REGISTER', 'UNDO'}
+    def execute(self, context):
+        count = sum(1 for obj in context.selected_objects if _ensure_mirror_modifier(context, obj))
+        context.scene.hair_mirror_modifier_enabled = count > 0
+        self.report({'INFO' if count else 'WARNING'}, f"{count}個にMirror Modifierを適用しました。")
+        return {'FINISHED' if count else 'CANCELLED'}
+
+
+class HGD_OT_apply_mirror_modifier_to_all(bpy.types.Operator):
+    bl_idname = "hgd.apply_mirror_modifier_to_all"
+    bl_label = "全Curve/PreviewへMirror適用"
+    bl_options = {'REGISTER', 'UNDO'}
+    def execute(self, context):
+        count = sum(1 for obj in utils.generated_objects() if _ensure_mirror_modifier(context, obj))
+        context.scene.hair_mirror_modifier_enabled = count > 0
+        self.report({'INFO' if count else 'WARNING'}, f"{count}個にMirror Modifierを適用しました。")
+        return {'FINISHED' if count else 'CANCELLED'}
+
+
+class HGD_OT_remove_mirror_modifier(bpy.types.Operator):
+    bl_idname = "hgd.remove_mirror_modifier"
+    bl_label = "Mirror Modifier削除"
+    bl_options = {'REGISTER', 'UNDO'}
+    def execute(self, context):
+        targets = context.selected_objects or [obj for obj in utils.generated_objects() if obj.modifiers.get("HGD_Mirror")]
+        count = 0
+        for obj in targets:
+            if obj.modifiers.get("HGD_Mirror"):
+                _remove_hgd_mirror_modifier(obj); count += 1
+        self.report({'INFO' if count else 'WARNING'}, f"{count}個のMirror Modifierを削除しました。")
+        return {'FINISHED' if count else 'CANCELLED'}
+
+
+class HGD_OT_resolve_mirror_modifier(bpy.types.Operator):
+    bl_idname = "hgd.resolve_mirror_modifier"
+    bl_label = "Mirror解決"
+    bl_description = "Mirror Modifierで表示されている反対側を、独立したCurveとPreviewとして生成します。出力Meshは対象外です。"
+    bl_options = {'REGISTER', 'UNDO'}
+    def execute(self, context):
+        selected = [obj for obj in context.selected_objects if obj.get("hair_guide_type") in MIRROR_MODIFIER_TYPES]
+        targets = selected or [obj for obj in utils.generated_objects() if obj.get("hair_guide_type") in MIRROR_MODIFIER_TYPES and obj.modifiers.get("HGD_Mirror")]
+        if not targets:
+            self.report({'WARNING'}, "Mirror解決対象がありません。")
+            return {'CANCELLED'}
+        empty = _ensure_or_get_mirror_empty(context)
+        curve_sources = [obj for obj in targets if obj.get("hair_guide_type") in MIRROR_CURVE_TYPES]
+        for obj in targets:
+            if obj.get("hair_guide_type") in MIRROR_PREVIEW_TYPES:
+                src = bpy.data.objects.get(obj.get("hair_source_curve", ""))
+                if src and src not in curve_sources:
+                    curve_sources.append(src)
+        mirrored_curves = []
+        for source in curve_sources:
+            mirrored = _resolve_curve_mirror_object(context, source, empty)
+            if mirrored:
+                mirrored_curves.append(mirrored)
+                if source.get("hair_guide_type") == "twist_control":
+                    _create_or_replace_twist_strand(context, mirrored)
+                if context.scene.hair_mirror_resolve_remove_modifier:
+                    _remove_hgd_mirror_modifier(source)
+        preview_count = 0
+        for curve in mirrored_curves:
+            if _create_or_update_card_preview(context, curve):
+                preview_count += 1
+            if _create_or_update_flat_mesh_preview(context, curve):
+                preview_count += 1
+        if context.scene.hair_mirror_resolve_remove_modifier:
+            for obj in targets:
+                if obj.get("hair_guide_type") in MIRROR_PREVIEW_TYPES:
+                    _remove_hgd_mirror_modifier(obj)
+        self.report({'INFO'}, f"{len(mirrored_curves)}本の反対側Curveと{preview_count}個のPreviewを生成しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_mirror_side_guide_base(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     source_name = ""
@@ -4802,6 +5011,11 @@ classes = (
     HGD_OT_update_all_twists,
     HGD_OT_apply_curve_batch_settings,
     HGD_OT_update_curve_roots_from_points,
+    HGD_OT_create_mirror_empty,
+    HGD_OT_apply_mirror_modifier_to_selected,
+    HGD_OT_apply_mirror_modifier_to_all,
+    HGD_OT_resolve_mirror_modifier,
+    HGD_OT_remove_mirror_modifier,
     HGD_OT_mirror_side_guide_l_to_r,
     HGD_OT_mirror_side_guide_r_to_l,
     HGD_OT_mirror_side,
