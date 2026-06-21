@@ -67,7 +67,6 @@ class HGD_PT_guides_points(HGD_PT_base):
         for args in [('頭頂部','Top'),('前髪','Front'),('側頭部','Side'),('左側','Side_L'),('右側','Side_R'),('後頭部上層','Back_Upper'),('後頭部中層','Back_Middle'),('襟足','Nape')]: _region_buttons(box,*args)
         box.operator('hgd.symmetrize_front_back_guides', text='前後ガイド左右対称化', icon='MOD_MIRROR')
         row=box.row(align=True); row.operator('hgd.mirror_side_guide_l_to_r', text='左→右'); row.operator('hgd.mirror_side_guide_r_to_l', text='右→左')
-        box.prop(scene,'hair_mirror_mode_enabled'); box.prop(scene,'hair_mirror_source_side'); box.prop(scene,'hair_mirror_axis_mode')
         row=box.row(align=True); row.operator('hgd.mirror_mode_sync_pairs', text='ミラーペア同期')
         finish=_section_box(self.layout,'作業完了','CHECKMARK','[GUIDE]')
         finish.label(text='出力Meshだけを残し、ガイド・配置点・Curve・Preview・Emptyを削除します。', icon='INFO')

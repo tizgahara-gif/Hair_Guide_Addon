@@ -4473,8 +4473,11 @@ class HGD_OT_clear_legacy_braid_objects(bpy.types.Operator):
 
 
 def _mirror_axis_x(context):
-    if getattr(context.scene, "hair_mirror_axis_mode", "HEAD_CENTER_X") == "WORLD_X":
+    axis = getattr(context.scene, "hair_mirror_axis", "HEAD_CENTER_X")
+    if axis in {"WORLD_X_ZERO", "WORLD_X", "X"}:
         return 0.0
+    if axis == "EMPTY" and getattr(context.scene, "hair_mirror_empty", None):
+        return context.scene.hair_mirror_empty.matrix_world.translation.x
     head = getattr(context.scene, "hair_target_head_object", None)
     if head:
         _min_v, _max_v, center, _size = utils.head_bounds(head)
@@ -4483,31 +4486,13 @@ def _mirror_axis_x(context):
 
 def _auto_create_mirror_pairs_for_generated_curves(context, curves_by_point):
     scene = context.scene
-    if not getattr(scene, "hair_mirror_mode_enabled", False):
+    if not getattr(scene, "hair_mirror_modifier_enabled", False):
         return 0
-    src_region, dst_region = ("Side_L", "Side_R") if scene.hair_mirror_source_side == "L" else ("Side_R", "Side_L")
-    mirror_x = _mirror_axis_x(context)
-    created = 0
-    for point_name, obj in list(curves_by_point.items()):
-        if not obj or obj.get("hair_region") != src_region:
-            continue
-        if obj.get("hair_mirror_pair") and bpy.data.objects.get(obj.get("hair_mirror_pair")):
-            continue
-        new_name = utils.unique_name(_swap_side(obj.name, src_region, dst_region))
-        new_obj = obj.copy()
-        new_obj.data = obj.data.copy()
-        new_obj.name = new_name
-        new_obj.data.name = new_name + "Curve"
-        utils.get_curve_collection(dst_region, obj.get("hair_guide_type", "curve")).objects.link(new_obj)
-        _copy_mirrored_bezier_shape(obj, new_obj, mirror_x)
-        new_obj["hair_region"] = dst_region
-        new_obj["flow_side"] = _mirrored_flow_side(dst_region)
-        new_obj["hair_mirror_source"] = obj.name
-        new_obj["hair_mirror_pair"] = obj.name
-        obj["hair_mirror_pair"] = new_obj.name
-        utils.apply_curve_region_color(new_obj)
-        created += 1
-    return created
+    applied = 0
+    for obj in curves_by_point.values():
+        if _ensure_mirror_modifier(context, obj):
+            applied += 1
+    return applied
 
 def _copy_mirrored_curve_data_world_x(source, target):
     new_data = source.data.copy()
@@ -4993,20 +4978,32 @@ class HGD_OT_mirror_selected_curves(bpy.types.Operator):
 class HGD_OT_mirror_mode_sync_pairs(bpy.types.Operator):
     bl_idname = "hgd.mirror_mode_sync_pairs"
     bl_label = "ミラーペア同期"
-    bl_description = "ミラーモード設定のミラー元からhair_mirror_pairの反対側Curveへ形状を反映します"
+    bl_description = "hair_mirror_pairで対応付けられたCurveへ、選択Curveまたは先に見つかったCurveの形状を反映します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        src_side = "L" if context.scene.hair_mirror_source_side == "L" else "R"
         mirror_x = _mirror_axis_x(context)
+        selected_names = {obj.name for obj in context.selected_objects}
+        sources = [
+            obj for obj in utils.generated_objects()
+            if obj.type == "CURVE" and obj.get("hair_guide_type") in {"curve", "twist_control"}
+        ]
+        sources.sort(key=lambda obj: (obj.name not in selected_names, obj.name))
         updated = 0
-        for source in utils.generated_objects():
-            if source.type != "CURVE" or source.get("hair_guide_type") not in {"curve", "twist_control"}:
-                continue
-            if source.get("hair_mirror_side", _mirror_side_from_object(source)) != src_side:
-                continue
+        seen_pairs = set()
+        for source in sources:
             target = bpy.data.objects.get(source.get("hair_mirror_pair", ""))
-            if target and _copy_mirrored_bezier_shape(source, target, mirror_x):
+            if not target or target.type != "CURVE" or target.get("hair_guide_type") not in {"curve", "twist_control"}:
+                continue
+            pair_key = frozenset((source.name, target.name))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+            if _copy_mirrored_bezier_shape(source, target, mirror_x):
+                target["hair_mirror_pair"] = source.name
+                source["hair_mirror_pair"] = target.name
+                if target.get("hair_guide_type") == "twist_control":
+                    _create_or_replace_twist_strand(context, target)
                 updated += 1
         if updated == 0:
             self.report({'WARNING'}, "同期対象のミラーペアが見つかりません。")
