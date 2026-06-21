@@ -41,15 +41,15 @@ class HGD_PT_quick_flow(HGD_PT_base):
     def draw(self, context):
         scene=context.scene; box=_section_box(self.layout,'Quick Flow','CHECKMARK')
         box.operator('hgd.set_target_head', text='1. 頭部登録', icon='CHECKMARK')
-        box.operator('hgd.create_hair_guides', text='2. 基本ガイド生成', icon='OUTLINER_OB_CURVE')
-        box.operator('hgd.generate_placement_points', text='3. 配置点生成', icon='MESH_UVSPHERE')
-        box.operator('hgd.create_curve_from_points', text='4. Curve生成', icon='CURVE_BEZCURVE')
-        box.operator('hgd.mirror_selected_curves', text='5. 選択Curveを複製', icon='MOD_MIRROR')
-        box.prop(scene,'hair_curve_display_mode', text='6. 表示モード')
-        box.operator('hgd.apply_display_mode_to_selected_curves', text='6. 選択対象へ表示モード適用', icon='RESTRICT_VIEW_OFF')
-        box.operator('hgd.update_card_previews_from_curves', text='7. CARD Previewを現在設定で更新', icon='FILE_REFRESH')
-        box.operator('hgd.update_flat_mesh_previews_from_curves', text='8. Flat Mesh Preview更新', icon='MESH_DATA')
-        box.operator('hgd.toggle_final_edit_mode', text='9. 最終編集モード OFF' if scene.hair_final_edit_mode_enabled else '9. 最終編集モード ON', icon='HIDE_OFF' if scene.hair_final_edit_mode_enabled else 'MESH_DATA')
+        box.prop(scene, 'hair_work_mode_lock_enabled', text='2. 作業集中モード')
+        box.operator('hgd.apply_work_mode_lock', text='2. 作業集中モードを反映', icon='LOCKED')
+        box.operator('hgd.create_hair_guides', text='3. 基本ガイド生成', icon='OUTLINER_OB_CURVE')
+        box.operator('hgd.generate_placement_points', text='4. 配置点生成', icon='MESH_UVSPHERE')
+        box.operator('hgd.create_curve_from_points', text='5. Curve生成', icon='CURVE_BEZCURVE')
+        box.operator('hgd.mirror_selected_curves', text='6. 選択Curveを複製', icon='MOD_MIRROR')
+        box.prop(scene,'hair_curve_display_mode', text='7. 表示モード')
+        box.operator('hgd.apply_display_mode_to_selected_curves', text='7. 選択対象へ表示モード適用', icon='RESTRICT_VIEW_OFF')
+        box.operator('hgd.toggle_final_edit_mode', text='8. 最終編集モード OFF' if scene.hair_final_edit_mode_enabled else '8. 最終編集モード ON', icon='HIDE_OFF' if scene.hair_final_edit_mode_enabled else 'MESH_DATA')
 
 class HGD_PT_setup(HGD_PT_base):
     bl_label='[SETUP] Setup'; bl_order=1
