@@ -65,7 +65,7 @@ class HGD_PT_guides_points(HGD_PT_base):
         box.operator('hgd.create_hair_guides', text='基本ガイド生成'); box.operator('hgd.generate_placement_points', text='配置点生成')
         _all_region_buttons(box)
         for args in [('頭頂部','Top'),('前髪','Front'),('側頭部','Side'),('左側','Side_L'),('右側','Side_R'),('後頭部上層','Back_Upper'),('後頭部中層','Back_Middle'),('襟足','Nape')]: _region_buttons(box,*args)
-        box.operator('hgd.symmetrize_front_back_guides', text='前後ガイド左右対称化', icon='MOD_MIRROR')
+        box.operator('hgd.symmetrize_front_back_guides', text='Front/Back/Napeガイドを左右対称化', icon='PIVOT_MEDIAN')
 
 class HGD_PT_curve_shape(HGD_PT_base):
     bl_label='[CURVE] Curve Shape'; bl_order=3
