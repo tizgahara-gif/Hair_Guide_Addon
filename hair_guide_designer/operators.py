@@ -2758,6 +2758,30 @@ def _is_stale_card_preview_for_curve(obj, curve_obj):
     return False
 
 
+def _is_exact_card_preview_for_curve(obj, curve_obj):
+    return (
+        obj.get("hair_guide_type") == "card_preview"
+        and obj.get("hair_source_curve") == curve_obj.name
+        and obj.name == _card_preview_name_for_curve(curve_obj)
+    )
+
+
+def _find_card_preview_for_curve(curve_obj):
+    for obj in _card_preview_cleanup_candidates():
+        if _is_exact_card_preview_for_curve(obj, curve_obj):
+            return obj
+    return None
+
+
+def _remove_mismatched_card_previews_for_curve(curve_obj):
+    removed = 0
+    for obj in list(_card_preview_cleanup_candidates()):
+        if _is_stale_card_preview_for_curve(obj, curve_obj) and not _is_exact_card_preview_for_curve(obj, curve_obj):
+            bpy.data.objects.remove(obj, do_unlink=True)
+            removed += 1
+    return removed
+
+
 def _card_preview_cleanup_candidates():
     candidates = []
     seen = set()
@@ -2920,19 +2944,23 @@ def _create_or_update_card_preview_for_scene(context, curve_obj):
     _clear_flat_mesh_preview_for_curve(curve_obj)
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return None
-    _clear_card_preview_for_curve(curve_obj)
+    _remove_mismatched_card_previews_for_curve(curve_obj)
     name = _card_preview_name_for_curve(curve_obj)
     mesh, samples = _build_card_preview_mesh(context, curve_obj, name)
     if not mesh:
         return None
-    existing = bpy.data.objects.get(name)
-    if existing and existing.get("hair_guide_type") == "card_preview":
+    existing = _find_card_preview_for_curve(curve_obj)
+    if existing:
         preview = _replace_preview_mesh_data(existing, mesh)
     else:
         preview = bpy.data.objects.new(name, mesh)
         _, collections = utils.ensure_system()
         collections[utils.CARD_PREVIEWS].objects.link(preview)
     _apply_card_preview_props(preview, curve_obj, scene, samples)
+    preview["debug_card_width_root_cm"] = float(curve_obj.get("hair_card_width_root_cm", scene.hair_card_width_root_cm))
+    preview["debug_card_width_mid_cm"] = float(curve_obj.get("hair_card_width_mid_cm", scene.hair_card_width_mid_cm))
+    preview["debug_card_width_tip_cm"] = float(curve_obj.get("hair_card_width_tip_cm", scene.hair_card_width_tip_cm))
+    preview["debug_card_vertex_count"] = len(preview.data.vertices)
     preview.hide_viewport = False
     preview.hide_render = False
     curve_obj["hair_card_preview_object"] = preview.name
