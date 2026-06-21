@@ -96,6 +96,7 @@ class HGD_PT_card_flat_preview(HGD_PT_base):
     def draw(self, context):
         scene=context.scene; box=_section_box(self.layout,'CARD','MESH_PLANE','[CARD]')
         for p in ['hair_card_width_preset','hair_card_width_root_cm','hair_card_width_mid_cm','hair_card_width_tip_cm','hair_card_mid_position','hair_card_width_interpolation']: box.prop(scene,p)
+        box.prop(scene, 'hair_card_samples', text='CARD分割数')
         box.prop(scene, 'hair_card_sync_widths', text='CARD幅を同期')
         if scene.hair_card_sync_widths:
             box.prop(scene, 'hair_card_synced_width_cm', text='CARD同期幅(cm)')
