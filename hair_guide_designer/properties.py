@@ -79,7 +79,7 @@ PROPERTY_NAMES = (
     "hair_flat_mesh_add_subdivision", "hair_flat_mesh_mark_side_sharp", "hair_twist_flat_mesh_force_inner_side", "hair_twist_flat_mesh_inner_mode", "hair_warning_count", "hair_root_cluster_threshold",
     "hair_batch_curve_length", "hair_batch_curve_bevel_depth", "hair_batch_curve_resolution",
     "hair_follow_keep_tip_offset", "hair_follow_update_selected_only",
-    "hair_mirror_axis", "hair_mirror_overwrite_existing", "hair_mirror_copy_custom_properties",
+    "hair_mirror_modifier_enabled", "hair_mirror_axis", "hair_mirror_empty", "hair_mirror_resolve_remove_modifier", "hair_mirror_overwrite_existing", "hair_mirror_copy_custom_properties",
     "hair_use_shared_taper", "hair_taper_preset", "hair_taper_root_radius",
     "hair_taper_mid_radius", "hair_taper_tip_radius", "hair_taper_bevel_depth",
     "hair_taper_resolution", "hair_auto_apply_taper_to_new_curves",
@@ -101,6 +101,10 @@ def poll_card_control_empty(self, obj):
         and obj.type == 'EMPTY'
         and obj.get("hair_guide_type") == "card_control_empty"
     )
+
+
+def poll_mirror_empty(self, obj):
+    return obj is not None and obj.type == 'EMPTY'
 
 
 def register():
@@ -654,11 +658,32 @@ def register():
         description="全生成カーブではなく、選択中の生成カーブのみ更新します。",
     )
 
+    scene.hair_mirror_modifier_enabled = BoolProperty(
+        name="Mirror Modifierミラー",
+        default=False,
+        description="Curve/PreviewへMirror Modifierを追加し、反対側を非破壊表示します。",
+    )
     scene.hair_mirror_axis = EnumProperty(
-        name="軸",
-        items=(("X", "X", "X軸でミラー"),),
-        default="X",
-        description="ミラー軸。MVPではX軸のみ対応します。",
+        name="ミラー軸",
+        items=(
+            ("HEAD_CENTER_X", "頭部中心X", "登録頭部の中心Xを基準にします"),
+            ("WORLD_X_ZERO", "World X=0", "World原点X=0を基準にします"),
+            ("EMPTY", "Mirror Empty", "指定EmptyをMirror Objectとして使います"),
+            ("X", "X (旧互換)", "旧ファイル互換用。World X=0として扱います"),
+        ),
+        default="HEAD_CENTER_X",
+        description="Mirror Modifierで使うXミラー基準。HEAD_CENTER_X時も内部的にはEmptyを作成して使用します。",
+    )
+    scene.hair_mirror_empty = PointerProperty(
+        name="Mirror Empty",
+        type=bpy.types.Object,
+        poll=poll_mirror_empty,
+        description="Mirror ModifierのMirror Objectとして使用するEmpty。",
+    )
+    scene.hair_mirror_resolve_remove_modifier = BoolProperty(
+        name="解決後Mirror Modifierを削除",
+        default=True,
+        description="Mirror解決後、元Curve/PreviewからHGD_Mirror Modifierを削除します。",
     )
     scene.hair_mirror_overwrite_existing = BoolProperty(
         name="既存を上書き",
