@@ -74,6 +74,19 @@ CARD_WIDTH_PRESET_LABELS = {
 CARD_SELECTION_REDIRECT_TYPES = {"card_preview", "flat_mesh_preview", "card_mesh", "flat_mesh"}
 
 
+def _sync_card_width_preset_to_scene(scene):
+    preset = scene.hair_card_width_preset
+    if preset == "CUSTOM":
+        return
+    values = CARD_WIDTH_PRESETS.get(preset)
+    if not values:
+        return
+    root, mid, tip = values
+    scene.hair_card_width_root_cm = root
+    scene.hair_card_width_mid_cm = mid
+    scene.hair_card_width_tip_cm = tip
+
+
 def _is_card_control_empty(obj):
     return bool(obj is not None and obj.type == 'EMPTY' and obj.get("hair_guide_type") == "card_control_empty")
 
@@ -2703,6 +2716,7 @@ def _sync_scene_card_width_settings_to_curve(scene, curve_obj):
     UI上のCARD幅設定を、対象CurveのCustom Propertyへ同期する。
     CARD Preview更新・表示モード適用の直前に必ず呼ぶ。
     """
+    _sync_card_width_preset_to_scene(scene)
     curve_obj["hair_card_mid_position"] = scene.hair_card_mid_position
     curve_obj["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
     curve_obj["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
@@ -3025,14 +3039,11 @@ class HGD_OT_apply_card_width_preset(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
         preset = scene.hair_card_width_preset
+        _sync_card_width_preset_to_scene(scene)
         if preset == "CUSTOM":
             self.report({'INFO'}, "カスタム設定を使用します。")
             return {'FINISHED'}
-        root, mid, tip = CARD_WIDTH_PRESETS[preset]
-        scene.hair_card_width_root_cm = root
-        scene.hair_card_width_mid_cm = mid
-        scene.hair_card_width_tip_cm = tip
-        self.report({'INFO'}, f"CARD幅プリセット「{CARD_WIDTH_PRESET_LABELS[preset]}」を反映しました。")
+        self.report({'INFO'}, f"CARD幅プリセット「{CARD_WIDTH_PRESET_LABELS.get(preset, preset)}」を反映しました。")
         return {'FINISHED'}
 
 
@@ -3194,6 +3205,7 @@ class HGD_OT_update_flat_mesh_previews_from_curves(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        _sync_card_width_preset_to_scene(context.scene)
         curves = _generated_curves_from_context(context, True)
         if not curves:
             curves = [
@@ -4202,6 +4214,7 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        _sync_card_width_preset_to_scene(context.scene)
         curves, twist_controls = _selected_card_update_targets(context)
         if not curves and not twist_controls:
             for obj in utils.generated_objects():
