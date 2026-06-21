@@ -2472,10 +2472,23 @@ def _flat_mesh_preview_name_for_curve(curve_obj):
     return f"{FLAT_MESH_PREVIEW_PREFIX}{curve_obj.name.split('.')[0]}"
 
 
-def _remove_flat_mesh_preview_for_curve(curve_obj):
+def _unlink_preview_reference_properties(curve_obj):
+    curve_obj["hair_card_preview_object"] = ""
+    curve_obj["hair_flat_mesh_preview_object"] = ""
+
+
+def _clear_flat_mesh_preview_for_curve(curve_obj):
+    removed = 0
     for obj in list(utils.generated_objects("flat_mesh_preview")):
         if obj.get("hair_source_curve") == curve_obj.name or obj.name == _flat_mesh_preview_name_for_curve(curve_obj):
             bpy.data.objects.remove(obj, do_unlink=True)
+            removed += 1
+    curve_obj["hair_flat_mesh_preview_object"] = ""
+    return removed
+
+
+def _remove_flat_mesh_preview_for_curve(curve_obj):
+    return _clear_flat_mesh_preview_for_curve(curve_obj)
 
 
 def _set_flat_mesh_preview_visible(curve_obj, visible):
@@ -2612,6 +2625,7 @@ def _create_flat_mesh_object(context, curve_obj, guide_type, name, collection):
 
 def _create_or_update_flat_mesh_preview(context, curve_obj):
     scene = context.scene
+    _clear_card_preview_for_curve(curve_obj)
     _sync_scene_card_width_settings_to_curve(scene, curve_obj)
     _, collections = utils.ensure_system()
     name = _flat_mesh_preview_name_for_curve(curve_obj)
@@ -2663,10 +2677,24 @@ def _card_preview_name_for_curve(curve_obj):
     return f"{CARD_PREVIEW_PREFIX}{curve_obj.name.split('.')[0]}"
 
 
-def _remove_card_preview_for_curve(curve_obj):
+def _clear_card_preview_for_curve(curve_obj):
+    removed = 0
     for obj in list(utils.generated_objects("card_preview")):
         if obj.get("hair_source_curve") == curve_obj.name or obj.name == _card_preview_name_for_curve(curve_obj):
             bpy.data.objects.remove(obj, do_unlink=True)
+            removed += 1
+    curve_obj["hair_card_preview_object"] = ""
+    return removed
+
+
+def _remove_card_preview_for_curve(curve_obj):
+    return _clear_card_preview_for_curve(curve_obj)
+
+
+def _clear_all_previews_for_curve(curve_obj):
+    removed = _clear_card_preview_for_curve(curve_obj)
+    removed += _clear_flat_mesh_preview_for_curve(curve_obj)
+    return removed
 
 
 def _set_card_preview_visible(curve_obj, visible):
@@ -2791,6 +2819,7 @@ def _apply_card_preview_props(preview, curve_obj, scene, samples):
 
 def _create_or_update_card_preview_for_scene(context, curve_obj):
     scene = context.scene
+    _clear_flat_mesh_preview_for_curve(curve_obj)
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return None
     name = _card_preview_name_for_curve(curve_obj)
@@ -2916,8 +2945,7 @@ def _apply_display_mode_to_curve(context, obj):
         obj.data.bevel_depth = 0.0
         obj.data.bevel_object = None
         obj.data.taper_object = None
-        _set_card_preview_visible(obj, False)
-        _set_flat_mesh_preview_visible(obj, False)
+        _clear_all_previews_for_curve(obj)
     elif mode == "SOLID":
         obj.display_type = 'TEXTURED'
         obj.data.bevel_object = None
@@ -2928,10 +2956,10 @@ def _apply_display_mode_to_curve(context, obj):
             obj.data.taper_object = None
             obj["hair_use_taper"] = False
             obj["hair_taper_object"] = ""
-        _set_card_preview_visible(obj, False)
-        _set_flat_mesh_preview_visible(obj, False)
+        _clear_all_previews_for_curve(obj)
         _ensure_curve_visible_geometry(context, obj)
     elif mode == "CARD":
+        _clear_flat_mesh_preview_for_curve(obj)
         _sync_scene_card_width_settings_to_curve(scene, obj)
         obj.hide_viewport = False
         obj.display_type = 'WIRE'
@@ -2949,6 +2977,7 @@ def _apply_display_mode_to_curve(context, obj):
         _set_card_preview_visible(obj, True)
         _set_flat_mesh_preview_visible(obj, False)
     elif mode == "FLAT_MESH":
+        _clear_card_preview_for_curve(obj)
         obj.hide_viewport = False
         obj.display_type = 'WIRE'
         obj.data.bevel_depth = 0.0
