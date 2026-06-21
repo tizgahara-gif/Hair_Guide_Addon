@@ -69,6 +69,9 @@ class HGD_PT_guides_points(HGD_PT_base):
         row=box.row(align=True); row.operator('hgd.mirror_side_guide_l_to_r', text='左→右'); row.operator('hgd.mirror_side_guide_r_to_l', text='右→左')
         box.prop(scene,'hair_mirror_mode_enabled'); box.prop(scene,'hair_mirror_source_side'); box.prop(scene,'hair_mirror_axis_mode')
         row=box.row(align=True); row.operator('hgd.mirror_mode_sync_pairs', text='ミラーペア同期')
+        finish=_section_box(self.layout,'作業完了','CHECKMARK','[GUIDE]')
+        finish.label(text='出力Meshだけを残し、ガイド・配置点・Curve・Preview・Emptyを削除します。', icon='INFO')
+        finish.operator('hgd.finish_hair_guide_work', text='作業終了：出力Meshのみ残す', icon='CHECKMARK')
 
 class HGD_PT_curve_shape(HGD_PT_base):
     bl_label='[CURVE] Curve Shape'; bl_order=3
@@ -137,6 +140,9 @@ class HGD_PT_final_edit(HGD_PT_base):
         scene=context.scene; box=_section_box(self.layout,'Final Edit','MESH_DATA','[FINAL]')
         box.operator('hgd.toggle_final_edit_mode', text='最終編集モード OFF' if scene.hair_final_edit_mode_enabled else '最終編集モード ON')
         box.label(text='ON: card_mesh / flat_meshのみ表示し、出力Meshを選択可能にします。')
+        finish=_section_box(self.layout,'作業完了','CHECKMARK','[FINAL]')
+        finish.label(text='出力Meshだけを残し、ガイド・配置点・Curve・Preview・Emptyを削除します。', icon='INFO')
+        finish.operator('hgd.finish_hair_guide_work', text='作業終了：出力Meshのみ残す', icon='CHECKMARK')
 
 class HGD_PT_cleanup_utility(HGD_PT_base):
     bl_label='[CLEANUP] Cleanup / Utility'; bl_order=8
@@ -144,6 +150,7 @@ class HGD_PT_cleanup_utility(HGD_PT_base):
         box=_section_box(self.layout,'Cleanup / Utility','TRASH','[CLEANUP]')
         for op,text in [('hgd.clear_card_previews','CARD Preview削除'),('hgd.clear_flat_mesh_previews','Flat Mesh Preview削除'),('hgd.clear_placement_points','配置点削除'),('hgd.delete_hair_guides','ガイド削除'),('hgd.clear_warnings','Warning削除'),('hgd.cleanup_card_control_empties','未使用CARD Control Empty削除'),('hgd.organize_curves_by_region','hair_guideへ整理')]: box.operator(op,text=text, icon='TRASH')
         box.operator('hgd.clear_all_generated', text='全生成物削除（確認あり）', icon='ERROR')
+        box.operator('hgd.finish_hair_guide_work', text='作業終了：出力Meshのみ残す', icon='CHECKMARK')
 
 class HGD_PT_advanced(HGD_PT_base):
     bl_label='Advanced'; bl_order=9; bl_options={'DEFAULT_CLOSED'}

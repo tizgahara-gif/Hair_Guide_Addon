@@ -303,6 +303,114 @@ class HGD_OT_toggle_final_edit_mode(bpy.types.Operator):
         self.report({'INFO'}, "最終編集モードを有効化しました。出力Meshのみ表示します。")
         return {'FINISHED'}
 
+
+
+FINISH_WORK_DELETE_TYPES = {
+    "guide",
+    "region",
+    "placement_point",
+    "curve",
+    "twist_control",
+    "twist_strand",
+    "card_preview",
+    "flat_mesh_preview",
+    "card_control_empty",
+    "warning",
+    "taper_object",
+    "profile_object",
+    "mirror_empty",
+}
+FINISH_WORK_OUTPUT_TYPES = {"card_mesh", "flat_mesh"}
+FINISH_WORK_CLEANUP_COLLECTIONS = {
+    "00_Guides",
+    "01_PlacementPoints",
+    "02_Curves",
+    "03_Previews",
+    "05_Empties",
+    "06_Warnings",
+    "99_Internal",
+}
+
+
+def _unlink_empty_child_collection(parent, collection):
+    if collection.name == utils.ROOT or collection.name == "04_Outputs":
+        return False
+    if collection.objects or collection.children:
+        return False
+    try:
+        parent.children.unlink(collection)
+    except RuntimeError:
+        return False
+    if not collection.users:
+        bpy.data.collections.remove(collection)
+    return True
+
+
+def _remove_empty_finish_work_collections(parent):
+    removed = 0
+    for child in list(parent.children):
+        removed += _remove_empty_finish_work_collections(child)
+        if child.name in FINISH_WORK_CLEANUP_COLLECTIONS:
+            removed += int(_unlink_empty_child_collection(parent, child))
+    return removed
+
+
+class HGD_OT_finish_hair_guide_work(bpy.types.Operator):
+    bl_idname = "hgd.finish_hair_guide_work"
+    bl_label = "作業終了：出力Meshのみ残す"
+    bl_description = "ガイド・配置点・Curve・Preview・Empty・Warning・内部Objectを削除し、出力Meshのみ残します。"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
+
+    def execute(self, context):
+        root = bpy.data.collections.get(utils.ROOT)
+        if not root:
+            self.report({'WARNING'}, "出力Meshがありません。先にCARD MeshまたはFlat Meshを出力してください。")
+            return {'CANCELLED'}
+
+        root_objects = utils.collection_objects_recursive(root)
+        output_meshes = [
+            obj for obj in root_objects
+            if obj.get("hair_guide_type", "") in FINISH_WORK_OUTPUT_TYPES
+        ]
+        if not output_meshes:
+            self.report({'WARNING'}, "出力Meshがありません。先にCARD MeshまたはFlat Meshを出力してください。")
+            return {'CANCELLED'}
+
+        if getattr(context.object, "mode", "OBJECT") != "OBJECT":
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        for obj in list(context.selected_objects):
+            obj.select_set(False)
+
+        deleted = 0
+        for obj in list(root_objects):
+            if obj.get("hair_guide_type", "") in FINISH_WORK_DELETE_TYPES:
+                bpy.data.objects.remove(obj, do_unlink=True)
+                deleted += 1
+
+        removed_collections = _remove_empty_finish_work_collections(root)
+        context.scene.hair_final_edit_mode_enabled = False
+        if hasattr(context.scene, "hair_warning_count"):
+            context.scene.hair_warning_count = 0
+
+        active_obj = None
+        for output in output_meshes:
+            if output.name not in bpy.data.objects:
+                continue
+            output.hide_viewport = False
+            output.hide_select = False
+            output.select_set(True)
+            if active_obj is None:
+                active_obj = output
+        if active_obj is not None:
+            context.view_layer.objects.active = active_obj
+
+        self.report({'INFO'}, f"作業用オブジェクトを{deleted}個削除し、出力Meshのみ残しました。空Collection削除: {removed_collections}")
+        return {'FINISHED'}
+
 class HGD_OT_set_target_head(bpy.types.Operator):
     bl_idname = "hgd.set_target_head"
     bl_label = "選択メッシュを頭部として登録"
@@ -4951,6 +5059,7 @@ classes = (
     HGD_OT_reload_keymaps,
     HGD_OT_toggle_work_mode_lock,
     HGD_OT_toggle_final_edit_mode,
+    HGD_OT_finish_hair_guide_work,
     HGD_OT_set_target_head,
     HGD_OT_create_hair_guides,
     HGD_OT_symmetrize_front_back_guides,
