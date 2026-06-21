@@ -1566,10 +1566,10 @@ class HGD_OT_clear_flat_mesh_previews(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class HGD_OT_rebuild_card_previews_clean(bpy.types.Operator):
-    bl_idname = "hgd.rebuild_card_previews_clean"
-    bl_label = "CARD Previewをクリーン再生成"
-    bl_description = "既存プロジェクト移行用にCARD/Flat Mesh Previewを全削除し、選択CurveまたはCARD表示中Curveだけを現在設定で再生成します"
+class HGD_OT_rebuild_preview_links_clean(bpy.types.Operator):
+    bl_idname = "hgd.rebuild_preview_links_clean"
+    bl_label = "Previewリンクをクリーン再生成"
+    bl_description = "既存プロジェクト移行用にCARD/Flat Mesh Previewを全削除し、全CurveのPreview参照を空にして選択Curveだけを現在設定でCARD Preview再生成します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -1578,8 +1578,6 @@ class HGD_OT_rebuild_card_previews_clean(bpy.types.Operator):
             return {'CANCELLED'}
 
         selected_curves, selected_twist_controls = _selected_card_update_targets(context)
-        selected_targets = bool(selected_curves or selected_twist_controls)
-
         removed = 0
         for obj in list(utils.generated_objects()):
             if obj.get("hair_guide_type") in {"card_preview", "flat_mesh_preview"}:
@@ -1593,20 +1591,16 @@ class HGD_OT_rebuild_card_previews_clean(bpy.types.Operator):
 
         _sync_card_width_preset_to_scene(context.scene)
         rebuilt = 0
-        if selected_targets:
-            for control in selected_twist_controls:
-                _sync_scene_card_width_settings_to_curve(context.scene, control)
-                strand = _create_or_replace_twist_strand(context, control)
-                if strand:
-                    _sync_scene_card_width_settings_to_curve(context.scene, strand)
-                    strand["hair_curve_display_mode"] = "CARD"
-                    if _create_or_update_card_preview(context, strand):
-                        rebuilt += 1
-            rebuild_curves = selected_curves
-        else:
-            rebuild_curves = _all_card_display_curves(context)
+        for control in selected_twist_controls:
+            _sync_scene_card_width_settings_to_curve(context.scene, control)
+            strand = _create_or_replace_twist_strand(context, control)
+            if strand:
+                _sync_scene_card_width_settings_to_curve(context.scene, strand)
+                strand["hair_curve_display_mode"] = "CARD"
+                if _create_or_update_card_preview(context, strand):
+                    rebuilt += 1
 
-        for curve_obj in rebuild_curves:
+        for curve_obj in selected_curves:
             _sync_scene_card_width_settings_to_curve(context.scene, curve_obj)
             curve_obj["hair_curve_display_mode"] = "CARD"
             if _create_or_update_card_preview(context, curve_obj):
@@ -1618,6 +1612,12 @@ class HGD_OT_rebuild_card_previews_clean(bpy.types.Operator):
             return {'CANCELLED'}
         self.report({'INFO'}, f"Previewを{removed}個削除し、CARD Previewを{rebuilt}個再生成しました。")
         return {'FINISHED'}
+
+
+class HGD_OT_rebuild_card_previews_clean(HGD_OT_rebuild_preview_links_clean):
+    bl_idname = "hgd.rebuild_card_previews_clean"
+    bl_label = "CARD Previewをクリーン再生成"
+    bl_description = "互換用です。hgd.rebuild_preview_links_clean と同じ処理でPreviewリンクをクリーン再生成します"
 
 
 class HGD_OT_clear_all_generated(bpy.types.Operator):
@@ -2509,7 +2509,7 @@ def _flat_mesh_taper_scale(scene, obj, t):
 
 
 def _flat_mesh_name_for_curve(curve_obj):
-    base = f"HGD_FLAT_MESH_{curve_obj.name.split('.')[0]}"
+    base = f"HGD_FLAT_MESH_{_safe_preview_source_name(curve_obj)}"
     existing = bpy.data.objects.get(base)
     if existing and existing.get("hair_guide_type") == "flat_mesh":
         bpy.data.objects.remove(existing, do_unlink=True)
@@ -2523,7 +2523,7 @@ FLAT_MESH_PREVIEW_PREFIX = "HGD_FLAT_MESH_PREVIEW_"
 
 
 def _flat_mesh_preview_name_for_curve(curve_obj):
-    return f"{FLAT_MESH_PREVIEW_PREFIX}{curve_obj.name.split('.')[0]}"
+    return f"{FLAT_MESH_PREVIEW_PREFIX}{_safe_preview_source_name(curve_obj)}"
 
 
 def _unlink_preview_reference_properties(curve_obj):
@@ -2679,8 +2679,9 @@ def _create_flat_mesh_object(context, curve_obj, guide_type, name, collection):
 
 def _create_or_update_flat_mesh_preview(context, curve_obj):
     scene = context.scene
-    _clear_card_preview_for_curve(curve_obj)
+    _sync_card_width_preset_to_scene(scene)
     _sync_scene_card_width_settings_to_curve(scene, curve_obj)
+    _clear_card_preview_for_curve(curve_obj)
     _, collections = utils.ensure_system()
     name = _flat_mesh_preview_name_for_curve(curve_obj)
     new_mesh = _build_flat_mesh_mesh_data(context, curve_obj, name)
@@ -2736,7 +2737,8 @@ def _card_preview_name_for_curve(curve_obj):
 
 
 def _legacy_card_preview_name_for_curve(curve_obj):
-    return f"{CARD_PREVIEW_PREFIX}{curve_obj.name.split('.')[0]}"
+    legacy_base = curve_obj.name.partition(".")[0]
+    return f"{CARD_PREVIEW_PREFIX}{legacy_base}"
 
 
 def _is_stale_card_preview_for_curve(obj, curve_obj):
@@ -2949,7 +2951,7 @@ def _create_or_update_card_preview(context, curve_obj):
 
 
 def _card_mesh_name_for_curve(curve_obj):
-    base = f"HGD_CARD_MESH_{curve_obj.name.split('.')[0]}"
+    base = f"HGD_CARD_MESH_{_safe_preview_source_name(curve_obj)}"
     return utils.unique_name(base) if bpy.data.objects.get(base) else base
 
 
@@ -3056,7 +3058,7 @@ def _apply_display_mode_to_curve(context, obj):
         _clear_all_previews_for_curve(obj)
         _ensure_curve_visible_geometry(context, obj)
     elif mode == "CARD":
-        _clear_flat_mesh_preview_for_curve(obj)
+        _sync_card_width_preset_to_scene(scene)
         _sync_scene_card_width_settings_to_curve(scene, obj)
         obj.hide_viewport = False
         obj.display_type = 'WIRE'
@@ -3074,7 +3076,8 @@ def _apply_display_mode_to_curve(context, obj):
         _set_card_preview_visible(obj, True)
         _set_flat_mesh_preview_visible(obj, False)
     elif mode == "FLAT_MESH":
-        _clear_card_preview_for_curve(obj)
+        _sync_card_width_preset_to_scene(scene)
+        _sync_scene_card_width_settings_to_curve(scene, obj)
         obj.hide_viewport = False
         obj.display_type = 'WIRE'
         obj.data.bevel_depth = 0.0
@@ -5291,6 +5294,7 @@ classes = (
     HGD_OT_clear_warnings,
     HGD_OT_clear_card_previews,
     HGD_OT_clear_flat_mesh_previews,
+    HGD_OT_rebuild_preview_links_clean,
     HGD_OT_rebuild_card_previews_clean,
     HGD_OT_clear_all_generated,
     HGD_OT_toggle_in_front_generated_helpers,
