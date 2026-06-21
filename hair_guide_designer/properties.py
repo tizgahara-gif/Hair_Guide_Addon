@@ -79,7 +79,7 @@ PROPERTY_NAMES = (
     "hair_flat_mesh_add_subdivision", "hair_flat_mesh_mark_side_sharp", "hair_twist_flat_mesh_force_inner_side", "hair_twist_flat_mesh_inner_mode", "hair_warning_count", "hair_root_cluster_threshold",
     "hair_batch_curve_length", "hair_batch_curve_bevel_depth", "hair_batch_curve_resolution",
     "hair_follow_keep_tip_offset", "hair_follow_update_selected_only",
-    "hair_mirror_axis", "hair_mirror_overwrite_existing", "hair_mirror_copy_custom_properties",
+    "hair_mirror_mode_enabled", "hair_mirror_source_side", "hair_mirror_axis_mode", "hair_mirror_axis", "hair_mirror_overwrite_existing", "hair_mirror_copy_custom_properties",
     "hair_use_shared_taper", "hair_taper_preset", "hair_taper_root_radius",
     "hair_taper_mid_radius", "hair_taper_tip_radius", "hair_taper_bevel_depth",
     "hair_taper_resolution", "hair_auto_apply_taper_to_new_curves",
@@ -652,6 +652,24 @@ def register():
         name="選択カーブのみ",
         default=True,
         description="全生成カーブではなく、選択中の生成カーブのみ更新します。",
+    )
+
+    scene.hair_mirror_mode_enabled = BoolProperty(
+        name="ミラーモード",
+        default=False,
+        description="ON中は生成時に左右ペアを作成し、同期ボタンで反対側へ形状を反映します。OFF後は独立編集できます。",
+    )
+    scene.hair_mirror_source_side = EnumProperty(
+        name="ミラー元",
+        items=(("L", "左", "左側を元に右側へ反映"), ("R", "右", "右側を元に左側へ反映")),
+        default="L",
+        description="ミラーモードで生成・同期するときのコピー元です。",
+    )
+    scene.hair_mirror_axis_mode = EnumProperty(
+        name="ミラー軸モード",
+        items=(("WORLD_X", "World X", "World X=0を基準に反転"), ("HEAD_CENTER_X", "Head Center X", "頭部中心Xを基準に反転")),
+        default="HEAD_CENTER_X",
+        description="左右反転の基準軸です。",
     )
 
     scene.hair_mirror_axis = EnumProperty(

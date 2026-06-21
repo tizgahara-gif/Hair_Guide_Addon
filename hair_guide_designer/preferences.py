@@ -20,6 +20,18 @@ class HGD_AddonPreferences(bpy.types.AddonPreferences):
     hgd_pie_use_shift: BoolProperty(name="Shift", default=False)
     hgd_pie_use_ctrl: BoolProperty(name="Ctrl", default=False)
 
+    hair_curve_variation_seed: IntProperty(
+        name="個体差シード",
+        default=1,
+        min=0,
+        description="Curveの位置ブレと長さブレを再現するための乱数シード。",
+    )
+    hair_curve_variation_randomize_seed_per_generation: BoolProperty(
+        name="生成ごとにシードをランダム化",
+        default=False,
+        description="有効にすると、カーブ生成ごとに個体差Seedを変えます。",
+    )
+
     def draw(self, context):
         layout = self.layout
         key_box = layout.box()
@@ -30,6 +42,11 @@ class HGD_AddonPreferences(bpy.types.AddonPreferences):
         row.prop(self, "hgd_pie_use_shift")
         row.prop(self, "hgd_pie_use_alt")
         key_box.operator("hgd.reload_keymaps", icon='FILE_REFRESH')
+
+        seed_box = layout.box()
+        seed_box.label(text="Curve Variation Seed", icon='FILE_REFRESH')
+        seed_box.prop(self, "hair_curve_variation_seed")
+        seed_box.prop(self, "hair_curve_variation_randomize_seed_per_generation")
 
         layout.label(text="配置点数")
         for prop in ("point_count_top", "point_count_front", "point_count_side_l", "point_count_side_r", "point_count_back_upper", "point_count_back_middle", "point_count_nape"):

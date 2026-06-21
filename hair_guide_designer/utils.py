@@ -4,7 +4,7 @@ import mathutils
 
 ROOT = "hair_guide"
 GUIDES = "00_Guides"
-REGIONS = "99_Internal"
+REGIONS = "00_Guides"
 PLACEMENT_POINTS = "01_PlacementPoints"
 CURVES = "02_Curves"
 WARNINGS = "06_Warnings"
