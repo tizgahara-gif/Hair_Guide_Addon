@@ -2920,6 +2920,49 @@ def _sync_scene_card_width_settings_to_curve(scene, curve_obj):
     curve_obj["hair_card_samples"] = scene.hair_card_samples
 
 
+def _resolve_card_settings_source_from_selection(context):
+    active = context.active_object
+    candidates = []
+    if active:
+        candidates.append(active)
+    candidates.extend([obj for obj in context.selected_objects if obj != active])
+
+    for obj in candidates:
+        if not obj:
+            continue
+        guide_type = obj.get("hair_guide_type", "")
+        if guide_type == "card_preview":
+            return obj
+        if guide_type in {"curve", "twist_strand"}:
+            return obj
+        if guide_type in {"flat_mesh_preview", "card_mesh", "flat_mesh"}:
+            source = bpy.data.objects.get(obj.get("hair_source_curve", ""))
+            if source:
+                return source
+    return None
+
+
+def _read_float_prop(obj, key, fallback):
+    try:
+        return float(obj.get(key, fallback))
+    except Exception:
+        return fallback
+
+
+def _read_int_prop(obj, key, fallback):
+    try:
+        return int(obj.get(key, fallback))
+    except Exception:
+        return fallback
+
+
+def _read_bool_prop(obj, key, fallback):
+    try:
+        return bool(obj.get(key, fallback))
+    except Exception:
+        return fallback
+
+
 def _store_scene_card_width_shape(curve_obj, scene):
     _sync_scene_card_width_settings_to_curve(scene, curve_obj)
 
@@ -3246,6 +3289,49 @@ class HGD_OT_apply_card_width_preset(bpy.types.Operator):
             self.report({'INFO'}, "カスタム設定を使用します。")
             return {'FINISHED'}
         self.report({'INFO'}, f"CARD幅プリセット「{CARD_WIDTH_PRESET_LABELS.get(preset, preset)}」を反映しました。")
+        return {'FINISHED'}
+
+
+class HGD_OT_load_card_preview_settings_to_scene(bpy.types.Operator):
+    bl_idname = "hgd.load_card_preview_settings_to_scene"
+    bl_label = "現在のPreview設定を読み込み"
+    bl_description = "選択中のCARD Previewまたは参照元CurveからRoot/Mid/Tip幅、Mid位置、幅補間、分割数を読み込み、CARD幅プリセットをCUSTOMにします。"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        source = _resolve_card_settings_source_from_selection(context)
+        if not source:
+            self.report({'WARNING'}, "CARD設定を読み込めるPreview、Curve、または参照元Curve付きMeshが選択されていません。")
+            return {'CANCELLED'}
+
+        width_keys = (
+            "hair_card_width_root_cm",
+            "hair_card_width_mid_cm",
+            "hair_card_width_tip_cm",
+        )
+        if not any(key in source for key in width_keys):
+            self.report({'WARNING'}, "選択対象にRoot/Mid/Tip幅のPreview設定がありません。")
+            return {'CANCELLED'}
+
+        scene.hair_card_width_preset = "CUSTOM"
+        scene.hair_card_width_root_cm = _read_float_prop(source, "hair_card_width_root_cm", scene.hair_card_width_root_cm)
+        scene.hair_card_width_mid_cm = _read_float_prop(source, "hair_card_width_mid_cm", scene.hair_card_width_mid_cm)
+        scene.hair_card_width_tip_cm = _read_float_prop(source, "hair_card_width_tip_cm", scene.hair_card_width_tip_cm)
+        scene.hair_card_mid_position = _read_float_prop(source, "hair_card_mid_position", scene.hair_card_mid_position)
+
+        width_interpolation = str(source.get("hair_card_width_interpolation", scene.hair_card_width_interpolation))
+        enum_items = scene.bl_rna.properties["hair_card_width_interpolation"].enum_items
+        if width_interpolation in {item.identifier for item in enum_items}:
+            scene.hair_card_width_interpolation = width_interpolation
+
+        scene.hair_card_samples = _read_int_prop(source, "hair_card_samples", scene.hair_card_samples)
+        scene.hair_card_sync_widths = False
+        scene.hair_card_synced_width_cm = _read_float_prop(source, "hair_card_synced_width_cm", scene.hair_card_synced_width_cm)
+        scene.hair_card_default_roll_angle = _read_float_prop(source, "hair_card_roll_angle", scene.hair_card_default_roll_angle)
+        scene.hair_card_use_parallel_transport = _read_bool_prop(source, "hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport)
+
+        self.report({'INFO'}, f"{source.name} からCARD Preview設定を読み込み、プリセットをCUSTOMにしました。")
         return {'FINISHED'}
 
 
@@ -5375,6 +5461,7 @@ classes = (
     HGD_OT_organize_curves_by_region,
     HGD_OT_apply_curve_region_colors,
     HGD_OT_apply_card_width_preset,
+    HGD_OT_load_card_preview_settings_to_scene,
     HGD_OT_apply_taper_preset,
     HGD_OT_create_or_update_default_taper,
     HGD_OT_apply_taper_to_selected_curves,
