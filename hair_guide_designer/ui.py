@@ -93,6 +93,7 @@ class HGD_PT_card_flat_preview(HGD_PT_base):
     def draw(self, context):
         scene=context.scene; box=_section_box(self.layout,'CARD','MESH_PLANE','[CARD]')
         for p in ['hair_card_width_preset','hair_card_width_root_cm','hair_card_width_mid_cm','hair_card_width_tip_cm','hair_card_mid_position','hair_card_width_interpolation']: box.prop(scene,p)
+        box.label(text='CARD Root/Mid/Tip幅とCARDサンプル数はFlat Mesh生成にも使用されます。', icon='INFO')
         box.operator('hgd.apply_card_width_preset'); box.operator('hgd.update_card_previews_from_curves', text='CARD Previewを現在設定で更新')
         flat=_section_box(self.layout,'Flat Preview','MESH_DATA','[CARD]'); flat.operator('hgd.update_flat_mesh_previews_from_curves', text='Flat Mesh Preview更新'); flat.operator('hgd.clear_flat_mesh_previews', text='Preview削除')
         ctrl=_section_box(self.layout,'CARD方向制御','EMPTY_SINGLE_ARROW','[CARD]')
@@ -112,7 +113,9 @@ class HGD_PT_output_mesh(HGD_PT_base):
         scene=context.scene; card=_section_box(self.layout,'CARD Mesh','MESH_PLANE','[OUTPUT]')
         card.operator('hgd.convert_selected_card_preview_to_mesh', text='選択CARD Mesh出力'); card.operator('hgd.convert_all_card_previews_to_mesh', text='全CARD Mesh出力')
         flat=_section_box(self.layout,'Flat Mesh','MESH_DATA','[OUTPUT]')
-        for p in ['hair_flat_mesh_width_cm','hair_flat_mesh_thickness_cm','hair_flat_mesh_samples','hair_flat_mesh_ring_segments','hair_flat_mesh_mark_side_sharp','hair_flat_mesh_add_subdivision']: flat.prop(scene,p)
+        flat.label(text='扁平メッシュの幅と分割数はCARD設定を使用します。', icon='INFO')
+        flat.label(text='Root/Mid/Tipやサンプル数はCARD / Flat Preview側で調整してください。')
+        for p in ['hair_flat_mesh_thickness_cm','hair_flat_mesh_ring_segments','hair_flat_mesh_mark_side_sharp','hair_flat_mesh_add_subdivision']: flat.prop(scene,p)
         flat.operator('hgd.export_flat_mesh_from_selected_curves', text='選択Flat Mesh出力'); flat.operator('hgd.create_flat_mesh_from_all_curves', text='全Flat Mesh出力')
 
 class HGD_PT_final_edit(HGD_PT_base):
