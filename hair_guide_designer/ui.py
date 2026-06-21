@@ -66,8 +66,6 @@ class HGD_PT_guides_points(HGD_PT_base):
         _all_region_buttons(box)
         for args in [('頭頂部','Top'),('前髪','Front'),('側頭部','Side'),('左側','Side_L'),('右側','Side_R'),('後頭部上層','Back_Upper'),('後頭部中層','Back_Middle'),('襟足','Nape')]: _region_buttons(box,*args)
         box.operator('hgd.symmetrize_front_back_guides', text='前後ガイド左右対称化', icon='MOD_MIRROR')
-        row=box.row(align=True); row.operator('hgd.mirror_side_guide_l_to_r', text='左→右'); row.operator('hgd.mirror_side_guide_r_to_l', text='右→左')
-        row=box.row(align=True); row.operator('hgd.mirror_mode_sync_pairs', text='ミラーペア同期')
         finish=_section_box(self.layout,'作業完了','CHECKMARK','[GUIDE]')
         finish.label(text='出力Meshだけを残し、ガイド・配置点・Curve・Preview・Emptyを削除します。', icon='INFO')
         finish.operator('hgd.finish_hair_guide_work', text='作業終了：出力Meshのみ残す', icon='CHECKMARK')
@@ -92,17 +90,6 @@ class HGD_PT_display_mode(HGD_PT_base):
     def draw(self, context):
         scene=context.scene; box=_section_box(self.layout,'Display Mode','RESTRICT_VIEW_OFF','[DISPLAY]')
         box.prop(scene,'hair_curve_display_mode'); box.operator('hgd.apply_display_mode_to_selected_curves', text='選択対象へ適用'); box.operator('hgd.apply_display_mode_to_all_curves', text='全Curveへ適用')
-        mirror=_section_box(self.layout,'Mirror','MOD_MIRROR','[DISPLAY]')
-        mirror.prop(scene,'hair_mirror_modifier_enabled')
-        mirror.prop(scene,'hair_mirror_axis')
-        mirror.prop(scene,'hair_mirror_empty')
-        mirror.prop(scene,'hair_mirror_resolve_remove_modifier')
-        mirror.operator('hgd.create_mirror_empty', text='Mirror Empty作成')
-        mirror.operator('hgd.apply_mirror_modifier_to_selected', text='選択対象へMirror適用')
-        mirror.operator('hgd.apply_mirror_modifier_to_all', text='全Curve/PreviewへMirror適用')
-        mirror.operator('hgd.resolve_mirror_modifier', text='Mirror解決')
-        mirror.operator('hgd.remove_mirror_modifier', text='Mirror Modifier削除')
-
 class HGD_PT_card_flat_preview(HGD_PT_base):
     bl_label='[CARD] CARD / Flat Preview'; bl_order=5
     def draw(self, context):
