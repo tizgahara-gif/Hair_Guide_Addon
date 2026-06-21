@@ -1210,6 +1210,19 @@ class HGD_OT_clear_placement_points(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def _select_generated_objects(context, objects):
+    bpy.ops.object.select_all(action='DESELECT')
+    active = None
+    for obj in objects:
+        if obj and obj.name in context.view_layer.objects:
+            obj.hide_viewport = False
+            obj.hide_select = False
+            obj.select_set(True)
+            active = obj
+    if active:
+        context.view_layer.objects.active = active
+
+
 class HGD_OT_create_curve_from_points(bpy.types.Operator):
     bl_idname = "hgd.create_curve_from_points"
     bl_label = "カーブ毛束を生成"
@@ -1225,11 +1238,15 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
             if context.scene.hair_strand_generation_type == "TWIST_CURVE":
                 made = 0
                 curves_by_point = {}
+                created_controls = []
                 for point in points:
                     control, _strand = _make_twist_from_point(context, point)
                     curves_by_point[point.name] = control
+                    if control:
+                        created_controls.append(control)
                     made += 1
                 _apply_work_mode_lock_to_all_objects(context)
+                _select_generated_objects(context, created_controls)
                 self.report({'INFO'}, f"ツイスト制御カーブ{made}本と表示用カーブを生成しました。制御カーブを編集してから更新してください。")
                 return {'FINISHED'}
             utils.ensure_system()
@@ -1239,6 +1256,7 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 taper_obj, _ = _create_or_update_default_taper(context)
             made = 0
             curves_by_point = {}
+            created_curves = []
             for point in points:
                 region = point.get("hair_region", "Front")
                 direction = utils.string_to_vector(point.get("recommended_direction"), utils.direction_for_region(region))
@@ -1279,12 +1297,13 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 if scene.hair_auto_apply_taper_to_new_curves:
                     _apply_taper_to_curve_obj(context, obj, taper_obj)
                 _ensure_curve_visible_geometry(context, obj)
-                if scene.hair_card_auto_apply_to_new_curves:
-                    _apply_display_mode_to_curve(context, obj)
                 _restore_curve_root_world(obj, root_world)
+                _apply_display_mode_to_curve(context, obj)
                 curves_by_point[point.name] = obj
+                created_curves.append(obj)
                 made += 1
             _apply_work_mode_lock_to_all_objects(context)
+            _select_generated_objects(context, created_curves)
             self.report({'INFO'}, f"カーブ毛束を{made}本生成しました。")
             return {'FINISHED'}
         except Exception as exc:
@@ -2127,8 +2146,7 @@ def _create_or_replace_twist_strand(context, control_obj):
         _apply_taper_to_curve_obj(context, obj, taper_obj)
     obj.data.bevel_depth = cm_to_m(scene.hair_twist_bevel_depth_cm)
     _ensure_curve_visible_geometry(context, obj)
-    if scene.hair_card_auto_apply_to_new_curves:
-        _apply_display_mode_to_curve(context, obj)
+    _apply_display_mode_to_curve(context, obj)
     _apply_work_mode_lock_to_object(context, obj)
     return obj
 
