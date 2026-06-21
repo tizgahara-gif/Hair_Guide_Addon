@@ -1566,6 +1566,60 @@ class HGD_OT_clear_flat_mesh_previews(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class HGD_OT_rebuild_card_previews_clean(bpy.types.Operator):
+    bl_idname = "hgd.rebuild_card_previews_clean"
+    bl_label = "CARD Previewをクリーン再生成"
+    bl_description = "既存プロジェクト移行用にCARD/Flat Mesh Previewを全削除し、選択CurveまたはCARD表示中Curveだけを現在設定で再生成します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        if not bpy.data.collections.get(utils.ROOT):
+            self.report({'WARNING'}, "HairGuideSystemが存在しません。")
+            return {'CANCELLED'}
+
+        selected_curves, selected_twist_controls = _selected_card_update_targets(context)
+        selected_targets = bool(selected_curves or selected_twist_controls)
+
+        removed = 0
+        for obj in list(utils.generated_objects()):
+            if obj.get("hair_guide_type") in {"card_preview", "flat_mesh_preview"}:
+                bpy.data.objects.remove(obj, do_unlink=True)
+                removed += 1
+
+        for obj in utils.generated_objects():
+            if obj.type == "CURVE":
+                obj["hair_card_preview_object"] = ""
+                obj["hair_flat_mesh_preview_object"] = ""
+
+        _sync_card_width_preset_to_scene(context.scene)
+        rebuilt = 0
+        if selected_targets:
+            for control in selected_twist_controls:
+                _sync_scene_card_width_settings_to_curve(context.scene, control)
+                strand = _create_or_replace_twist_strand(context, control)
+                if strand:
+                    _sync_scene_card_width_settings_to_curve(context.scene, strand)
+                    strand["hair_curve_display_mode"] = "CARD"
+                    if _create_or_update_card_preview(context, strand):
+                        rebuilt += 1
+            rebuild_curves = selected_curves
+        else:
+            rebuild_curves = _all_card_display_curves(context)
+
+        for curve_obj in rebuild_curves:
+            _sync_scene_card_width_settings_to_curve(context.scene, curve_obj)
+            curve_obj["hair_curve_display_mode"] = "CARD"
+            if _create_or_update_card_preview(context, curve_obj):
+                rebuilt += 1
+
+        context.view_layer.update()
+        if rebuilt == 0:
+            self.report({'WARNING'}, f"Previewを{removed}個削除しましたが、再生成対象Curveが見つかりません。")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"Previewを{removed}個削除し、CARD Previewを{rebuilt}個再生成しました。")
+        return {'FINISHED'}
+
+
 class HGD_OT_clear_all_generated(bpy.types.Operator):
     bl_idname = "hgd.clear_all_generated"
     bl_label = "生成物をすべて削除"
@@ -2673,14 +2727,54 @@ def _create_flat_meshes_from_curves(context, selected_only):
 CARD_PREVIEW_PREFIX = "HGD_CARD_PREVIEW_"
 
 
+def _safe_preview_source_name(curve_obj):
+    return curve_obj.name.replace(".", "_")
+
+
 def _card_preview_name_for_curve(curve_obj):
+    return f"{CARD_PREVIEW_PREFIX}{_safe_preview_source_name(curve_obj)}"
+
+
+def _legacy_card_preview_name_for_curve(curve_obj):
     return f"{CARD_PREVIEW_PREFIX}{curve_obj.name.split('.')[0]}"
+
+
+def _is_stale_card_preview_for_curve(obj, curve_obj):
+    is_card_preview = obj.get("hair_guide_type") == "card_preview" or obj.name.startswith(CARD_PREVIEW_PREFIX)
+    if not is_card_preview:
+        return False
+    if obj.get("hair_source_curve") == curve_obj.name:
+        return True
+    if obj.name == _card_preview_name_for_curve(curve_obj):
+        return True
+    if (
+        obj.name.startswith(CARD_PREVIEW_PREFIX)
+        and not obj.get("hair_source_curve", "")
+        and obj.name == _legacy_card_preview_name_for_curve(curve_obj)
+    ):
+        return True
+    return False
+
+
+def _card_preview_cleanup_candidates():
+    candidates = []
+    seen = set()
+    for obj in utils.generated_objects("card_preview"):
+        candidates.append(obj)
+        seen.add(obj.name)
+    collection = utils.get_system_collection(utils.CARD_PREVIEWS, create=False)
+    if collection:
+        for obj in utils.collection_objects_recursive(collection):
+            if obj.name not in seen and obj.name.startswith(CARD_PREVIEW_PREFIX):
+                candidates.append(obj)
+                seen.add(obj.name)
+    return candidates
 
 
 def _clear_card_preview_for_curve(curve_obj):
     removed = 0
-    for obj in list(utils.generated_objects("card_preview")):
-        if obj.get("hair_source_curve") == curve_obj.name or obj.name == _card_preview_name_for_curve(curve_obj):
+    for obj in list(_card_preview_cleanup_candidates()):
+        if _is_stale_card_preview_for_curve(obj, curve_obj):
             bpy.data.objects.remove(obj, do_unlink=True)
             removed += 1
     curve_obj["hair_card_preview_object"] = ""
@@ -2819,9 +2913,12 @@ def _apply_card_preview_props(preview, curve_obj, scene, samples):
 
 def _create_or_update_card_preview_for_scene(context, curve_obj):
     scene = context.scene
+    _sync_card_width_preset_to_scene(scene)
+    _sync_scene_card_width_settings_to_curve(scene, curve_obj)
     _clear_flat_mesh_preview_for_curve(curve_obj)
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return None
+    _clear_card_preview_for_curve(curve_obj)
     name = _card_preview_name_for_curve(curve_obj)
     mesh, samples = _build_card_preview_mesh(context, curve_obj, name)
     if not mesh:
@@ -5194,6 +5291,7 @@ classes = (
     HGD_OT_clear_warnings,
     HGD_OT_clear_card_previews,
     HGD_OT_clear_flat_mesh_previews,
+    HGD_OT_rebuild_card_previews_clean,
     HGD_OT_clear_all_generated,
     HGD_OT_toggle_in_front_generated_helpers,
     HGD_OT_organize_curves_by_region,
