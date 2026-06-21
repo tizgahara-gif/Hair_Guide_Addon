@@ -67,6 +67,9 @@ class HGD_PT_guides_points(HGD_PT_base):
         _all_region_buttons(box)
         for args in [('頭頂部','Top'),('前髪','Front'),('側頭部','Side'),('左側','Side_L'),('右側','Side_R'),('後頭部上層','Back_Upper'),('後頭部中層','Back_Middle'),('襟足','Nape')]: _region_buttons(box,*args)
         box.operator('hgd.symmetrize_front_back_guides', text='Front/Back/Napeガイドを左右対称化', icon='PIVOT_MEDIAN')
+        row = box.row(align=True)
+        row.operator('hgd.mirror_side_guide_l_to_r', text='Side L → R 対称化', icon='ARROW_LEFTRIGHT')
+        row.operator('hgd.mirror_side_guide_r_to_l', text='Side R → L 対称化', icon='ARROW_LEFTRIGHT')
 
 class HGD_PT_curve_shape(HGD_PT_base):
     bl_label='[CURVE] Curve Shape'; bl_order=3
