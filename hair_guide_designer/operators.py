@@ -2303,7 +2303,11 @@ def _card_width(scene, t, curve_obj=None):
     return mid + (tip - mid) * f
 
 
-def _sync_scene_card_settings_to_curve(scene, curve_obj):
+def _sync_scene_card_width_settings_to_curve(scene, curve_obj):
+    """
+    UI上のCARD幅設定を、対象CurveのCustom Propertyへ同期する。
+    CARD Preview更新・表示モード適用の直前に必ず呼ぶ。
+    """
     curve_obj["hair_card_mid_position"] = scene.hair_card_mid_position
     curve_obj["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
     curve_obj["hair_card_width_root_cm"] = scene.hair_card_width_root_cm
@@ -2315,7 +2319,7 @@ def _sync_scene_card_settings_to_curve(scene, curve_obj):
 
 
 def _store_scene_card_width_shape(curve_obj, scene):
-    _sync_scene_card_settings_to_curve(scene, curve_obj)
+    _sync_scene_card_width_settings_to_curve(scene, curve_obj)
 
 
 def _build_card_preview_mesh(context, curve_obj, name):
@@ -2402,6 +2406,9 @@ def _create_or_update_card_preview_for_scene(context, curve_obj):
 def _create_or_update_card_preview(context, curve_obj):
     preview = _create_or_update_card_preview_for_scene(context, curve_obj)
     if preview:
+        preview.data.update()
+        preview.update_tag(refresh={'DATA'})
+        context.view_layer.update()
         _apply_work_mode_lock_to_object(context, preview)
     return preview
 
@@ -2509,7 +2516,7 @@ def _apply_display_mode_to_curve(context, obj):
         _set_flat_mesh_preview_visible(obj, False)
         _ensure_curve_visible_geometry(context, obj)
     elif mode == "CARD":
-        _sync_scene_card_settings_to_curve(scene, obj)
+        _sync_scene_card_width_settings_to_curve(scene, obj)
         obj.hide_viewport = False
         obj.display_type = 'WIRE'
         obj.data.bevel_depth = 0.0
@@ -3438,6 +3445,7 @@ class HGD_OT_apply_card_roll_to_selected(bpy.types.Operator):
         for curve in targets:
             curve["hair_card_roll_angle"] = scene.hair_card_default_roll_angle
             curve["hair_card_use_parallel_transport"] = scene.hair_card_use_parallel_transport
+            _sync_scene_card_width_settings_to_curve(scene, curve)
             curve["hair_curve_display_mode"] = "CARD"
             if _create_or_update_card_preview(context, curve):
                 applied += 1
@@ -3462,6 +3470,7 @@ class HGD_OT_fix_card_twist(bpy.types.Operator):
             curve["hair_card_use_parallel_transport"] = True
             if "hair_card_roll_angle" not in curve:
                 curve["hair_card_roll_angle"] = scene.hair_card_default_roll_angle
+            _sync_scene_card_width_settings_to_curve(scene, curve)
             curve["hair_curve_display_mode"] = "CARD"
             if _create_or_update_card_preview(context, curve):
                 fixed += 1
@@ -3727,7 +3736,7 @@ class HGD_OT_cleanup_card_control_empties(bpy.types.Operator):
 class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
     bl_idname = "hgd.update_card_previews_from_curves"
     bl_label = "CARD Previewを現在設定で更新"
-    bl_description = "現在のCARD幅、Mid位置、補間、参照Empty設定を選択Curveへ反映してPreviewを再生成します。"
+    bl_description = "現在のRoot/Mid/Tip幅、Mid位置、幅補間を選択Curveへ同期してPreviewを再生成します。"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -3748,16 +3757,16 @@ class HGD_OT_update_card_previews_from_curves(bpy.types.Operator):
 
         updated = 0
         for control in twist_controls:
-            _sync_scene_card_settings_to_curve(context.scene, control)
+            _sync_scene_card_width_settings_to_curve(context.scene, control)
             strand = _create_or_replace_twist_strand(context, control)
             if strand:
-                _sync_scene_card_settings_to_curve(context.scene, strand)
+                _sync_scene_card_width_settings_to_curve(context.scene, strand)
                 strand["hair_curve_display_mode"] = "CARD"
                 if _create_or_update_card_preview(context, strand):
                     updated += 1
 
         for curve_obj in curves:
-            _sync_scene_card_settings_to_curve(context.scene, curve_obj)
+            _sync_scene_card_width_settings_to_curve(context.scene, curve_obj)
             if curve_obj.get("hair_guide_type") == "twist_strand":
                 curve_obj["hair_curve_display_mode"] = "CARD"
             elif curve_obj.get("hair_guide_type") == "curve":
