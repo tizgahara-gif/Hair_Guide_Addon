@@ -554,7 +554,7 @@ def register():
         default=0.012, min=0.001, max=2.0, precision=4,
         description="互換用のm単位厚みです。通常UIではcm単位を使用します。",
     )
-    scene.hair_flat_mesh_thickness_cm = FloatProperty(name="扁平メッシュ厚み(cm)", default=1.2, min=0.0, max=200.0, precision=2, description="扁平メッシュ生成時の楕円断面の厚みをcm単位で指定します。内部ではmへ変換します。")
+    scene.hair_flat_mesh_thickness_cm = FloatProperty(name="扁平メッシュ厚み(cm)", default=1.2, min=0.0, max=200.0, precision=2, description="CARD幅に厚みを与えて扁平メッシュ化する際の厚みです。")
     scene.hair_flat_mesh_samples = IntProperty(
         name="サンプル数",
         default=24,
@@ -567,7 +567,7 @@ def register():
         default=8,
         min=4,
         max=32,
-        description="扁平メッシュの楕円断面リング分割数です。",
+        description="CARD幅方向を基準にした扁平断面の分割数です。",
     )
     scene.hair_flat_mesh_solidify_thickness = FloatProperty(
         name="Solidify厚み(互換用)",

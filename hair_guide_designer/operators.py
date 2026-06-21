@@ -2299,45 +2299,29 @@ def _build_flat_mesh_data(context, curve_obj):
     scene = context.scene
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return [], [], set()
-    sample_count = max(int(getattr(scene, "hair_flat_mesh_sample_count", scene.hair_flat_mesh_samples)), 2)
+    sample_count = max(int(scene.hair_card_samples), 2)
     samples = utils.sample_curve_world_points_evaluated(curve_obj, sample_count)
     if len(samples) < 2:
         return [], [], set()
 
+    frames = _build_card_frames(context, curve_obj, samples)
+    if not frames:
+        return [], [], set()
+
     ring_segments = min(max(int(getattr(scene, "hair_flat_mesh_ring_segments", 8)), 4), 32)
-    half_width = cm_to_m(scene.hair_flat_mesh_width_cm) * 0.5
     half_thickness = cm_to_m(scene.hair_flat_mesh_thickness_cm) * 0.5
     vertices = []
     faces = []
     sharp_edges = set()
-    prev_tangent = None
-    prev_side = None
     prev_normal = None
-    for index, sample in enumerate(samples):
-        prev_point = samples[max(index - 1, 0)]
-        next_point = samples[min(index + 1, len(samples) - 1)]
-        tangent = next_point - prev_point
-        if tangent.length < 1e-6:
-            tangent = prev_tangent.copy() if prev_tangent else mathutils.Vector((0.0, 0.0, 1.0))
-        tangent.normalize()
-        side = _flat_mesh_side_vector_for_curve(context, curve_obj, sample, tangent, prev_side)
-        if side is None:
-            if prev_side is not None and bool(curve_obj.get("hair_card_use_parallel_transport", scene.hair_card_use_parallel_transport)):
-                side = _parallel_transport_side(prev_tangent, tangent, prev_side)
-            else:
-                side = _initial_card_side(scene, curve_obj, sample, tangent)
-            side = _apply_card_roll(side, tangent, float(curve_obj.get("hair_card_roll_angle", scene.hair_card_default_roll_angle)))
+    for index, (sample, tangent, side) in enumerate(frames):
         normal = _flat_mesh_normal_from_side(tangent, side, prev_normal)
-        t = index / max(len(samples) - 1, 1)
-        taper = _flat_mesh_taper_scale(scene, curve_obj, t)
-        hw = half_width * taper
-        ht = half_thickness * taper
+        t = index / max(len(frames) - 1, 1)
+        half_width = max(_card_width(scene, t, curve_obj), 0.0) * 0.5
         for ring_index in range(ring_segments):
             angle = 2.0 * math.pi * ring_index / ring_segments
-            vertex = sample + side * math.cos(angle) * hw + normal * math.sin(angle) * ht
+            vertex = sample + side * math.cos(angle) * half_width + normal * math.sin(angle) * half_thickness
             vertices.append(tuple(vertex))
-        prev_tangent = tangent.copy()
-        prev_side = side.copy()
         prev_normal = normal.copy()
 
     sharp_ring_indices = _flat_mesh_sharp_ring_indices(ring_segments) if scene.hair_flat_mesh_mark_side_sharp else set()
@@ -2362,11 +2346,24 @@ def _apply_flat_mesh_custom_props(obj, curve_obj, scene, guide_type):
     utils.set_common_props(obj, guide_type, curve_obj.get("hair_region", ""), scene)
     obj.color = curve_obj.color
     obj["hair_source_curve"] = curve_obj.name
-    obj["hair_flat_mesh_width"] = cm_to_m(scene.hair_flat_mesh_width_cm)
-    obj["hair_flat_mesh_width_cm"] = scene.hair_flat_mesh_width_cm
+    root_cm = float(curve_obj.get("hair_card_width_root_cm", scene.hair_card_width_root_cm))
+    mid_cm = float(curve_obj.get("hair_card_width_mid_cm", scene.hair_card_width_mid_cm))
+    tip_cm = float(curve_obj.get("hair_card_width_tip_cm", scene.hair_card_width_tip_cm))
+    sync_widths = bool(curve_obj.get("hair_card_sync_widths", scene.hair_card_sync_widths))
+    synced_cm = float(curve_obj.get("hair_card_synced_width_cm", scene.hair_card_synced_width_cm))
+    obj["hair_card_width_root"] = cm_to_m(root_cm)
+    obj["hair_card_width_root_cm"] = root_cm
+    obj["hair_card_width_mid"] = cm_to_m(mid_cm)
+    obj["hair_card_width_mid_cm"] = mid_cm
+    obj["hair_card_width_tip"] = cm_to_m(tip_cm)
+    obj["hair_card_width_tip_cm"] = tip_cm
+    obj["hair_card_sync_widths"] = sync_widths
+    obj["hair_card_synced_width_cm"] = synced_cm
+    obj["hair_card_samples"] = max(int(scene.hair_card_samples), 2)
+    obj["hair_card_mid_position"] = float(curve_obj.get("hair_card_mid_position", scene.hair_card_mid_position))
+    obj["hair_card_width_interpolation"] = str(curve_obj.get("hair_card_width_interpolation", scene.hair_card_width_interpolation))
     obj["hair_flat_mesh_thickness"] = cm_to_m(scene.hair_flat_mesh_thickness_cm)
     obj["hair_flat_mesh_thickness_cm"] = scene.hair_flat_mesh_thickness_cm
-    obj["hair_flat_mesh_samples"] = max(int(getattr(scene, "hair_flat_mesh_sample_count", scene.hair_flat_mesh_samples)), 2)
     obj["hair_flat_mesh_ring_segments"] = min(max(int(getattr(scene, "hair_flat_mesh_ring_segments", 8)), 4), 32)
     obj["hair_flat_mesh_mark_side_sharp"] = scene.hair_flat_mesh_mark_side_sharp
     obj["hair_card_control_empty"] = curve_obj.get("hair_card_control_empty", "")
@@ -2403,6 +2400,7 @@ def _create_flat_mesh_object(context, curve_obj, guide_type, name, collection):
 
 def _create_or_update_flat_mesh_preview(context, curve_obj):
     scene = context.scene
+    _sync_scene_card_width_settings_to_curve(scene, curve_obj)
     _, collections = utils.ensure_system()
     name = _flat_mesh_preview_name_for_curve(curve_obj)
     new_mesh = _build_flat_mesh_mesh_data(context, curve_obj, name)
@@ -2432,6 +2430,7 @@ def _create_or_update_flat_mesh_preview(context, curve_obj):
 def _create_flat_mesh_from_curve(context, curve_obj):
     if curve_obj.type != "CURVE" or curve_obj.get("hair_guide_type") not in {"curve", "twist_strand"}:
         return None
+    _sync_scene_card_width_settings_to_curve(context.scene, curve_obj)
     _, collections = utils.ensure_system()
     mesh_name = _flat_mesh_name_for_curve(curve_obj)
     return _create_flat_mesh_object(context, curve_obj, "flat_mesh", mesh_name, collections[utils.FLAT_MESHES])
