@@ -95,13 +95,16 @@ class HGD_PT_card_flat_preview(HGD_PT_base):
     bl_label='[CARD] CARD / Flat Preview'; bl_order=5
     def draw(self, context):
         scene=context.scene; box=_section_box(self.layout,'CARD','MESH_PLANE','[CARD]')
-        for p in ['hair_card_width_preset','hair_card_width_root_cm','hair_card_width_mid_cm','hair_card_width_tip_cm','hair_card_mid_position','hair_card_width_interpolation']: box.prop(scene,p)
+        box.prop(scene, 'hair_card_width_preset')
+        box.operator('hgd.load_card_preview_settings_to_scene', text='現在のPreview設定を読み込み', icon='IMPORT')
+        box.operator('hgd.apply_card_width_preset')
+        for p in ['hair_card_width_root_cm','hair_card_width_mid_cm','hair_card_width_tip_cm','hair_card_mid_position','hair_card_width_interpolation']: box.prop(scene,p)
         box.prop(scene, 'hair_card_samples', text='CARD分割数')
         box.prop(scene, 'hair_card_sync_widths', text='CARD幅を同期')
         if scene.hair_card_sync_widths:
             box.prop(scene, 'hair_card_synced_width_cm', text='CARD同期幅(cm)')
         box.label(text='CARD Root/Mid/Tip幅とCARDサンプル数はFlat Mesh生成にも使用されます。', icon='INFO')
-        box.operator('hgd.apply_card_width_preset'); box.operator('hgd.update_card_previews_from_curves', text='CARD Previewを現在設定で更新')
+        box.operator('hgd.update_card_previews_from_curves', text='CARD Previewを現在設定で更新')
         ctrl=_section_box(self.layout,'CARD方向制御','EMPTY_SINGLE_ARROW','[CARD]')
         ctrl.operator('hgd.create_card_control_empty', text='共有CARD Control Empty作成/割当')
         ctrl.prop(scene,'hair_selected_card_control_empty', text='参照Empty')
