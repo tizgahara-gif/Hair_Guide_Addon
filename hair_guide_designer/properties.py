@@ -92,6 +92,7 @@ PROPERTY_NAMES = (
     "hair_ui_show_debug",
     "hair_show_guides_in_front", "hair_show_inline_help", "hair_work_mode_lock_enabled",
     "hair_final_edit_mode_enabled",
+    "hair_mirror_mode_enabled", "hair_mirror_source_side", "hair_mirror_axis_mode",
 )
 
 
@@ -149,6 +150,30 @@ def register():
         name="最終編集モード",
         default=False,
         description="ONにすると出力Meshのみ表示し、ガイドやCurveを非表示にします。",
+    )
+
+    scene.hair_mirror_mode_enabled = BoolProperty(
+        name="ミラーモード",
+        default=False,
+        description="ON中に生成した配置点・Curve・Emptyを左右ペア化します。編集後はミラー同期で反映します。",
+    )
+    scene.hair_mirror_source_side = EnumProperty(
+        name="ミラー元",
+        items=(
+            ("L_TO_R", "左→右", "左側を元に右側へ反映"),
+            ("R_TO_L", "右→左", "右側を元に左側へ反映"),
+        ),
+        default="L_TO_R",
+        description="ミラー同期時にコピー元にする側",
+    )
+    scene.hair_mirror_axis_mode = EnumProperty(
+        name="ミラー軸",
+        items=(
+            ("HEAD_CENTER_X", "頭部中心X", "登録頭部の中心Xをミラー軸にする"),
+            ("WORLD_X_ZERO", "World X=0", "World X=0をミラー軸にする"),
+        ),
+        default="HEAD_CENTER_X",
+        description="左右ミラーの基準X座標",
     )
 
     scene.hair_seed = IntProperty(

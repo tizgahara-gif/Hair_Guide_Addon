@@ -682,3 +682,14 @@ Pie Menuには表示モード適用、CARD Previewを現在設定で更新、Fla
 - `05_Empties`
 - `06_Warnings`
 - `99_Internal`
+
+## ミラーモード
+
+ミラーモードON中は、生成した配置点・Curve・CARD Control Emptyが左右ペアとして作成されます。
+編集後は「ミラー同期」で片側から反対側へ反映できます。
+
+解除すると左右Objectは独立し、以後は個別編集できます。
+
+注意:
+Previewと出力Meshはミラー対象ではありません。
+必要に応じてPreview更新またはMesh出力を行ってください。

@@ -773,6 +773,9 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
                 self.report({'WARNING'}, "基本ガイドが見つからないため、頭部Bounding Boxから配置点を生成しました。")
             elif used_fallback or guide_count < 6:
                 self.report({'WARNING'}, "一部の基本ガイドが見つからないため、頭部Bounding Box基準で補完しました。")
+            if scene.hair_mirror_mode_enabled:
+                for obj in list(utils.generated_objects("placement_point")):
+                    _create_or_update_mirror_pair(context, obj)
             _apply_work_mode_lock_to_all_objects(context)
             if removed_points or removed_warnings:
                 self.report({'INFO'}, f"既存の配置点 {removed_points} 個、警告 {removed_warnings} 件を削除しました。配置点 {count_total} 個を再生成しました。")
@@ -1080,6 +1083,9 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                     curves_by_point[point.name] = control
                     made += 1
                 _link_created_curve_mirror_pairs(curves_by_point)
+                if context.scene.hair_mirror_mode_enabled:
+                    for obj in curves_by_point.values():
+                        _create_or_update_mirror_pair(context, obj)
                 _apply_work_mode_lock_to_all_objects(context)
                 self.report({'INFO'}, f"ツイスト制御カーブ{made}本と表示用カーブを生成しました。制御カーブを編集してから更新してください。")
                 return {'FINISHED'}
@@ -1136,6 +1142,9 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 curves_by_point[point.name] = obj
                 made += 1
             _link_created_curve_mirror_pairs(curves_by_point)
+            if scene.hair_mirror_mode_enabled:
+                for obj in curves_by_point.values():
+                    _create_or_update_mirror_pair(context, obj)
             _apply_work_mode_lock_to_all_objects(context)
             self.report({'INFO'}, f"カーブ毛束を{made}本生成しました。")
             return {'FINISHED'}
@@ -1988,6 +1997,215 @@ def _copy_mirrored_bezier_shape(source, target, mirror_x):
 def _copy_custom_properties(source, target):
     for key in source.keys():
         target[key] = source[key]
+
+
+MIRRORABLE_TYPES = {"guide", "region", "placement_point", "curve", "twist_control", "card_control_empty"}
+
+
+def _mirror_axis_x(context):
+    scene = context.scene
+    if getattr(scene, "hair_mirror_axis_mode", "HEAD_CENTER_X") == "WORLD_X_ZERO":
+        return 0.0
+    head = getattr(scene, "hair_target_head_object", None)
+    if head:
+        _, _, center, _ = utils.head_bounds(head)
+        return center.x
+    return 0.0
+
+
+def _detect_mirror_side(context, obj):
+    flow_side = obj.get("flow_side", "")
+    if flow_side in {"L", "R"}:
+        return flow_side
+    region = obj.get("hair_region", "")
+    if region == "Side_L":
+        return "L"
+    if region == "Side_R":
+        return "R"
+    base = obj.name.split(".")[0]
+    if base.endswith("_L"):
+        return "L"
+    if base.endswith("_R"):
+        return "R"
+    axis_x = _mirror_axis_x(context)
+    world_x = obj.matrix_world.translation.x
+    if abs(world_x - axis_x) < 1e-5:
+        return "CENTER"
+    return "L" if world_x < axis_x else "R"
+
+
+def _mirror_name(name, src_side, dst_side):
+    base = name
+    replacements = [("Side_L", "Side_R"), ("Side_R", "Side_L"), ("_L", "_R"), ("_R", "_L"), ("Left", "Right"), ("Right", "Left")]
+    if src_side == "R":
+        replacements = [(b, a) for a, b in replacements]
+    for old, new in replacements:
+        if old in base:
+            return base.replace(old, new, 1)
+    return f"{base}_MIRROR_{dst_side}"
+
+
+def _mirror_region_value(region):
+    if region == "Side_L":
+        return "Side_R"
+    if region == "Side_R":
+        return "Side_L"
+    return region
+
+
+def _mirror_flow_value(flow):
+    if flow == "L":
+        return "R"
+    if flow == "R":
+        return "L"
+    return flow
+
+
+def _link_generated_mirror_object(pair, guide_type):
+    _, collections = utils.ensure_system()
+    if guide_type == "placement_point":
+        collection = collections[utils.PLACEMENT_POINTS]
+    elif guide_type == "card_control_empty":
+        collection = collections[utils.CARD_CONTROLS]
+    elif guide_type in {"guide", "region"}:
+        collection = collections[utils.GUIDES if guide_type == "guide" else utils.REGIONS]
+    else:
+        collection = utils.get_curve_collection(pair.get("hair_region", ""), guide_type)
+    if not any(obj.name == pair.name for obj in collection.objects):
+        try:
+            collection.objects.link(pair)
+        except RuntimeError:
+            pass
+
+
+def _copy_mirrored_object_shape(context, source, target):
+    axis_x = _mirror_axis_x(context)
+    world_loc = source.matrix_world.translation.copy()
+    world_loc.x = axis_x - (world_loc.x - axis_x)
+    target.location = target.parent.matrix_world.inverted() @ world_loc if target.parent else world_loc
+    guide_type = source.get("hair_guide_type")
+    if source.type == "CURVE" and target.type == "CURVE" and guide_type in {"guide", "region", "curve", "twist_control"}:
+        _copy_mirrored_bezier_shape(source, target, axis_x)
+    if guide_type == "placement_point":
+        direction = utils.string_to_vector(source.get("recommended_direction"), None)
+        if direction:
+            direction.x *= -1
+            target["recommended_direction"] = utils.vector_to_string(direction)
+        target["flow_side"] = _mirror_flow_value(source.get("flow_side", ""))
+        target["hair_region"] = _mirror_region_value(source.get("hair_region", ""))
+        target["hair_root_id"] = target.name
+    elif guide_type in {"curve", "twist_control", "guide", "region"}:
+        target["flow_side"] = _mirror_flow_value(source.get("flow_side", ""))
+        target["hair_region"] = _mirror_region_value(source.get("hair_region", ""))
+        if guide_type in {"curve", "twist_control"}:
+            source_point = bpy.data.objects.get(source.get("hair_source_point", ""))
+            paired_point = bpy.data.objects.get(source_point.get("hair_mirror_pair", "")) if source_point else None
+            if paired_point:
+                target["hair_source_point"] = paired_point.name
+                target["hair_root_id"] = paired_point.name
+            utils.apply_curve_region_color(target)
+            utils.organize_curve_object(target)
+    elif guide_type == "card_control_empty":
+        target["hair_guide_type"] = "card_control_empty"
+
+
+def _create_or_update_mirror_pair(context, obj):
+    guide_type = obj.get("hair_guide_type")
+    if guide_type not in MIRRORABLE_TYPES or (guide_type == "card_control_empty" and obj.get("hair_card_shared")):
+        return None
+    side = _detect_mirror_side(context, obj)
+    if side not in {"L", "R"}:
+        obj["hair_mirror_side"] = "CENTER"
+        return None
+    dst_side = "R" if side == "L" else "L"
+    pair_name = _mirror_name(obj.name, side, dst_side)
+    pair = bpy.data.objects.get(pair_name)
+    if not pair:
+        pair = obj.copy()
+        pair.data = obj.data.copy() if obj.data else None
+        pair.name = pair_name
+        if pair.data:
+            pair.data.name = pair_name + ("Curve" if pair.type == "CURVE" else "Data")
+        _link_generated_mirror_object(pair, guide_type)
+    _copy_mirrored_object_shape(context, obj, pair)
+    obj["hair_mirror_pair"] = pair.name
+    pair["hair_mirror_pair"] = obj.name
+    obj["hair_mirror_source"] = obj.name
+    pair["hair_mirror_source"] = obj.name
+    obj["hair_mirror_side"] = side
+    pair["hair_mirror_side"] = dst_side
+    obj["hair_mirror_mode_object"] = True
+    pair["hair_mirror_mode_object"] = True
+    _apply_work_mode_lock_to_object(context, pair)
+    return pair
+
+
+def _mirror_mode_candidates(context, selected_only=False):
+    source = context.selected_objects if selected_only else utils.generated_objects()
+    return [obj for obj in source if obj.get("hair_guide_type") in MIRRORABLE_TYPES and obj.get("hair_mirror_mode_object")]
+
+
+class HGD_OT_sync_mirror_objects(bpy.types.Operator):
+    bl_idname = "hgd.sync_mirror_objects"
+    bl_label = "ミラー同期"
+    bl_description = "ミラー元設定に従い、選択ペアまたは全ミラーペアを反対側へ反映します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        wanted = "L" if context.scene.hair_mirror_source_side == "L_TO_R" else "R"
+        selected_only = bool(context.selected_objects)
+        candidates = _mirror_mode_candidates(context, selected_only)
+        synced = 0
+        seen = set()
+        for obj in candidates:
+            if obj.name in seen:
+                continue
+            source = obj
+            if source.get("hair_mirror_side") != wanted:
+                pair = bpy.data.objects.get(source.get("hair_mirror_pair", ""))
+                if pair and pair.get("hair_mirror_side") == wanted:
+                    source = pair
+            if source.get("hair_mirror_side") != wanted:
+                continue
+            pair = bpy.data.objects.get(source.get("hair_mirror_pair", ""))
+            if not pair:
+                pair = _create_or_update_mirror_pair(context, source)
+            elif pair.get("hair_guide_type") in MIRRORABLE_TYPES:
+                _copy_mirrored_object_shape(context, source, pair)
+            if pair:
+                source["hair_mirror_mode_object"] = True
+                pair["hair_mirror_mode_object"] = True
+                seen.update({source.name, pair.name})
+                synced += 1
+        self.report({'INFO'}, f"ミラー同期しました: {synced} ペア。Previewは必要に応じて更新してください。")
+        return {'FINISHED'}
+
+
+class HGD_OT_toggle_mirror_mode(bpy.types.Operator):
+    bl_idname = "hgd.toggle_mirror_mode"
+    bl_label = "ミラーモード切替"
+    bl_description = "ミラーモードの有効/解除を切り替えます。解除後も左右Objectは削除せず独立編集できます"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        if scene.hair_mirror_mode_enabled:
+            scene.hair_mirror_mode_enabled = False
+            for obj in utils.generated_objects():
+                if obj.get("hair_mirror_mode_object"):
+                    obj["hair_mirror_mode_object"] = False
+                    if obj.data and obj.data.users > 1:
+                        obj.data = obj.data.copy()
+            self.report({'INFO'}, "ミラーモードを解除しました。左右Objectは独立編集できます。")
+            return {'FINISHED'}
+        scene.hair_mirror_mode_enabled = True
+        count = 0
+        for obj in list(utils.generated_objects()):
+            if obj.get("hair_guide_type") in MIRRORABLE_TYPES and not obj.get("hair_mirror_pair"):
+                if _create_or_update_mirror_pair(context, obj):
+                    count += 1
+        self.report({'INFO'}, f"ミラーモードを有効化しました。{count} ペアを作成しました。")
+        return {'FINISHED'}
 
 
 def _delete_generated_if_exists(name):
@@ -3784,6 +4002,8 @@ class HGD_OT_create_card_control_empty_per_curve(bpy.types.Operator):
             empty.location = _card_control_empty_location_for_curves(context, [curve])
             _setup_card_control_empty(context, empty)
             empty["hair_source_curve"] = curve.name
+            if context.scene.hair_mirror_mode_enabled:
+                _create_or_update_mirror_pair(context, empty)
             curve["hair_card_control_empty"] = empty.name
             count += 1
         self.report({'INFO'}, f"個別CARD Control Emptyを{count}個作成/割り当てしました。")
@@ -4712,6 +4932,8 @@ classes = (
     HGD_OT_update_all_twists,
     HGD_OT_apply_curve_batch_settings,
     HGD_OT_update_curve_roots_from_points,
+    HGD_OT_sync_mirror_objects,
+    HGD_OT_toggle_mirror_mode,
     HGD_OT_mirror_side_guide_l_to_r,
     HGD_OT_mirror_side_guide_r_to_l,
     HGD_OT_mirror_side,
