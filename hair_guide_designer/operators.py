@@ -5179,6 +5179,8 @@ classes = (
     HGD_OT_set_target_head,
     HGD_OT_create_hair_guides,
     HGD_OT_symmetrize_front_back_guides,
+    HGD_OT_mirror_side_guide_l_to_r,
+    HGD_OT_mirror_side_guide_r_to_l,
     HGD_OT_delete_hair_guides,
     HGD_OT_show_hide_guides,
     HGD_OT_region_visibility,
