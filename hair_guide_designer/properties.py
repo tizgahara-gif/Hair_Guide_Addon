@@ -66,7 +66,7 @@ PROPERTY_NAMES = (
     "hair_curve_root_jitter", "hair_curve_mid_jitter", "hair_curve_tip_jitter",
     "hair_curve_root_jitter_cm", "hair_curve_mid_jitter_cm", "hair_curve_tip_jitter_cm",
     "hair_curve_root_jitter_ratio", "hair_curve_mid_jitter_ratio", "hair_curve_tip_jitter_ratio",
-    "hair_curve_length_variation", "hair_curve_display_mode",
+    "hair_curve_length_variation", "hair_curve_display_mode", "hair_curve_origin_to_reference_empty",
     "hair_card_width_preset",
     "hair_card_width_root", "hair_card_width_root_cm", "hair_card_width_mid", "hair_card_width_mid_cm",
     "hair_card_width_tip", "hair_card_width_tip_cm", "hair_card_mid_position", "hair_card_width_interpolation", "hair_card_sync_widths", "hair_card_synced_width_cm", "hair_card_samples",
@@ -763,6 +763,11 @@ def register():
         name="Curve生成時に最新参照Emptyを自動割当",
         default=True,
         description="Curve生成時、参照可能なCARD Control Emptyがあれば参照Emptyを優先し、なければ最新のEmptyを自動割り当てします。",
+    )
+    scene.hair_curve_origin_to_reference_empty = BoolProperty(
+        name="Curve原点を参照Emptyへ移動",
+        default=True,
+        description="Curve生成時、参照Emptyがある場合はCurveの見た目を維持したままObject原点をEmpty位置へ移動します。",
     )
 
     scene.hair_twist_segments = IntProperty(
