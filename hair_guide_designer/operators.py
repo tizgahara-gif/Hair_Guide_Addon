@@ -431,7 +431,6 @@ BASIC_GUIDE_NAMES = {
     "HAIR_GUIDE_Hairline",
     "HAIR_GUIDE_SideBoundary_L",
     "HAIR_GUIDE_SideBoundary_R",
-    "HAIR_GUIDE_BackVolume",
     "HAIR_GUIDE_BackUpper",
     "HAIR_GUIDE_BackMiddle",
     "HAIR_GUIDE_Nape",
@@ -503,13 +502,6 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
                 mathutils.Vector((center.x + rx * 0.28, front_out, hairline_z + size.z * 0.025)),
                 mathutils.Vector((center.x + rx * 0.58, front_surface - size.y * 0.015, hairline_z - size.z * 0.015)),
             ]
-            back_points = [
-                mathutils.Vector((center.x - rx * 0.62, back_surface + size.y * 0.02, back_volume_z - size.z * 0.02)),
-                mathutils.Vector((center.x - rx * 0.32, back_out, back_volume_z + size.z * 0.035)),
-                mathutils.Vector((center.x, back_out + size.y * 0.025, back_volume_z + size.z * 0.055)),
-                mathutils.Vector((center.x + rx * 0.32, back_out, back_volume_z + size.z * 0.035)),
-                mathutils.Vector((center.x + rx * 0.62, back_surface + size.y * 0.02, back_volume_z - size.z * 0.02)),
-            ]
             nape_points = [
                 mathutils.Vector((center.x - rx * 0.35, back_surface + size.y * 0.015, nape_z)),
                 mathutils.Vector((center.x, back_out, nape_z - size.z * 0.03)),
@@ -532,7 +524,6 @@ class HGD_OT_create_hair_guides(bpy.types.Operator):
                 ("HAIR_GUIDE_Hairline", hairline_points, "Front"),
                 ("HAIR_GUIDE_SideBoundary_L", [mathutils.Vector((center.x - rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x - rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x - rx * 0.82, back_out - size.y * 0.16, back_volume_z + size.z * 0.02))], "Side"),
                 ("HAIR_GUIDE_SideBoundary_R", [mathutils.Vector((center.x + rx * 0.92, front_out + size.y * 0.12, hairline_z - size.z * 0.02)), mathutils.Vector((center.x + rx * 0.98, center.y, hairline_z - size.z * 0.12)), mathutils.Vector((center.x + rx * 0.82, back_out - size.y * 0.16, back_volume_z + size.z * 0.02))], "Side"),
-                ("HAIR_GUIDE_BackVolume", back_points, "Back_Middle"),
                 ("HAIR_GUIDE_BackUpper", back_upper_points, "Back_Upper"),
                 ("HAIR_GUIDE_BackMiddle", back_middle_points, "Back_Middle"),
                 ("HAIR_GUIDE_Nape", nape_points, "Nape"),
@@ -635,7 +626,6 @@ class HGD_OT_create_detailed_guides(bpy.types.Operator):
 
 FRONT_BACK_SYMMETRY_GUIDES = (
     "HAIR_GUIDE_Hairline",
-    "HAIR_GUIDE_BackVolume",
     "HAIR_GUIDE_BackUpper",
     "HAIR_GUIDE_BackMiddle",
     "HAIR_GUIDE_Nape",
@@ -933,11 +923,8 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
             "side_l": utils.get_guide_object("HAIR_GUIDE_SideBoundary_L"),
             "side_r": utils.get_guide_object("HAIR_GUIDE_SideBoundary_R"),
             "top": utils.get_guide_object("HAIR_GUIDE_Top"),
-            "back": utils.get_guide_object("HAIR_GUIDE_BackVolume"),
             "back_upper": utils.get_guide_object("HAIR_GUIDE_BackUpper"),
             "back_middle": utils.get_guide_object("HAIR_GUIDE_BackMiddle"),
-            "legacy_back_upper": utils.get_guide_object("HAIR_GUIDE_Hachi") or utils.get_guide_object("HAIR_GUIDE_BackVolume"),
-            "legacy_back_middle": utils.get_guide_object("HAIR_GUIDE_Occipital") or utils.get_guide_object("HAIR_GUIDE_BackVolume"),
             "nape": utils.get_guide_object("HAIR_GUIDE_Nape"),
             "center": utils.get_guide_object("HAIR_GUIDE_Center"),
         }
@@ -954,13 +941,9 @@ class HGD_OT_generate_placement_points(bpy.types.Operator):
         if region == "Back_Upper":
             if guides["back_upper"]:
                 return utils.sample_curve_world_points(guides["back_upper"], count)
-            if guides.get("legacy_back_upper"):
-                return self._back_layer_positions("Back_Upper", count, guides, min_v, max_v, center, size, offset)
         if region == "Back_Middle":
             if guides["back_middle"]:
                 return utils.sample_curve_world_points(guides["back_middle"], count)
-            if guides.get("legacy_back_middle"):
-                return self._back_layer_positions("Back_Middle", count, guides, min_v, max_v, center, size, offset)
         if region == "Nape" and guides["nape"]:
             return utils.sample_curve_world_points(guides["nape"], count)
         return None
@@ -1233,7 +1216,6 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                     control, _strand = _make_twist_from_point(context, point)
                     curves_by_point[point.name] = control
                     made += 1
-                _link_created_curve_mirror_pairs(curves_by_point)
                 _apply_work_mode_lock_to_all_objects(context)
                 self.report({'INFO'}, f"ツイスト制御カーブ{made}本と表示用カーブを生成しました。制御カーブを編集してから更新してください。")
                 return {'FINISHED'}
@@ -1273,7 +1255,6 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                 if "hair_card_control_empty" not in obj:
                     _assign_latest_card_control_empty_if_available(context, obj)
                 _move_curve_origin_to_reference_empty_if_enabled(context, obj)
-                _set_curve_mirror_metadata(obj, point)
                 obj["strand_type"] = scene.hair_strand_type
                 obj["root_radius"] = scene.hair_curve_root_radius
                 obj["tip_radius"] = scene.hair_curve_tip_radius
@@ -1289,8 +1270,6 @@ class HGD_OT_create_curve_from_points(bpy.types.Operator):
                     _apply_display_mode_to_curve(context, obj)
                 curves_by_point[point.name] = obj
                 made += 1
-            _link_created_curve_mirror_pairs(curves_by_point)
-            _auto_create_mirror_pairs_for_generated_curves(context, curves_by_point)
             _apply_work_mode_lock_to_all_objects(context)
             self.report({'INFO'}, f"カーブ毛束を{made}本生成しました。")
             return {'FINISHED'}
@@ -1788,6 +1767,10 @@ def _card_or_flat_side_vector(context, curve_obj, sample, tangent, previous_side
     else:
         return None
 
+    # CARD Control Empty based frames historically faced opposite to the target.
+    # Invert only this Empty-derived side vector; automatic/PTF fallback frames stay unchanged.
+    side *= -1.0
+
     side = side - tangent * side.dot(tangent)
     if side.length < 1e-6:
         return None
@@ -2025,7 +2008,6 @@ def _make_twist_from_point(context, point):
     control["hair_card_width_interpolation"] = scene.hair_card_width_interpolation
     _assign_latest_card_control_empty_if_available(context, control)
     _move_curve_origin_to_reference_empty_if_enabled(context, control)
-    _set_curve_mirror_metadata(control, point)
     control.data.resolution_u = scene.hair_twist_resolution
     _set_twist_control_display(control)
     _apply_curve_variation(control, scene, point.name)
@@ -5153,18 +5135,6 @@ classes = (
     HGD_OT_update_all_twists,
     HGD_OT_apply_curve_batch_settings,
     HGD_OT_update_curve_roots_from_points,
-    HGD_OT_create_mirror_empty,
-    HGD_OT_apply_mirror_modifier_to_selected,
-    HGD_OT_apply_mirror_modifier_to_all,
-    HGD_OT_resolve_mirror_modifier,
-    HGD_OT_remove_mirror_modifier,
-    HGD_OT_mirror_side_guide_l_to_r,
-    HGD_OT_mirror_side_guide_r_to_l,
-    HGD_OT_mirror_side,
-    HGD_OT_mirror_selected_curves,
-    HGD_OT_mirror_mode_sync_pairs,
-    HGD_OT_mirror_side_l_to_r,
-    HGD_OT_mirror_side_r_to_l,
 )
 
 
